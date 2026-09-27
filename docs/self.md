@@ -1,14 +1,14 @@
 # Self-modification
 
-`tool-self` is the one place nyaa can change its own running image: evaluate
+`tool-self` is the one place miao can change its own running image: evaluate
 a form in the host, redefine a function or class, or reload a mounted
 child. Everything else -- `tool-eval`, `tool-repl`, a worker -- runs in a
 throwaway process that loads nothing and shares no state with the harness.
-See [~takeiteasy/nyaa#12](https://todo.sr.ht/~takeiteasy/nyaa/12).
+See [~takeiteasy/miao#12](https://todo.sr.ht/~takeiteasy/miao/12).
 
 ```lisp
-(m:mount *ctx* 'nyaa:tool-self :enable '(:eval :define :reload))
-(nyaa:invoke-tool :tool-self :op :eval :form "(+ 1 2)")
+(m:mount *ctx* 'miao:tool-self :enable '(:eval :define :reload))
+(miao:invoke-tool :tool-self :op :eval :form "(+ 1 2)")
 ;; => (:ok (:value "3" :values ("3") :out "" :elided nil))
 ```
 
@@ -19,7 +19,7 @@ named in `:enable`, a mount option that defaults to nil. `:log` always
 answers, since it only reads back what a write already did.
 
 ```lisp
-(nyaa:invoke-tool :tool-self :op :eval :form "1")
+(miao:invoke-tool :tool-self :op :eval :form "1")
 ;; => (:error (:forbidden ":eval is not enabled"))
 ```
 
@@ -51,7 +51,7 @@ with `find-package` only: a package that doesn't already exist is a
 `(:bad-request ...)`, never created on the caller's behalf. `:define`
 additionally requires the form's head to be a definition -- `defun`,
 `defmacro`, `defgeneric`, `defmethod`, `defclass`, `defstruct`,
-`defparameter`, `defvar`, `m:defservice` or `nyaa:define-tool` -- so its
+`defparameter`, `defvar`, `m:defservice` or `miao:define-tool` -- so its
 checkpoint and log entry describe an actual definition; anything else is
 `:eval`'s job.
 
@@ -101,7 +101,7 @@ points at what to roll back to -- and an outcome entry after:
 
 ```lisp
 (:at "2026-09-23T10:00:00Z" :kind :intent :op :eval
- :form "(+ 1 2)" :label nil :checkpoint "~/.nyaa/generations/....generation"
+ :form "(+ 1 2)" :label nil :checkpoint "~/.miao/generations/....generation"
  :previous-source nil)
 (:at "2026-09-23T10:00:00Z" :kind :outcome :op :eval :outcome :ok)
 ```
@@ -117,9 +117,9 @@ received `:timeout` adds a third entry,
 ([introspection](introspection.md)) as it stood before the write --
 a `:file`/`:position`, or the old `:form` when it was itself defined in the
 image -- rollback restores declared service state, never code
-([#48](https://todo.sr.ht/~takeiteasy/nyaa/48)), so this pointer is the
+([#48](https://todo.sr.ht/~takeiteasy/miao/48)), so this pointer is the
 only way back to the old definition. The log is an append-only
-s-expression file (`:log`, default `~/.nyaa/self.log`), read the same
+s-expression file (`:log`, default `~/.miao/self.log`), read the same
 guarded way a generation is: `*read-eval*` nil, so a log can never run code
 merely by being read back. Each entry also reaches [meow's
 logger](https://github.com/takeiteasy/meow/blob/trunk/docs/logger.md) when
@@ -130,12 +130,12 @@ one is mounted, at `:info` or `:warn`.
 `:previous-source` is a manual way back, and only for one symbol.
 [`self-define`](images.md) closes that for real: it takes an
 [image generation](images.md) immediately before the write, so
-`nyaa:relaunch`ing that core undoes the redefinition itself, not just
+`miao:relaunch`ing that core undoes the redefinition itself, not just
 declared state.
 
 ```lisp
-(nyaa:self-define *ctx* "(defun greet () :hi)" :package "MY-APP")
-;; => :hi, #P"~/.nyaa/generations/....core"
+(miao:self-define *ctx* "(defun greet () :hi)" :package "MY-APP")
+;; => :hi, #P"~/.miao/generations/....core"
 ```
 
 It is a REPL entry, not a tool op: `save-image` needs the main thread, so
@@ -149,9 +149,9 @@ context's process to image, matching `save-image`'s own argument.
 written since:
 
 ```lisp
-(m:mount *ctx* 'nyaa:tool-self :enable '(:eval :define) :require-image t)
-(nyaa:invoke-tool :tool-self :op :eval :form "1")
-;; => (:error (:bad-request "take an image generation first (~takeiteasy/nyaa#48)"))
+(m:mount *ctx* 'miao:tool-self :enable '(:eval :define) :require-image t)
+(miao:invoke-tool :tool-self :op :eval :form "1")
+;; => (:error (:bad-request "take an image generation first (~takeiteasy/miao#48)"))
 ```
 
 With it set, `self-define` becomes the only way to still redefine

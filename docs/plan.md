@@ -1,6 +1,6 @@
 # The plan gate
 
-`tool-plan` (~takeiteasy/nyaa#6) is the DSL gate for *untrusted* input: a
+`tool-plan` (~takeiteasy/miao#6) is the DSL gate for *untrusted* input: a
 language of tool calls, so untrusted input may only express a composition of
 declared tools with typed arguments, never a form. There is no `eval` and no
 host-side reader; the audit surface is the interpreter plus each named
@@ -47,7 +47,7 @@ The tool receives `(:ref "not.a.reference")`. To pass a literal
 `tool-plan` is mounted with `:allow`, the tool names it may call:
 
 ```lisp
-(m:mount context 'nyaa:tool-plan :allow '(:tool-fs))
+(m:mount context 'miao:tool-plan :allow '(:tool-fs))
 ```
 
 A step's `:tool` must be in `:allow` *and* that tool's own `:trust` must be
@@ -108,4 +108,4 @@ context, since it would not come back.
 
 - A `:temporary` or unsupervised tool that ignores its cancel token keeps
   running after the plan returns
-  ([#147](https://todo.sr.ht/~takeiteasy/nyaa/147)).
+  ([#147](https://todo.sr.ht/~takeiteasy/miao/147)).

@@ -6,7 +6,7 @@ declaration into a mountable [meow](https://github.com/takeiteasy/meow) service,
 so a new backend is a few lines rather than a new adapter.
 
 ```lisp
-(nyaa:define-provider :ollama
+(miao:define-provider :ollama
   :protocol :protocol-ollama
   :base-url "http://127.0.0.1:11434"
   :auth :none
@@ -18,9 +18,9 @@ This defines the service class `provider-ollama`, registered under
 `:provider-ollama` with `:kind :provider` metadata. Mounting binds it to a model:
 
 ```lisp
-(meow:mount *context* 'nyaa:protocol-ollama)
-(meow:mount *context* 'nyaa:provider-ollama :model "llama3.2")
-(nyaa:complete :provider-ollama :messages '((:role :user :content "hello")))
+(meow:mount *context* 'miao:protocol-ollama)
+(meow:mount *context* 'miao:provider-ollama :model "llama3.2")
+(miao:complete :provider-ollama :messages '((:role :user :content "hello")))
 ```
 
 The protocol it names must be mounted too; a provider that cannot find its
@@ -59,7 +59,7 @@ one definition serves a local backend, a remote host and a proxy.
 [a protocol's](protocols.md#concurrency) does:
 
 ```lisp
-(meow:mount *context* 'nyaa:provider-ollama
+(meow:mount *context* 'miao:provider-ollama
             :base-url "http://gpu.lan:11434/v1"
             :model "qwen2.5-coder")
 ```
@@ -88,8 +88,8 @@ A provider whose key is absent still mounts, so discovery lists it and the
 failure is legible:
 
 ```lisp
-(getf (nyaa:describe-provider :provider-example) :status)   ; => :unavailable
-(nyaa:complete :provider-example :messages '(...))
+(getf (miao:describe-provider :provider-example) :status)   ; => :unavailable
+(miao:complete :provider-example :messages '(...))
 ;; => (:error (:bad-request "no API key; set EXAMPLE_API_KEY or mount with :api-key"))
 ```
 
@@ -102,7 +102,7 @@ A provider layers its data *under* the request, so an explicit key from the
 caller always wins:
 
 ```lisp
-(nyaa:complete :provider-ollama
+(miao:complete :provider-ollama
   :model "gemma3"            ; beats the mount's :model
   :temperature 0.9           ; beats the declaration's :defaults
   :messages '((:role :user :content "hello")))
@@ -121,8 +121,8 @@ protocol describes.
 ## Discovery
 
 ```lisp
-(nyaa:providers)                        ; => (:provider-ollama)
-(nyaa:describe-provider :provider-ollama)
+(miao:providers)                        ; => (:provider-ollama)
+(miao:describe-provider :provider-ollama)
 ```
 
 `providers` scans registration props for `:kind :provider`, the way `tools` and
@@ -137,8 +137,8 @@ included. The OpenAI-compatible `/v1` route stays reachable with no provider
 of its own: `:protocol-openai` takes `:base-url` per request, so one mounted
 service already answers for it.
 
-Set `NYAA_OLLAMA_NATIVE_URL` to run the live tests for this provider, and
-`NYAA_OLLAMA_MODEL` to name the model. (`NYAA_OLLAMA_URL` is the `/v1` URL the
+Set `MIAO_OLLAMA_NATIVE_URL` to run the live tests for this provider, and
+`MIAO_OLLAMA_MODEL` to name the model. (`MIAO_OLLAMA_URL` is the `/v1` URL the
 OpenAI protocol's own live tests use.)
 
 ## Limitations
@@ -146,4 +146,4 @@ OpenAI protocol's own live tests use.)
 - `:defaults` keys the protocol does not advertise are dropped on the wire
   rather than refused, since a protocol takes only what it knows.
 - Auth is BYOK. OAuth and other interactive flows are
-  [#24](https://todo.sr.ht/~takeiteasy/nyaa/24).
+  [#24](https://todo.sr.ht/~takeiteasy/miao/24).

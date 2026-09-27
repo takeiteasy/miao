@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; A subprocess launched in its own process group, so a deadline can signal
 ;;; everything it spawned rather than the direct child alone. Shared by

@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Shell tool: one command through `sh -c`, merged output, bounded by a
 ;;; caller deadline and its cancel token. Either kills the command's whole
@@ -20,7 +20,7 @@
   "Processes of commands still running, so RELAUNCH can kill them before it
 replaces the process.")
 
-(defvar *live-commands-lock* (bt:make-lock :name "nyaa-live-commands"))
+(defvar *live-commands-lock* (bt:make-lock :name "miao-live-commands"))
 
 (defun kill-live-commands ()
   "Kill every running command's process group. Each RUN-COMMAND unregisters
@@ -61,7 +61,7 @@ always comes from here and never after the process is reaped."
                            (stream-error () output))
                   drained t)
          (bt:signal-semaphore done)))
-     :name "nyaa-shell-drain")
+     :name "miao-shell-drain")
     (when cancel
       (on-cancel cancel (lambda () (bt:signal-semaphore done))))
     (bt:wait-on-semaphore done :timeout (/ timeout-ms 1000))

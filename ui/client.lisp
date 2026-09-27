@@ -1,4 +1,4 @@
-(in-package #:nyaa/ui)
+(in-package #:miao/ui)
 
 ;;; A client attached to a named agent: it folds the agent's events into a
 ;;; state and sends the operator's commands back. No rendering.
@@ -15,7 +15,7 @@
 
 (defstruct (client (:constructor %make-client (agent registry on-change)))
   agent registry on-change sink
-  (lock (bt:make-lock :name "nyaa/ui client"))
+  (lock (bt:make-lock :name "miao/ui client"))
   (current (make-state))
   (folded 0))
 

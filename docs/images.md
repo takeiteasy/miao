@@ -5,8 +5,8 @@ the running image itself -- SBCL's `save-lisp-and-die` -- so a rollback
 can undo code, not only declared state.
 
 ```lisp
-(nyaa:save-image *ctx*)
-;; => #P"~/.nyaa/generations/20260923-105642-113500.core"
+(miao:save-image *ctx*)
+;; => #P"~/.miao/generations/20260923-105642-113500.core"
 ```
 
 ## `save-image`
@@ -23,7 +23,7 @@ can undo code, not only declared state.
    `context`'s whole tree, then waits up to `timeout` seconds for any
    thread outside that tree to exit on its own -- a just-stopped
    context's thread still mid-unwind, say
-   ([#72](https://todo.sr.ht/~takeiteasy/nyaa/72)). Past `timeout`,
+   ([#72](https://todo.sr.ht/~takeiteasy/miao/72)). Past `timeout`,
    refuses, naming the threads still running: `save-lisp-and-die` and
    `fork(2)` both need this one alone.
 5. Forks. The child `save-lisp-and-die`s a `.core` next to the
@@ -44,7 +44,7 @@ returns on success.
 
 The saved core's own toplevel, on load:
 
-1. Exits at once if `NYAA_IMAGE_PROBE` is set -- `relaunch` and
+1. Exits at once if `MIAO_IMAGE_PROBE` is set -- `relaunch` and
    [the launcher](launcher.md) both use this to check a core loads without reviving its
    services.
 2. Otherwise, `forget-workers` marks every worker the heap holds as stale --
@@ -63,8 +63,8 @@ alongside its generation.
 
 ## Launching
 
-`nyaa` starts the newest generation, or the recovery image built by
-`nyaa install` -- see [the launcher](launcher.md).
+`miao` starts the newest generation, or the recovery image built by
+`miao install` -- see [the launcher](launcher.md).
 
 ## Trust posture
 

@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; The OpenAI chat completions wire shape: POST <base-url>/chat/completions,
 ;;; with optional SSE streaming. One protocol for every backend speaking it --

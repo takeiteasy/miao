@@ -1,11 +1,11 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; The checkpoint tool: save, list and roll back generations of the
-;;; harness's declared state (checkpoint.lisp, ~takeiteasy/nyaa#11).
+;;; harness's declared state (checkpoint.lisp, ~takeiteasy/miao#11).
 ;;;
 ;;; :trust :operator: writing and reverting the harness's own state is not
 ;;; something the default :agent trust level should reach. tool-self
-;;; (~takeiteasy/nyaa#12) takes a checkpoint before every write it makes,
+;;; (~takeiteasy/miao#12) takes a checkpoint before every write it makes,
 ;;; through the CHECKPOINT function this tool also wraps, rather than
 ;;; through this tool -- so it works whether or not TOOL-CHECKPOINT is
 ;;; mounted alongside it.

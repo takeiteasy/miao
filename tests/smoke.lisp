@@ -1,9 +1,9 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
 (test system-loads
-  (is (find-package '#:nyaa))
-  (is (stringp nyaa:*version*)))
+  (is (find-package '#:miao))
+  (is (stringp miao:*version*)))
 
 (test meow-is-available
   (is (find-package '#:meow))
@@ -35,9 +35,9 @@
 
 (test http-live-request
   ;; Off by default: CI must not depend on the network.
-  (if (uiop:getenv "NYAA_LIVE_HTTP")
+  (if (uiop:getenv "MIAO_LIVE_HTTP")
       (multiple-value-bind (body status)
           (drakma:http-request "https://httpbingo.org/status/404" :redirect nil)
         (declare (ignore body))
         (is (= 404 status)))
-      (skip "set NYAA_LIVE_HTTP to run live HTTP tests")))
+      (skip "set MIAO_LIVE_HTTP to run live HTTP tests")))

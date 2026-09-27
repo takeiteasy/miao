@@ -4,26 +4,26 @@
 exec ros -Q -- $0 "$@"
 |#
 
-;;; The nyaa launcher: docs/launcher.md.
+;;; The miao launcher: docs/launcher.md.
 
-(let ((asd (merge-pathnames "../nyaa.asd" (or *load-truename* *default-pathname-defaults*)))
+(let ((asd (merge-pathnames "miao.asd" (or *load-truename* *default-pathname-defaults*)))
       (*standard-output* (make-broadcast-stream))
       (*error-output* (make-broadcast-stream)))
   (when (probe-file asd) (asdf:load-asd (truename asd)))
-  (asdf:load-system "nyaa/launcher"))
+  (asdf:load-system "miao/launcher"))
 
-(defparameter *usage* "usage: nyaa [--core FILE] [-- sbcl-args...]
-       nyaa [--core FILE] run PROMPT [options]
-       nyaa [--core FILE] chat [options | --resume [ID]]
-       nyaa [--core FILE] chats
-       nyaa install")
+(defparameter *usage* "usage: miao [--core FILE] [-- sbcl-args...]
+       miao [--core FILE] run PROMPT [options]
+       miao [--core FILE] chat [options | --resume [ID]]
+       miao [--core FILE] chats
+       miao install")
 
 (defun usage-error (format &rest args)
-  (format *error-output* "nyaa: ~?~%~a~%" format args *usage*)
+  (format *error-output* "miao: ~?~%~a~%" format args *usage*)
   (ros:quit 2))
 
 (defun source-directory ()
-  (let ((asd (probe-file (merge-pathnames "../nyaa.asd" (or *load-truename* #p"")))))
+  (let ((asd (probe-file (merge-pathnames "miao.asd" (or *load-truename* #p"")))))
     (and asd (make-pathname :name nil :type nil :version nil :defaults asd))))
 
 (defun quicklisp-setup ()
@@ -40,22 +40,22 @@ exec ros -Q -- $0 "$@"
            "--noinform" "--non-interactive" "--no-userinit"
            "--load" (quicklisp-setup)
            "--eval" (if source
-                        (format nil "(asdf:load-asd ~s)" (namestring (merge-pathnames "nyaa.asd" source)))
+                        (format nil "(asdf:load-asd ~s)" (namestring (merge-pathnames "miao.asd" source)))
                         "nil")
-           "--eval" "(ql:quickload (quote (:nyaa :nyaa/cli)) :silent t)"
-           "--eval" (format nil "(nyaa:save-recovery-image ~s)"
-                            (namestring (nyaa/launcher:recovery-core)))))))
+           "--eval" "(ql:quickload (quote (:miao :miao/cli)) :silent t)"
+           "--eval" (format nil "(miao:save-recovery-image ~s)"
+                            (namestring (miao/launcher:recovery-core)))))))
 
 (defparameter *bootstrap*
   "(progn
-     (unless (find-package \"NYAA/CLI\") (require :asdf) (asdf:load-system \"nyaa/cli\"))
-     (let ((code (funcall (intern \"MAIN\" \"NYAA/CLI\")
+     (unless (find-package \"MIAO/CLI\") (require :asdf) (asdf:load-system \"miao/cli\"))
+     (let ((code (funcall (intern \"MAIN\" \"MIAO/CLI\")
                           (rest sb-ext:*posix-argv*))))
        (finish-output) (finish-output *error-output*)
        (sb-ext:exit :code code :abort t)))")
 
 (defun run-command (core args)
-  (ros:exec (nyaa/launcher:launch-argv
+  (ros:exec (miao/launcher:launch-argv
              core
              (append (list "--noinform" "--end-runtime-options"
                            "--no-userinit" "--disable-debugger" "--eval" *bootstrap*
@@ -70,13 +70,13 @@ exec ros -Q -- $0 "$@"
     (cond
       ((equal (first argv) "install") (install))
       ((member (first argv) '("run" "chat" "chats") :test #'equal)
-       (run-command (nyaa/launcher:select-core :core core) argv))
+       (run-command (miao/launcher:select-core :core core) argv))
       ((or (null argv) (equal (first argv) "--"))
-       (ros:exec (nyaa/launcher:launch-argv (nyaa/launcher:select-core :core core) (rest argv))))
+       (ros:exec (miao/launcher:launch-argv (miao/launcher:select-core :core core) (rest argv))))
       (t (usage-error "unknown command ~a" (first argv))))))
 
 (defun main (&rest argv)
   (handler-case (dispatch argv)
     (error (e)
-      (format *error-output* "nyaa: ~a~%" e)
+      (format *error-output* "miao: ~a~%" e)
       (ros:quit 1))))

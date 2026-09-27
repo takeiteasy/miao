@@ -1,10 +1,10 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; `nyaa run` through NYAA/CLI:MAIN against the echo provider, which
+;;; `miao run` through MIAO/CLI:MAIN against the echo provider, which
 ;;; answers with the last user message and a bang.
 
-(defvar *home* nil "The NYAA_HOME a test's command line runs against, when it needs to keep it.")
+(defvar *home* nil "The MIAO_HOME a test's command line runs against, when it needs to keep it.")
 
 (defun call-with-home (body)
   (let ((*home* (uiop:ensure-directory-pathname (make-sandbox-directory))))
@@ -20,7 +20,7 @@ empty home of its own."
   (flet ((in-home (home)
            (let* ((out (make-string-output-stream))
                   (err (make-string-output-stream))
-                  (code (nyaa/cli:main args :context *protocol-context* :home home :out out :err err)))
+                  (code (miao/cli:main args :context *protocol-context* :home home :out out :err err)))
              (values code (get-output-stream-string out) (get-output-stream-string err)))))
     (if *home*
         (in-home *home*)
@@ -37,8 +37,8 @@ empty home of its own."
     (is (= 0 (cli "run" "hi" "--model" "test-echo:name:with:colons")))))
 
 (test max-turns-reaches-the-agent
-  (is (= 3 (getf (nyaa/cli::parse-args '("a" "--max-turns" "3")) :max-turns)))
-  (is (null (getf (nyaa/cli::parse-args '("a")) :max-turns)))
+  (is (= 3 (getf (miao/cli::parse-args '("a" "--max-turns" "3")) :max-turns)))
+  (is (null (getf (miao/cli::parse-args '("a")) :max-turns)))
   (with-protocol
     (is (= 0 (cli "run" "hi" "--model" "test-echo:x" "--max-turns" "1")))))
 
@@ -51,12 +51,12 @@ empty home of its own."
       (is (search "[done stop]" err)))))
 
 (test a-system-file-is-appended-or-replaces
-  (with-nyaa-home (home)
+  (with-miao-home (home)
     (let ((file (merge-pathnames "system.txt" home)))
       (alexandria:write-string-into-file "Be terse." file)
-      (is (search "Be terse." (nyaa/cli::system-prompt (namestring file) nil)))
-      (is (search "nyaa" (nyaa/cli::system-prompt (namestring file) nil)))
-      (is (equal "Be terse." (nyaa/cli::system-prompt (namestring file) t))))))
+      (is (search "Be terse." (miao/cli::system-prompt (namestring file) nil)))
+      (is (search "miao" (miao/cli::system-prompt (namestring file) nil)))
+      (is (equal "Be terse." (miao/cli::system-prompt (namestring file) t))))))
 
 (test bad-usage-exits-two
   (with-protocol
@@ -76,30 +76,30 @@ empty home of its own."
     (multiple-value-bind (code out err) (cli "run" "hi" "--model" "test-orphan:x")
       (is (= 1 code))
       (is (equal "" out))
-      (is (search "nyaa:" err)))))
+      (is (search "miao:" err)))))
 
 (test the-exit-code-follows-the-stop-reason
-  (is (= 0 (nyaa/cli:exit-code '(:ok (:stop-reason :stop)))))
-  (is (= 3 (nyaa/cli:exit-code '(:ok (:stop-reason :max-turns)))))
-  (is (= 3 (nyaa/cli:exit-code '(:ok (:stop-reason :timeout)))))
-  (is (= 1 (nyaa/cli:exit-code '(:ok (:stop-reason :cancelled)))))
-  (is (= 1 (nyaa/cli:exit-code '(:error :unavailable)))))
+  (is (= 0 (miao/cli:exit-code '(:ok (:stop-reason :stop)))))
+  (is (= 3 (miao/cli:exit-code '(:ok (:stop-reason :max-turns)))))
+  (is (= 3 (miao/cli:exit-code '(:ok (:stop-reason :timeout)))))
+  (is (= 1 (miao/cli:exit-code '(:ok (:stop-reason :cancelled)))))
+  (is (= 1 (miao/cli:exit-code '(:error :unavailable)))))
 
 (test a-truncated-run-prints-partial-text-and-the-reason
   (let ((out (make-string-output-stream))
         (err (make-string-output-stream)))
-    (nyaa/cli::report '(:ok (:content "partial" :stop-reason :max-turns)) out err)
+    (miao/cli::report '(:ok (:content "partial" :stop-reason :max-turns)) out err)
     (is (equal (format nil "partial~%") (get-output-stream-string out)))
     (is (search "max-turns" (get-output-stream-string err)))))
 
 (test init-lisp-is-loaded-before-the-model-is-resolved
-  (with-nyaa-home (home)
+  (with-miao-home (home)
     (alexandria:write-string-into-file
-     "(nyaa:define-provider :test-from-init :protocol :protocol-echo :base-url \"http://127.0.0.1:1\")"
+     "(miao:define-provider :test-from-init :protocol :protocol-echo :base-url \"http://127.0.0.1:1\")"
      (merge-pathnames "init.lisp" home))
     (with-protocol
       (let* ((out (make-string-output-stream))
-             (code (nyaa/cli:main '("run" "hi" "--model" "test-from-init:x")
+             (code (miao/cli:main '("run" "hi" "--model" "test-from-init:x")
                                   :context *protocol-context* :home home :out out)))
         (is (= 0 code))
         (is (equal (format nil "hi!~%") (get-output-stream-string out)))))))

@@ -4,14 +4,14 @@ An append-only s-expression log of [steering](agent.md#messages) messages,
 each marked consumed once it has been folded into a run or discarded. It
 backs an agent's own in-memory steer queue, so a steer survives past the
 run it was sent to, a crash, or a restart -- not just the next turn. See
-[~takeiteasy/nyaa#14](https://todo.sr.ht/~takeiteasy/nyaa/14).
+[~takeiteasy/miao#14](https://todo.sr.ht/~takeiteasy/miao/14).
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama :vault t)
-(m:mount *ctx* 'nyaa:tool-vault)
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama :vault t)
+(m:mount *ctx* 'miao:tool-vault)
 
 (m:cast (m:lookup :assistant) '(:steer :content "focus on the tests"))
-(nyaa:invoke-tool :tool-vault :op :list)
+(miao:invoke-tool :tool-vault :op :list)
 ;; => (:ok (:entries ((:id "..." :agent :assistant :content "focus on the tests"
 ;;                      :status :pending ...)) :total 1))
 ```
@@ -19,7 +19,7 @@ run it was sent to, a crash, or a restart -- not just the next turn. See
 ## `:vault`, the agent mount option
 
 Off (`nil`) by default: steering stays in-memory only, exactly as before
-this landed. `t` records to the default log, `~/.nyaa/vault.log`, resolved
+this landed. `t` records to the default log, `~/.miao/vault.log`, resolved
 lazily so mounting an agent never touches the filesystem on its own. A
 string or pathname records there instead.
 
@@ -62,7 +62,7 @@ same shared `%append-log`/`%read-log` helpers checkpoint.lisp declares -- so
 a vault entry can never run code merely by being read back. Appends to one
 log file serialise behind a lock of their own, keyed by the file's canonical
 name, so different logs never wait on each other. The lock is also an
-`flock` on a sidecar `<log>.lock` file, so other nyaa processes appending to
+`flock` on a sidecar `<log>.lock` file, so other miao processes appending to
 or compacting the same log serialise too.
 
 ## Claims
@@ -70,7 +70,7 @@ or compacting the same log serialise too.
 A steer waiting in an agent's queue, or one `:restore` has cast at an agent,
 is claimed: still `:pending` in the log, with `:claimed t` in
 `vault-entries`, but it cannot be restored or discarded. Claims are
-persisted in the log, so other nyaa processes see them, and are taken under
+persisted in the log, so other miao processes see them, and are taken under
 the log's lock:
 
 ```lisp
@@ -100,7 +100,7 @@ process holds or that are already consumed.
 
 ## Compaction
 
-`(nyaa:vault-compact path :max-age seconds)` rewrites the log without the
+`(miao:vault-compact path :max-age seconds)` rewrites the log without the
 steers consumed more than `max-age` seconds ago (default `*vault-max-age*`,
 7 days; `0` drops every consumed steer) and their `:consumed` lines.
 Pending steers are always kept, with their live claim folded onto the
@@ -126,8 +126,8 @@ writes to harness state.
 | `:compact` | `:max-age` (seconds, default `*vault-max-age*`) | `:dropped`, `:kept` |
 
 ```lisp
-(m:mount *ctx* 'nyaa:tool-vault)
-(nyaa:invoke-tool :tool-vault :op :restore :id "20260923-140501-822931")
+(m:mount *ctx* 'miao:tool-vault)
+(miao:invoke-tool :tool-vault :op :restore :id "20260923-140501-822931")
 ```
 
 `:restore` claims the entry under the log's lock, then casts

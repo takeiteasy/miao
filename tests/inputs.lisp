@@ -1,12 +1,12 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; Idempotent input redelivery (~takeiteasy/nyaa#75): a :RUN or :STEER a caller
+;;; Idempotent input redelivery (~takeiteasy/miao#75): a :RUN or :STEER a caller
 ;;; keys with :INPUT-ID is accepted once, and a redelivery answers with the
 ;;; original's status. Replies are read through M:CALL.
 
 (defun input-statuses (path)
-  (mapcar (lambda (e) (getf e :status)) (nyaa:input-entries path)))
+  (mapcar (lambda (e) (getf e :status)) (miao:input-entries path)))
 
 (defun keyed-run (child input-id &optional (content "go"))
   (m:call child (list :run :messages (list (list :role :user :content content))
@@ -31,23 +31,23 @@
 
 (test a-keyed-input-is-fresh-then-a-duplicate
   (with-vault-path (path)
-    (multiple-value-bind (id duplicate) (nyaa::call-log-input path :assistant "k" "d1")
+    (multiple-value-bind (id duplicate) (miao::call-log-input path :assistant "k" "d1")
       (is (stringp id))
       (is (null duplicate))
       (multiple-value-bind (again duplicate status digest)
-          (nyaa::call-log-input path :assistant "k" "d1")
+          (miao::call-log-input path :assistant "k" "d1")
         (is (equal id again))
         (is (eq :duplicate duplicate))
         (is (eq :running status))
         (is (equal "d1" digest))))
-    (is (eql 1 (length (nyaa:input-entries path))))))
+    (is (eql 1 (length (miao:input-entries path))))))
 
 (test a-finished-input-reports-its-outcome
   (with-vault-path (path)
-    (let ((id (nyaa::call-log-input path :assistant "k" "d1")))
-      (nyaa::call-log-done path (list (list id :stop nil)))
+    (let ((id (miao::call-log-input path :assistant "k" "d1")))
+      (miao::call-log-done path (list (list id :stop nil)))
       (is (equal '(:stop) (input-statuses path)))
-      (is (eq :stop (nth-value 2 (nyaa::call-log-input path :assistant "k" "d1")))))))
+      (is (eq :stop (nth-value 2 (miao::call-log-input path :assistant "k" "d1")))))))
 
 (test an-input-whose-owner-is-gone-reads-as-lost
   (with-vault-path (path)
@@ -56,25 +56,25 @@
                    :input-id "k" :digest "d1"
                    :by (list :pid 999999 :host (machine-instance) :start 1 :token "other"))
              out))
-    (is (eq :lost (nth-value 2 (nyaa::call-log-input path :assistant "k" "d1"))))))
+    (is (eq :lost (nth-value 2 (miao::call-log-input path :assistant "k" "d1"))))))
 
 (test an-unrecorded-input-appends-nothing
   (with-vault-path (path)
-    (is (null (nyaa::call-log-input path :assistant "k" "d1" :record nil)))
-    (is (null (nyaa:input-entries path)))))
+    (is (null (miao::call-log-input path :assistant "k" "d1" :record nil)))
+    (is (null (miao:input-entries path)))))
 
 (test call-entries-leaves-inputs-out
   (with-vault-path (path)
-    (nyaa::call-log-input path :assistant "k" "d1")
-    (is (null (nyaa:call-entries path)))))
+    (miao::call-log-input path :assistant "k" "d1")
+    (is (null (miao:call-entries path)))))
 
 (test compaction-drops-a-finished-input-and-keeps-an-open-one
   (with-vault-path (path)
-    (let ((done (nyaa::call-log-input path :assistant "a" "d"))
-          (open (nyaa::call-log-input path :assistant "b" "d")))
-      (nyaa::call-log-done path (list (list done :stop nil)))
-      (nyaa:call-log-compact path :max-age 0)
-      (is (equal (list open) (mapcar (lambda (e) (getf e :id)) (nyaa:input-entries path)))))))
+    (let ((done (miao::call-log-input path :assistant "a" "d"))
+          (open (miao::call-log-input path :assistant "b" "d")))
+      (miao::call-log-done path (list (list done :stop nil)))
+      (miao:call-log-compact path :max-age 0)
+      (is (equal (list open) (mapcar (lambda (e) (getf e :id)) (miao:input-entries path)))))))
 
 (test concurrent-inputs-of-one-id-are-accepted-once
   (with-vault-path (path)
@@ -83,26 +83,26 @@
            (threads (loop repeat 8
                           collect (bt:make-thread
                                    (lambda ()
-                                     (unless (nth-value 1 (nyaa::call-log-input
+                                     (unless (nth-value 1 (miao::call-log-input
                                                            path :assistant "k" "d"))
                                        (bt:with-lock-held (rlock) (incf fresh))))))))
       (mapc #'bt:join-thread threads)
       (is (eql 1 fresh))
-      (is (eql 1 (length (nyaa:input-entries path)))))))
+      (is (eql 1 (length (miao:input-entries path)))))))
 
 (test a-keyed-steer-is-recorded-once
   (with-vault-path (path)
-    (let ((id (nyaa:vault-record path :assistant "a" :input-id "k")))
+    (let ((id (miao:vault-record path :assistant "a" :input-id "k")))
       (multiple-value-bind (again duplicate status content)
-          (nyaa:vault-record path :assistant "a" :input-id "k")
+          (miao:vault-record path :assistant "a" :input-id "k")
         (is (equal id again))
         (is (eq :duplicate duplicate))
         (is (eq :pending status))
         (is (equal "a" content)))
-      (nyaa:vault-consume path id :folded)
-      (is (eq :folded (nth-value 2 (nyaa:vault-record path :assistant "a" :input-id "k"))))
-      (is (eql 1 (length (nyaa:vault-entries path))))
-      (is (equal "k" (getf (first (nyaa:vault-entries path)) :input-id))))))
+      (miao:vault-consume path id :folded)
+      (is (eq :folded (nth-value 2 (miao:vault-record path :assistant "a" :input-id "k"))))
+      (is (eql 1 (length (miao:vault-entries path))))
+      (is (equal "k" (getf (first (miao:vault-entries path)) :input-id))))))
 
 ;;; --- the agent ---------------------------------------------------------------
 
@@ -110,12 +110,12 @@
   (let ((n 0))
     (with-vault-path (path)
       (with-agent ((lambda (&rest request) (declare (ignore request)) (incf n) (final-reply "done")))
-        (m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-test-keyed :call-log path)
+        (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :call-log path)
         (is (eq :ok (keyed-run-named :assistant "k")))
         (is-true (wait-for-input-status path :stop))
         (is (equal '(:ok (:duplicate :stop)) (keyed-run-named :assistant "k")))
         (is (eql 1 n))
-        (is (eql 1 (length (nyaa:input-entries path))))))))
+        (is (eql 1 (length (miao:input-entries path))))))))
 
 (test a-redelivered-run-mid-run-answers-running
   (let ((n 0))
@@ -134,17 +134,17 @@
 (test a-run-keyed-with-other-messages-is-a-bad-request
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
-      (m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-test-keyed :call-log path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :call-log path)
       (keyed-run-named :assistant "k")
       (is-true (wait-for-input-status path :stop))
       (is (eq :bad-request
-              (first (nyaa:tool-error (keyed-run-named :assistant "k" "something else"))))))))
+              (first (miao:tool-error (keyed-run-named :assistant "k" "something else"))))))))
 
 (test a-keyed-run-with-no-call-log-is-a-bad-request
   (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed)))
-        (is (eq :bad-request (first (nyaa:tool-error (keyed-run child "k")))))))))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+        (is (eq :bad-request (first (miao:tool-error (keyed-run child "k")))))))))
 
 (test a-fresh-keyed-run-on-a-busy-agent-is-not-recorded
   (let ((n 0))
@@ -156,8 +156,8 @@
                       'tool-gate)
         (:tools '(:tool-gate))
       (keyed-run child "a")
-      (is (eq :bad-request (first (nyaa:tool-error (keyed-run child "b")))))
-      (is (eql 1 (length (nyaa:input-entries path))))
+      (is (eq :bad-request (first (miao:tool-error (keyed-run child "b")))))
+      (is (eql 1 (length (miao:input-entries path))))
       (is-true (m:receive :timeout 5)))))
 
 (test a-cancelled-input-is-finished
@@ -178,7 +178,7 @@
     (with-vault-path (path)
       (with-agent ((lambda (&rest request) (declare (ignore request)) (incf n) (final-reply "done")))
         (flet ((go-run ()
-                 (nyaa:run-agent *ctx* :model :provider-test-keyed :call-log path
+                 (miao:run-agent *ctx* :model :provider-test-keyed :call-log path
                                        :input-id "k"
                                        :messages '((:role :user :content "go")))))
           (is (eq :ok (first (go-run))))
@@ -189,16 +189,16 @@
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed :vault path)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :vault path)))
           (is (eq :ok (m:call child '(:steer :content "x" :input-id "k"))))
           (is (equal '(:ok (:duplicate :pending)) (m:call child '(:steer :content "x" :input-id "k"))))
-          (is (eq :bad-request (first (nyaa:tool-error
+          (is (eq :bad-request (first (miao:tool-error
                                        (m:call child '(:steer :content "y" :input-id "k"))))))
-          (is (eql 1 (length (nyaa:vault-entries path)))))))))
+          (is (eql 1 (length (miao:vault-entries path)))))))))
 
 (test a-keyed-steer-with-no-vault-is-a-bad-request
   (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
         (is (eq :bad-request
-                (first (nyaa:tool-error (m:call child '(:steer :content "x" :input-id "k"))))))))))
+                (first (miao:tool-error (m:call child '(:steer :content "x" :input-id "k"))))))))))

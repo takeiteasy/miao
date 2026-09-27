@@ -4,10 +4,10 @@ Every tool call an agent dispatches is recorded in an append-only log, so its
 status outlives the agent that dispatched it. Off by default.
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama
                            :tools '(:tool-shell) :call-log t)
 
-(nyaa:call-entries (merge-pathnames ".nyaa/calls.log" (user-homedir-pathname)))
+(miao:call-entries (merge-pathnames ".miao/calls.log" (user-homedir-pathname)))
 ;; => ((:id "20260925-101500-123456-0" :agent :assistant :call-id "c1"
 ;;      :name :tool-shell :arguments "{\"command\":\"ls\"}" :turn 1
 ;;      :status :ok :content "{\"stdout\":\"...\"}" ...))
@@ -21,7 +21,7 @@ A call that ended `:lost`, `:abandoned` or `:interrupted` can be
 | Value | Records to |
 |---|---|
 | `nil` (default) | nowhere |
-| `t` | `~/.nyaa/calls.log`, resolved when first used |
+| `t` | `~/.miao/calls.log`, resolved when first used |
 | a string or pathname | that file |
 
 A delegated [sub-agent](agent.md) inherits its parent's `:call-log`, so its
@@ -131,9 +131,9 @@ result under `:in-flight :call-log-ids`, ready to pass on after a restore.
 | `:compact` | `:max-age` (seconds, default `*call-log-max-age*`) | `:dropped`, `:kept` |
 
 ```lisp
-(m:mount *ctx* 'nyaa:tool-calls)
-(nyaa:invoke-tool :tool-calls :op :list :status :lost)
-(nyaa:invoke-tool :tool-calls :op :resume :ids '("20260925-101500-123456-0"))
+(m:mount *ctx* 'miao:tool-calls)
+(miao:invoke-tool :tool-calls :op :list :status :lost)
+(miao:invoke-tool :tool-calls :op :resume :ids '("20260925-101500-123456-0"))
 ```
 
 `:resume` sends `(:resume ...)` to the agent that logged the calls, or to the
@@ -144,15 +144,15 @@ uses), read once at mount time.
 ## Limitations
 
 - A call that finishes after its agent exited is `:abandoned` with no result
-  ([#180](https://todo.sr.ht/~takeiteasy/nyaa/180)).
+  ([#180](https://todo.sr.ht/~takeiteasy/miao/180)).
 - A resumed call runs again from the start; nothing reattaches to one still
-  running ([#185](https://todo.sr.ht/~takeiteasy/nyaa/185)).
+  running ([#185](https://todo.sr.ht/~takeiteasy/miao/185)).
 - A sub-agent call cannot be resumed
-  ([#186](https://todo.sr.ht/~takeiteasy/nyaa/186)).
+  ([#186](https://todo.sr.ht/~takeiteasy/miao/186)).
 - A call with large arguments cannot be resumed
-  ([#187](https://todo.sr.ht/~takeiteasy/nyaa/187)).
+  ([#187](https://todo.sr.ht/~takeiteasy/miao/187)).
 - Writes are synchronous on the agent's process
-  ([#181](https://todo.sr.ht/~takeiteasy/nyaa/181)).
+  ([#181](https://todo.sr.ht/~takeiteasy/miao/181)).
 
 [^liveness]: The dispatching process is judged as a vault
     [claim](vault.md#claims) is: alive while this image, another host, or a

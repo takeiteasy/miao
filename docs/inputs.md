@@ -5,7 +5,7 @@ as a client retrying after a dropped response, answers with the original's
 status and does not run or queue again.
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama
                            :call-log t :vault t)
 
 (m:call (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))
@@ -62,9 +62,9 @@ steer; it skips the check.
 - An id is remembered until compaction drops it: 7 days after the input
   finished ([`*call-log-max-age*`](calls.md#api),
   [`*vault-max-age*`](vault.md#compaction)). A later redelivery is new
-  ([#182](https://todo.sr.ht/~takeiteasy/nyaa/182)).
+  ([#182](https://todo.sr.ht/~takeiteasy/miao/182)).
 - A `:lost` input is reported, not re-run
-  ([#77](https://todo.sr.ht/~takeiteasy/nyaa/77)).
+  ([#77](https://todo.sr.ht/~takeiteasy/miao/77)).
 
 [^scope]: One id covers one log file. A `:run` and a `:steer` are in different
     logs, so the same string may key one of each.

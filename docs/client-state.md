@@ -1,16 +1,16 @@
 # Client state
 
-`nyaa/ui` folds an agent's [events](ui.md#events) into the state an operator
+`miao/ui` folds an agent's [events](ui.md#events) into the state an operator
 sees, and sends the operator's [commands](ui.md#commands) back. It draws
 nothing: a renderer reads the state and never reads events itself.
 
 ```lisp
-(ql:quickload :nyaa/ui)
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama)
+(ql:quickload :miao/ui)
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
 
-(let ((client (nyaa/ui:attach :assistant :on-change #'redraw)))
-  (nyaa/ui:run client "hi")
-  (nyaa/ui:client-state client))
+(let ((client (miao/ui:attach :assistant :on-change #'redraw)))
+  (miao/ui:run client "hi")
+  (miao/ui:client-state client))
 ```
 
 ## Attaching
@@ -75,19 +75,19 @@ with its transcript, status and reason, listed by `state-children` under the
 node whose call started it.[^tree]
 
 ```lisp
-(let ((root (nyaa/ui:state-root state)))
-  (dolist (child (nyaa/ui:state-children state root))
-    (format t "~a: ~a~%" (nyaa/ui:node-call-id child) (nyaa/ui:node-status child))))
+(let ((root (miao/ui:state-root state)))
+  (dolist (child (miao/ui:state-children state root))
+    (format t "~a: ~a~%" (miao/ui:node-call-id child) (miao/ui:node-status child))))
 ```
 
 ## Limitations
 
 - A client that attaches to an idle agent starts with an empty transcript, not
-  the conversation the agent holds ([#203](https://todo.sr.ht/~takeiteasy/nyaa/203)).
+  the conversation the agent holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
 - Sub-agent nodes are found by call id, and cannot be steered or cancelled
-  ([#200](https://todo.sr.ht/~takeiteasy/nyaa/200)).
+  ([#200](https://todo.sr.ht/~takeiteasy/miao/200)).
 - There is no state for operator approvals
-  ([#199](https://todo.sr.ht/~takeiteasy/nyaa/199)).
+  ([#199](https://todo.sr.ht/~takeiteasy/miao/199)).
 
 [^text]: Streamed text is kept as chunks and joined by `entry-text`, so a long
     answer does not copy itself on every delta.

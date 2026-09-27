@@ -1,6 +1,6 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
-;;; The call log (~takeiteasy/nyaa#73): an append-only s-expression log with
+;;; The call log (~takeiteasy/miao#73): an append-only s-expression log with
 ;;; one record per tool call an agent dispatches, so a call's status outlives
 ;;; the process running it. Read back the same guarded way the vault is
 ;;; (checkpoint.lisp's %APPEND-LOG/%READ-LOG).
@@ -16,7 +16,7 @@
 ;;;   (:kind :input   :id "..." :at "iso" :agent name-or-nil :input-id "k"
 ;;;    :digest "md5hex" :by owner)
 ;;;
-;;; An :INPUT is a :RUN a caller keyed with :INPUT-ID (~takeiteasy/nyaa#75); it
+;;; An :INPUT is a :RUN a caller keyed with :INPUT-ID (~takeiteasy/miao#75); it
 ;;; is finished by a :DONE line like a call. CALL-ENTRIES leaves it out.
 ;;;
 ;;; :ID is the log's own, fresh per dispatch: a provider may reuse :CALL-ID on
@@ -33,14 +33,14 @@
 :MAX-TOOL-RESULT.")
 
 (defvar *call-log* nil
-  "Default log path: ~/.nyaa/calls.log, resolved lazily.")
+  "Default log path: ~/.miao/calls.log, resolved lazily.")
 
 (defun %call-log-path (spec)
   "SPEC, an agent's :CALL-LOG mount option, as a log path: NIL means off, T the
 default, anything else is used as given."
   (cond ((eq spec t)
          (or *call-log*
-             (setf *call-log* (merge-pathnames ".nyaa/calls.log" (user-homedir-pathname)))))
+             (setf *call-log* (merge-pathnames ".miao/calls.log" (user-homedir-pathname)))))
         (t spec)))
 
 (defun call-log-accept (path agent turn calls &key (cap *call-log-max-content*))

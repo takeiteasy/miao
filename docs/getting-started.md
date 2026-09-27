@@ -2,19 +2,19 @@
 
 ## Loading
 
-nyaa loads through Quicklisp's local projects, alongside
+miao loads through Quicklisp's local projects, alongside
 [meow](https://github.com/takeiteasy/meow) and its own out-of-dist
 dependency:
 
 ```sh
-ln -s ~/git/nyaa ~/quicklisp/local-projects/nyaa
+ln -s ~/git/miao ~/quicklisp/local-projects/miao
 ln -s ~/git/meow ~/quicklisp/local-projects/meow
 git clone https://github.com/takeiteasy/trivial-high-precision-timer \
     ~/quicklisp/local-projects/trivial-high-precision-timer
 ```
 
 ```lisp
-(ql:quickload :nyaa)
+(ql:quickload :miao)
 ```
 
 Dependencies: `meow`, `alexandria`, [`jzon`](https://github.com/Zulu-Inuoe/jzon)
@@ -29,20 +29,20 @@ The [tools](tools.md) mount into a meow context:
 
 ```lisp
 (defvar *tools* (meow:start-service (make-instance 'meow:context :name :tools)))
-(meow:mount *tools* 'nyaa:tool-fs :root "/srv/workspace")
-(meow:mount *tools* 'nyaa:tool-shell)
-(meow:mount *tools* 'nyaa:tool-http)
-(meow:mount *tools* 'nyaa:tool-eval)
-(meow:mount *tools* 'nyaa:tool-repl)
-(nyaa:invoke-tool :tool-shell :cmd "echo hello")
+(meow:mount *tools* 'miao:tool-fs :root "/srv/workspace")
+(meow:mount *tools* 'miao:tool-shell)
+(meow:mount *tools* 'miao:tool-http)
+(meow:mount *tools* 'miao:tool-eval)
+(meow:mount *tools* 'miao:tool-repl)
+(miao:invoke-tool :tool-shell :cmd "echo hello")
 ```
 
 A [protocol](protocols.md) mounts the same way, and carries its backend in the
 request:
 
 ```lisp
-(meow:mount *tools* 'nyaa:protocol-openai)
-(nyaa:complete :protocol-openai
+(meow:mount *tools* 'miao:protocol-openai)
+(miao:complete :protocol-openai
   :base-url "http://127.0.0.1:11434/v1"
   :model "llama3.2"
   :messages '((:role :user :content "hello")))
@@ -51,15 +51,15 @@ request:
 A [provider](providers.md) carries that backend for you:
 
 ```lisp
-(meow:mount *tools* 'nyaa:protocol-ollama)
-(meow:mount *tools* 'nyaa:provider-ollama :model "llama3.2")
-(nyaa:complete :provider-ollama :messages '((:role :user :content "hello")))
+(meow:mount *tools* 'miao:protocol-ollama)
+(meow:mount *tools* 'miao:provider-ollama :model "llama3.2")
+(miao:complete :provider-ollama :messages '((:role :user :content "hello")))
 ```
 
 An [agent](agent.md) runs a turn cycle over a model and its tools:
 
 ```lisp
-(nyaa:run-agent *tools* :model :provider-ollama :tools '(:tool-shell)
+(miao:run-agent *tools* :model :provider-ollama :tools '(:tool-shell)
                 :messages '((:role :user :content "list the files")))
 ```
 
@@ -67,13 +67,13 @@ Runs on SBCL.
 
 ## Launching
 
-`nyaa install` builds a recovery image once, and `nyaa` launches nyaa from
+`miao install` builds a recovery image once, and `miao` launches miao from
 the newest saved [image generation](images.md) afterwards, falling back to
 recovery if it won't load -- see [the launcher](launcher.md):
 
 ```sh
-nyaa install
-nyaa
+miao install
+miao
 ```
 
 ## Tests
@@ -81,7 +81,7 @@ nyaa
 The suite uses FiveAM and runs through ASDF:
 
 ```lisp
-(asdf:test-system :nyaa)
+(asdf:test-system :miao)
 ```
 
 From the shell, `tests/test.sh` runs it and exits non-zero on failure:
@@ -90,15 +90,15 @@ From the shell, `tests/test.sh` runs it and exits non-zero on failure:
 tests/test.sh
 ```
 
-Tests that make real network requests are skipped unless `NYAA_LIVE_HTTP` is
-set, and the live protocol tests unless `NYAA_OLLAMA_URL` (the `/v1` route) or
-`NYAA_OLLAMA_NATIVE_URL` (native `/api/chat`) is:
+Tests that make real network requests are skipped unless `MIAO_LIVE_HTTP` is
+set, and the live protocol tests unless `MIAO_OLLAMA_URL` (the `/v1` route) or
+`MIAO_OLLAMA_NATIVE_URL` (native `/api/chat`) is:
 
 ```sh
-NYAA_LIVE_HTTP=1 tests/test.sh
-NYAA_OLLAMA_URL=http://127.0.0.1:11434/v1 \
-NYAA_OLLAMA_NATIVE_URL=http://127.0.0.1:11434 tests/test.sh
+MIAO_LIVE_HTTP=1 tests/test.sh
+MIAO_OLLAMA_URL=http://127.0.0.1:11434/v1 \
+MIAO_OLLAMA_NATIVE_URL=http://127.0.0.1:11434 tests/test.sh
 ```
 
-`NYAA_OLLAMA_MODEL` names the model, and defaults to `llama3.2`. A backend that
+`MIAO_OLLAMA_MODEL` names the model, and defaults to `llama3.2`. A backend that
 does not have that model skips the live tests rather than failing them.

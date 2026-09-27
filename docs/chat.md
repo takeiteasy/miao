@@ -1,13 +1,13 @@
 # Chat
 
-`nyaa chat` is a line-by-line chat with one [agent](agent.md). It streams the
+`miao chat` is a line-by-line chat with one [agent](agent.md). It streams the
 answer, shows tool calls and their results, and takes a line typed mid-run as
 a steer, and [saves each run](#saving-and-resuming) so a chat can be resumed.
-It is the secondary system `nyaa/cli`, drawn from
+It is the secondary system `miao/cli`, drawn from
 [client state](client-state.md).
 
 ```sh
-nyaa chat --model ollama:llama3.2 --tools tool-fs
+miao chat --model ollama:llama3.2 --tools tool-fs
 ```
 
 ```
@@ -20,7 +20,7 @@ There are 41.
 
 ## Options
 
-The options of [`nyaa run`](cli.md#options), without `PROMPT` and `-v`, and
+The options of [`miao run`](cli.md#options), without `PROMPT` and `-v`, and
 `--resume`. A prompt argument is a usage error (exit 2).
 
 | Option | Meaning |
@@ -50,21 +50,21 @@ what came before. It is unmounted when the chat ends.
 | `[run ended: reason]` | the run stopped for any reason but `:stop` |
 | `> ` | the run is over; the next line goes to the model |
 
-An existing install needs `nyaa install` again to get `chat` and `chats` into its saved core.
+An existing install needs `miao install` again to get `chat` and `chats` into its saved core.
 
 ## Saving and resuming
 
 Each run that ends is saved as a [generation](checkpoints.md), one folder per
-chat under `$NYAA_HOME/chats/`[^save]. A chat that runs nothing saves nothing.
+chat under `$MIAO_HOME/chats/`[^save]. A chat that runs nothing saves nothing.
 
 ```sh
-nyaa chats
+miao chats
 # 20260925-191231-123456-482  2026-09-25T18:12:40Z  how many .lisp files are here?
-nyaa chat --resume                        # the newest chat
-nyaa chat --resume 20260925-191231-123456-482
+miao chat --resume                        # the newest chat
+miao chat --resume 20260925-191231-123456-482
 ```
 
-`nyaa chats` prints one line per chat, newest first: its id, when it was last
+`miao chats` prints one line per chat, newest first: its id, when it was last
 saved and its first line. `--resume` prints the saved conversation as it was
 drawn, then a prompt; the next line carries on from it. The model, tools and
 system prompt are the saved ones, and a resumed chat keeps saving into its own
@@ -81,14 +81,14 @@ variable as in a new chat ([credentials](checkpoints.md#credentials)).
 ## Limitations
 
 - A line that reads as Lisp is sent as a prompt
-  ([#204](https://todo.sr.ht/~takeiteasy/nyaa/204)).
+  ([#204](https://todo.sr.ht/~takeiteasy/miao/204)).
 - The chat draws the [text the provider streams](protocols.md#streaming), so an
   answer that is not streamed is not shown
-  ([#205](https://todo.sr.ht/~takeiteasy/nyaa/205)).
+  ([#205](https://todo.sr.ht/~takeiteasy/miao/205)).
 - The options of a resumed chat cannot be changed
-  ([#207](https://todo.sr.ht/~takeiteasy/nyaa/207)).
+  ([#207](https://todo.sr.ht/~takeiteasy/miao/207)).
 - Saved chats are never deleted or pruned
-  ([#208](https://todo.sr.ht/~takeiteasy/nyaa/208)).
+  ([#208](https://todo.sr.ht/~takeiteasy/miao/208)).
 
 [^save]: Saved by a thread of its own, so a slow disk never holds up the
     prompt, and once more as the chat ends, so a run cut short by Ctrl-D is kept.

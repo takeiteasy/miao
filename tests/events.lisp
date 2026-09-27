@@ -1,7 +1,7 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; The UI contract (~takeiteasy/nyaa#193, #194): :RUN-START and :STEER, the
+;;; The UI contract (~takeiteasy/miao#193, #194): :RUN-START and :STEER, the
 ;;; :AGENT and :PARENT tags, and :SUBSCRIBE / :UNSUBSCRIBE.
 
 (defun run-dones (recorder)
@@ -12,7 +12,7 @@
   (is-true (eventually (lambda () (>= (run-dones recorder) n)) 5)))
 
 (defun mount-assistant (&rest initargs)
-  (apply #'m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-test-keyed initargs))
+  (apply #'m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed initargs))
 
 (defun send-to-assistant (message)
   "MESSAGE to :ASSISTANT's live process, retried while mount is still
@@ -121,10 +121,10 @@ restarting it after its last run. Returns the answer."
     (let* ((recorder (make-recorder))
            (sink (recorder-sink recorder)))
       (mount-assistant :sink sink)
-      (is (nyaa:tool-error-p (send-to-assistant (list :unsubscribe sink))))
-      (is (nyaa:tool-error-p (send-to-assistant (list :unsubscribe (lambda (e) e)))))
-      (is (nyaa:tool-error-p (send-to-assistant '(:subscribe 42))))
-      (is (nyaa:tool-error-p (send-to-assistant '(:subscribe nil))))
+      (is (miao:tool-error-p (send-to-assistant (list :unsubscribe sink))))
+      (is (miao:tool-error-p (send-to-assistant (list :unsubscribe (lambda (e) e)))))
+      (is (miao:tool-error-p (send-to-assistant '(:subscribe 42))))
+      (is (miao:tool-error-p (send-to-assistant '(:subscribe nil))))
       (send-to-assistant (list :subscribe sink))
       (run-assistant recorder 1)
       (is (= 5 (length (recorded-events recorder))) "the mount sink is not told twice"))))
@@ -160,16 +160,16 @@ restarting it after its last run. Returns the answer."
         (setf (car release) t)))))
 
 (test a-fanout-replays-its-history-then-goes-live-and-never-changes-an-event
-  (let* ((fanout (nyaa::make-fanout nil t))
+  (let* ((fanout (miao::make-fanout nil t))
          (seen '())
          (first-delta (list :type :text-delta :ref nil :text "a" :agent :x))
          (child-delta (list :type :text-delta :ref nil :text "c" :agent :x :parent nil)))
-    (nyaa::emit-event fanout (list :type :run-start :ref nil :agent :x))
-    (nyaa::emit-event fanout first-delta)
-    (nyaa::emit-event fanout (list :type :text-delta :ref nil :text "b" :agent :x))
-    (nyaa::emit-event fanout child-delta)
-    (nyaa::fanout-add fanout (lambda (event) (push event seen)) :replay t)
-    (nyaa::emit-event fanout (list :type :run-done :ref nil :agent :x))
+    (miao::emit-event fanout (list :type :run-start :ref nil :agent :x))
+    (miao::emit-event fanout first-delta)
+    (miao::emit-event fanout (list :type :text-delta :ref nil :text "b" :agent :x))
+    (miao::emit-event fanout child-delta)
+    (miao::fanout-add fanout (lambda (event) (push event seen)) :replay t)
+    (miao::emit-event fanout (list :type :run-done :ref nil :agent :x))
     (let ((events (reverse seen)))
       (is (equal '(:run-start :text-delta :text-delta :run-done) (types-of events)))
       (is (equal "ab" (getf (second events) :text)) "adjacent text merges")
@@ -177,10 +177,10 @@ restarting it after its last run. Returns the answer."
     (is (equal "a" (getf first-delta :text)) "the event a live sink holds is untouched")))
 
 (test a-fanout-that-is-not-recording-replays-nothing
-  (let ((fanout (nyaa::make-fanout))
+  (let ((fanout (miao::make-fanout))
         (seen '()))
-    (nyaa::emit-event fanout (list :type :run-start :ref nil))
-    (nyaa::fanout-add fanout (lambda (event) (push event seen)) :replay t)
+    (miao::emit-event fanout (list :type :run-start :ref nil))
+    (miao::fanout-add fanout (lambda (event) (push event seen)) :replay t)
     (sleep 0.1)
     (is (null seen))))
 

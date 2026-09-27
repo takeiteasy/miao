@@ -1,5 +1,5 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
 ;;; The provider layer against the fake HTTP backend: what a declaration
 ;;; publishes, what a mount may override, where a credential comes from and
@@ -10,40 +10,40 @@
 ;;; backend's port is only known at run time: each mount overrides it, which
 ;;; is the same override a remote Ollama host or a proxy uses.
 
-(nyaa:define-provider :test-keyed
+(miao:define-provider :test-keyed
   :protocol :protocol-openai
   :base-url "http://127.0.0.1:1"
-  :auth '(:bearer :env "NYAA_TEST_KEY_NEVER_SET")
+  :auth '(:bearer :env "MIAO_TEST_KEY_NEVER_SET")
   :models '("test-model" "test-model-large")
   :defaults '(:temperature 0.25)
   :headers '("x-quirk" "on")
   :summary "A bearer-keyed provider for tests")
 
-(nyaa:define-provider :test-header-keyed
+(miao:define-provider :test-header-keyed
   :protocol :protocol-openai
   :base-url "http://127.0.0.1:1"
-  :auth '(:header "x-api-key" :env "NYAA_TEST_KEY_NEVER_SET"))
+  :auth '(:header "x-api-key" :env "MIAO_TEST_KEY_NEVER_SET"))
 
-(nyaa:define-provider :test-keyless
+(miao:define-provider :test-keyless
   :protocol :protocol-openai
   :base-url "http://127.0.0.1:1"
   :auth :none)
 
-;;; PATH rather than a variable the test sets: no implementation nyaa runs on
+;;; PATH rather than a variable the test sets: no implementation miao runs on
 ;;; offers a portable SETENV, and PATH is the one variable guaranteed to be
 ;;; there. What is under test is that the key is read from the variable the
 ;;; declaration names, not which variable that is.
 
-(nyaa:define-provider :test-env-keyed
+(miao:define-provider :test-env-keyed
   :protocol :protocol-openai
   :base-url "http://127.0.0.1:1"
   :auth '(:bearer :env "PATH"))
 
-(nyaa:define-provider :test-echo
+(miao:define-provider :test-echo
   :protocol :protocol-echo
   :base-url "http://127.0.0.1:1")
 
-(nyaa:define-provider :test-rewriting
+(miao:define-provider :test-rewriting
   :protocol :protocol-echo
   :base-url "http://127.0.0.1:1"
   :rewrite-response (lambda (result)
@@ -51,11 +51,11 @@
                           (list :ok (list* :rewritten t (second result)))
                           result)))
 
-(nyaa:define-provider :test-stacked
+(miao:define-provider :test-stacked
   :protocol :provider-test-echo
   :base-url "http://127.0.0.1:1")
 
-(nyaa:define-provider :test-orphan
+(miao:define-provider :test-orphan
   :protocol :protocol-nobody-mounted
   :base-url "http://127.0.0.1:1")
 
@@ -74,8 +74,8 @@ mount is (class . initargs), with :base-url filled in."
     (setf *backend* server)
     (unwind-protect
          (progn
-           (m:mount context 'nyaa:protocol-openai)
-           (m:mount context 'nyaa:protocol-ollama)
+           (m:mount context 'miao:protocol-openai)
+           (m:mount context 'miao:protocol-ollama)
            (dolist (mount mounts)
              (apply #'m:mount context (first mount)
                     :base-url (fake-http-url server) (rest mount)))
@@ -93,7 +93,7 @@ is the one MAKE-INSTANCE takes."
           '(:model "test-model" :api-key "sk-secret")))
 
 (defun turn (name &rest extra)
-  (apply #'nyaa:complete name :messages '((:role :user :content "hello")) extra))
+  (apply #'miao:complete name :messages '((:role :user :content "hello")) extra))
 
 (defun sent-header (name)
   (getf-string (getf (first (fake-http-requests *backend*)) :headers) name))
@@ -102,8 +102,8 @@ is the one MAKE-INSTANCE takes."
 
 (test a-provider-is-discoverable-and-describes-itself
   (with-providers ((json-response +hello-reply+) (keyed))
-    (is (equal '(:provider-test-keyed) (nyaa:providers)))
-    (let ((metadata (nyaa:describe-provider :provider-test-keyed)))
+    (is (equal '(:provider-test-keyed) (miao:providers)))
+    (let ((metadata (miao:describe-provider :provider-test-keyed)))
       (is (eq :provider (getf metadata :kind)))
       (is (eq :protocol-openai (getf metadata :protocol)))
       (is (stringp (getf metadata :summary)))
@@ -113,18 +113,18 @@ is the one MAKE-INSTANCE takes."
       ;; The auth form names its kind and where the key comes from, never
       ;; the key.
       (is (eq :bearer (getf (getf metadata :auth) :kind)))
-      (is (equal "NYAA_TEST_KEY_NEVER_SET" (getf (getf metadata :auth) :env))))))
+      (is (equal "MIAO_TEST_KEY_NEVER_SET" (getf (getf metadata :auth) :env))))))
 
 (test metadata-carries-no-key-material
   (with-providers ((json-response +hello-reply+) (keyed))
     (is (null (search "sk-secret"
                       (princ-to-string
-                       (nyaa:describe-provider :provider-test-keyed)))))))
+                       (miao:describe-provider :provider-test-keyed)))))))
 
 (test a-mount-overrides-the-declaration
   ;; The declaration pins a dead port; only the override makes the turn land.
   (with-providers ((json-response +hello-reply+) (keyed :model "override-model"))
-    (let ((metadata (nyaa:describe-provider :provider-test-keyed)))
+    (let ((metadata (miao:describe-provider :provider-test-keyed)))
       (is (equal (fake-http-url *backend*) (getf metadata :base-url)))
       (is (equal "override-model" (getf metadata :model))))
     (is (eq :ok (first (turn :provider-test-keyed))))
@@ -133,7 +133,7 @@ is the one MAKE-INSTANCE takes."
 (test a-declaration-outside-the-vocabulary-is-a-definition-error
   (flet ((declaration (&rest plist)
            (signals error
-             (nyaa::check-provider-declaration
+             (miao::check-provider-declaration
               :provider-broken
               (append plist '(:protocol :protocol-openai
                               :base-url "http://127.0.0.1:1"))))))
@@ -143,9 +143,9 @@ is the one MAKE-INSTANCE takes."
     (declaration :defaults '(:temperature))        ; not a plist
     (declaration :quirk t))                        ; not a key at all
   ;; And the two the declaration cannot do without.
-  (signals error (nyaa::check-provider-declaration :b '(:base-url "http://x")))
-  (signals error (nyaa::check-provider-declaration :b '(:protocol :protocol-openai)))
-  (signals error (nyaa::check-provider-declaration
+  (signals error (miao::check-provider-declaration :b '(:base-url "http://x")))
+  (signals error (miao::check-provider-declaration :b '(:protocol :protocol-openai)))
+  (signals error (miao::check-provider-declaration
                   :b '(:protocol :protocol-openai :base-url "127.0.0.1:11434"))))
 
 ;;; --- credentials ------------------------------------------------------
@@ -168,7 +168,7 @@ is the one MAKE-INSTANCE takes."
                    (list 'provider-test-keyless :model "test-model"))
     (is (eq :ok (first (turn :provider-test-keyless))))
     (is (null (sent-header "authorization")))
-    (is (eq :none (getf (getf (nyaa:describe-provider :provider-test-keyless)
+    (is (eq :none (getf (getf (miao:describe-provider :provider-test-keyless)
                               :auth)
                         :kind)))))
 
@@ -184,11 +184,11 @@ is the one MAKE-INSTANCE takes."
   ;; call; the call itself is a bad request rather than an outage.
   (with-providers ((json-response +hello-reply+)
                    (list 'provider-test-keyed :model "test-model"))
-    (is (eq :unavailable (getf (nyaa:describe-provider :provider-test-keyed)
+    (is (eq :unavailable (getf (miao:describe-provider :provider-test-keyed)
                                :status)))
-    (let ((reason (nyaa:tool-error (turn :provider-test-keyed))))
+    (let ((reason (miao:tool-error (turn :provider-test-keyed))))
       (is (eq :bad-request (first reason)))
-      (is (search "NYAA_TEST_KEY_NEVER_SET" (second reason))))
+      (is (search "MIAO_TEST_KEY_NEVER_SET" (second reason))))
     (is (null (fake-http-requests *backend*)))))
 
 ;;; --- layering ---------------------------------------------------------
@@ -213,7 +213,7 @@ is the one MAKE-INSTANCE takes."
 (test a-mount-that-binds-no-model-leaves-the-requirement-to-the-caller
   (with-providers ((json-response +hello-reply+)
                    (list 'provider-test-keyless))
-    (is (eq :bad-request (first (nyaa:tool-error (turn :provider-test-keyless)))))
+    (is (eq :bad-request (first (miao:tool-error (turn :provider-test-keyless)))))
     (is (eq :ok (first (turn :provider-test-keyless :model "asked-for"))))
     (is (equal "asked-for" (gethash "model" (sent-body))))))
 
@@ -222,7 +222,7 @@ is the one MAKE-INSTANCE takes."
 (test a-turn-crosses-the-provider-unchanged
   (with-providers ((json-response +hello-reply+) (keyed))
     (let ((reply (second (turn :provider-test-keyed))))
-      (is (equal "hi there" (nyaa:content-text (getf reply :content))))
+      (is (equal "hi there" (miao:content-text (getf reply :content))))
       (is (eq :stop (getf (getf reply :meta) :finish-reason)))
       (is (= 7 (getf (getf (getf reply :meta) :usage) :prompt-tokens))))))
 
@@ -238,18 +238,18 @@ is the one MAKE-INSTANCE takes."
                          :stream (lambda (event) (push event events)))))
       (is (equal '(:text-delta :text-delta :done)
                  (mapcar (lambda (event) (getf event :type)) (nreverse events))))
-      (is (equal "hi there" (nyaa:content-text (getf (second result) :content)))))))
+      (is (equal "hi there" (miao:content-text (getf (second result) :content)))))))
 
 (test a-cancel-crosses-the-provider
   (with-providers ((stalled-stream "text/event-stream" (sse-body "{\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}"))
                    (keyed))
     (with-hold
-      (let* ((token (nyaa:make-cancel-token))
-             (canceller (bt:make-thread (lambda () (sleep 0.3) (nyaa:cancel token))))
+      (let* ((token (miao:make-cancel-token))
+             (canceller (bt:make-thread (lambda () (sleep 0.3) (miao:cancel token))))
              (result (turn :provider-test-keyed :cancel token :timeout 30000
                            :stream (lambda (event) event))))
         (bt:join-thread canceller)
-        (is (eq :cancelled (nyaa:tool-error result)))))))
+        (is (eq :cancelled (miao:tool-error result)))))))
 
 (test a-tool-call-crosses-the-provider-ready-to-invoke
   (with-providers ((json-response
@@ -269,26 +269,26 @@ is the one MAKE-INSTANCE takes."
   (with-providers ('(429 ("Content-Type" "application/json")
                      "{\"error\":{\"message\":\"rate limited\"}}")
                    (keyed))
-    (let ((reason (nyaa:tool-error (turn :provider-test-keyed))))
+    (let ((reason (miao:tool-error (turn :provider-test-keyed))))
       (is (eq :backend-error (first reason)))
       (is (= 429 (second reason)))
       (is (search "rate limited" (third reason))))))
 
 (test an-unreachable-backend-crosses-the-provider-as-unavailable
   (with-providers (:close (keyed))
-    (is (eq :unavailable (nyaa:tool-error (turn :provider-test-keyed))))))
+    (is (eq :unavailable (miao:tool-error (turn :provider-test-keyed))))))
 
 (test a-malformed-request-never-leaves-the-provider
   (with-providers ((json-response +hello-reply+) (keyed))
     (is (eq :bad-request
-            (first (nyaa:tool-error (nyaa:complete :provider-test-keyed
+            (first (miao:tool-error (miao:complete :provider-test-keyed
                                                    :messages '((:role :wizard)))))))
     (is (null (fake-http-requests *backend*)))))
 
 (test a-provider-whose-protocol-is-not-mounted-is-unavailable
   (with-providers ((json-response +hello-reply+)
                    (list 'provider-test-orphan :model "test-model"))
-    (is (eq :unavailable (nyaa:tool-error (turn :provider-test-orphan))))))
+    (is (eq :unavailable (miao:tool-error (turn :provider-test-orphan))))))
 
 ;;; --- the ollama provider ----------------------------------------------
 
@@ -296,8 +296,8 @@ is the one MAKE-INSTANCE takes."
   (with-providers ((json-response
                      "{\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},
                        \"done\":true,\"done_reason\":\"stop\"}")
-                   (list 'nyaa:provider-ollama :model "llama3.2"))
-    (let ((metadata (nyaa:describe-provider :provider-ollama)))
+                   (list 'miao:provider-ollama :model "llama3.2"))
+    (let ((metadata (miao:describe-provider :provider-ollama)))
       (is (eq :provider (getf metadata :kind)))
       (is (eq :protocol-ollama (getf metadata :protocol)))
       (is (eq :none (getf (getf metadata :auth) :kind)))
@@ -313,38 +313,38 @@ is the one MAKE-INSTANCE takes."
   ;; reachable with no provider of its own -- :protocol-openai takes
   ;; :base-url per request.
   (is (equal "http://127.0.0.1:11434"
-             (getf (nyaa::provider-declaration
-                    (make-instance 'nyaa:provider-ollama))
+             (getf (miao::provider-declaration
+                    (make-instance 'miao:provider-ollama))
                    :base-url))))
 
 ;;; --- live -------------------------------------------------------------
 
 (test ollama-live-completion-through-the-provider
   ;; Off by default: CI must not depend on a model being installed. A
-  ;; separate variable from NYAA_OLLAMA_URL, which the OpenAI protocol's live
+  ;; separate variable from MIAO_OLLAMA_URL, which the OpenAI protocol's live
   ;; tests point at the /v1 route.
-  (let ((base-url (uiop:getenv "NYAA_OLLAMA_NATIVE_URL"))
-        (model (or (uiop:getenv "NYAA_OLLAMA_MODEL") "llama3.2")))
+  (let ((base-url (uiop:getenv "MIAO_OLLAMA_NATIVE_URL"))
+        (model (or (uiop:getenv "MIAO_OLLAMA_MODEL") "llama3.2")))
     (if (null base-url)
-        (skip "set NYAA_OLLAMA_NATIVE_URL to run live Ollama tests")
+        (skip "set MIAO_OLLAMA_NATIVE_URL to run live Ollama tests")
         (let* ((registry (make-instance 'm:registry))
                (m:*registry* registry)
                (context (m:start-service (make-instance 'm:context :name :live)
                                          :registry registry)))
           (unwind-protect
                (progn
-                 (m:mount context 'nyaa:protocol-ollama)
-                 (m:mount context 'nyaa:provider-ollama
+                 (m:mount context 'miao:protocol-ollama)
+                 (m:mount context 'miao:provider-ollama
                           :base-url base-url :model model)
-                 (let ((result (nyaa:complete
+                 (let ((result (miao:complete
                                 :provider-ollama :timeout 120000
                                 :messages '((:role :user
                                              :content "Reply with the word ok.")))))
                    (if (model-missing-p result)
-                       (skip "~a has no model ~a; set NYAA_OLLAMA_MODEL" base-url model)
+                       (skip "~a has no model ~a; set MIAO_OLLAMA_MODEL" base-url model)
                        (progn
                          (is (eq :ok (first result)))
-                         (is (plusp (length (nyaa:content-text
+                         (is (plusp (length (miao:content-text
                                              (getf (second result) :content)))))))))
             (m:stop context))))))
 
@@ -411,13 +411,13 @@ is the one MAKE-INSTANCE takes."
   (call-with-echo-provider
    (lambda (context)
      (declare (ignore context))
-     (let* ((spawned (getf (nyaa:pool-stats 0) :spawned))
+     (let* ((spawned (getf (miao:pool-stats 0) :spawned))
             (start (get-internal-real-time))
             (results (concurrently 3 (lambda () (turn :provider-test-echo :delay 0.4)))))
        (is (every (lambda (result) (eq :ok (first result))) results))
        (is (< (elapsed-since start) 1))
-       (is (= spawned (getf (nyaa:pool-stats 0) :spawned)))
-       (is (zerop (getf (nyaa:pool-stats 0) :running)))))))
+       (is (= spawned (getf (miao:pool-stats 0) :spawned)))
+       (is (zerop (getf (miao:pool-stats 0) :running)))))))
 
 (test a-provider-that-rewrites-the-response-still-does
   (call-with-echo-provider

@@ -5,8 +5,8 @@ Two `:agent`-trusted, always-on, read-only tools over the running image:
 [meow](https://github.com/takeiteasy/meow) supervision tree it runs under.
 
 ```lisp
-(m:mount context 'nyaa:tool-image)
-(m:mount context 'nyaa:tool-services)
+(m:mount context 'miao:tool-image)
+(m:mount context 'miao:tool-services)
 ```
 
 Neither ever returns a value or a slot — flags and shapes only. That holds
@@ -23,14 +23,14 @@ even for a bound special: `tool-eval`, `tool-repl` and `tool-self`, all
 | `:source` | `:symbol` (required), `:doc-type` | `:available`, and `:file`/`:position` or `:form`/`:truncated` when it is, and `:methods` for a generic function |
 | `:packages` | — | `:packages` — each loaded package's name and nicknames |
 
-`:symbol` is `"nyaa:complete"` or `"complete"` against `:package` (or
+`:symbol` is `"miao:complete"` or `"complete"` against `:package` (or
 `*package*`), resolved with `find-symbol` — never `read-from-string` or
 `intern`, so a lookup cannot grow the image. An unresolvable `:package` or
 `:symbol` is a `(:bad-request ...)`.
 
 ```lisp
-(nyaa:invoke-tool :tool-image :op :describe :symbol "nyaa:complete")
-;; => (:ok (:name "COMPLETE" :package "NYAA" :fboundp t :boundp nil
+(miao:invoke-tool :tool-image :op :describe :symbol "miao:complete")
+;; => (:ok (:name "COMPLETE" :package "MIAO" :fboundp t :boundp nil
 ;;          :kind :function :lambda-list "(NAME &REST REQUEST)"
 ;;          :documentation "..." :variable-documentation nil
 ;;          :source (:available t :file "/.../protocol.lisp" :position 8572)))
@@ -51,7 +51,7 @@ printed lambda expression as `:form`, capped at 4000 characters with
 `:available nil` rather than erroring.
 
 ```lisp
-(nyaa:invoke-tool :tool-image :op :source :symbol "my-fn")
+(miao:invoke-tool :tool-image :op :source :symbol "my-fn")
 ;; => (:ok (:available t :form "(LAMBDA (X) (BLOCK MY-FN (1+ X)))" :truncated nil))
 ```
 
@@ -62,7 +62,7 @@ defined in the image has no source form, only its specializers. `:describe`
 carries the same under its `:source`.
 
 ```lisp
-(nyaa:invoke-tool :tool-image :op :source :symbol "my-generic")
+(miao:invoke-tool :tool-image :op :source :symbol "my-generic")
 ;; => (:ok (:available t :methods ((:specializers "(INTEGER)" :qualifiers "NIL"
 ;;                                   :file "/.../my.lisp" :position 120))
 ;;          :methods-total 1 :methods-truncated nil))
@@ -83,7 +83,7 @@ Props are exactly what each service's `metadata` already publishes — the
 same source `describe-tool` reads, key-free by construction.
 
 ```lisp
-(nyaa:invoke-tool :tool-services :op :children)
+(miao:invoke-tool :tool-services :op :children)
 ;; => (:ok (:children ((:name :tool-fs :class "tool-fs" :restart :transient
 ;;                       :state :running :status :ready :restart-in nil :alive t) ...)))
 ```
@@ -110,7 +110,7 @@ slot at all; everything it answers already travels through `metadata` or
 
 - `:children` asks each child for its status one after another, so busy
   children add up to a second each
-  ([#149](https://todo.sr.ht/~takeiteasy/nyaa/149)).
+  ([#149](https://todo.sr.ht/~takeiteasy/miao/149)).
 
 [^status]: Asked over a call with `m:service-status`; `:starting`, `:stopping`
     and `:stopped` are never visible from another process. See

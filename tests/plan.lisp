@@ -1,7 +1,7 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; TOOL-PLAN, the DSL gate (~takeiteasy/nyaa#6): checking a whole plan
+;;; TOOL-PLAN, the DSL gate (~takeiteasy/miao#6): checking a whole plan
 ;;; before any step runs, threading a value through :REF, and the reasons a
 ;;; step or a whole plan is refused.
 
@@ -9,59 +9,59 @@
 ;;; force real elapsed time between two steps without a tool this trust
 ;;; level otherwise offering one.
 
-(nyaa:define-tool :tool-sleep
+(miao:define-tool :tool-sleep
     (:trust :agent
      :summary "Sleep for :ms milliseconds"
      :params ((:ms (integer 0) :required t :doc "milliseconds to sleep")))
   (:invoke (ms)
     (sleep (/ ms 1000.0))
-    (nyaa::ok)))
+    (miao::ok)))
 
 ;;; Sleeps in small slices, stopping when cancelled, and records that it saw
 ;;; the cancel.
 
 (defvar *saw-cancel* nil)
 
-(nyaa:define-tool :tool-patient
+(miao:define-tool :tool-patient
     (:trust :agent
      :summary "Sleep for :ms milliseconds, stopping early if cancelled"
      :params ((:ms (integer 0) :required t :doc "milliseconds to sleep")))
   (:invoke (ms)
     (loop repeat (ceiling ms 10)
-          do (when (and nyaa::cancel-token (nyaa::cancelled-p nyaa::cancel-token))
+          do (when (and miao::cancel-token (miao::cancelled-p miao::cancel-token))
                (setf *saw-cancel* t)
                (return))
              (sleep 0.01))
-    (nyaa::ok)))
+    (miao::ok)))
 
 ;;; Ignores its cancel token and any timeout: sleeps the whole time asked.
 
-(nyaa:define-tool :tool-stubborn
+(miao:define-tool :tool-stubborn
     (:trust :agent
      :summary "Sleep for :ms milliseconds, whatever happens"
      :params ((:ms (integer 0) :required t :doc "milliseconds to sleep")))
   (:invoke (ms)
     (sleep (/ ms 1000.0))
-    (nyaa::ok :slept ms)))
+    (miao::ok :slept ms)))
 
 ;;; Declares its own :TIMEOUT and reports what it was given.
 
-(nyaa:define-tool :tool-timeout-echo
+(miao:define-tool :tool-timeout-echo
     (:trust :agent
      :summary "Answer the :timeout this call was given"
-     :params ((:timeout (integer 1) :default nyaa::+default-tool-timeout+
+     :params ((:timeout (integer 1) :default miao::+default-tool-timeout+
                :doc "milliseconds")))
   (:invoke (timeout)
-    (nyaa::ok :timeout timeout)))
+    (miao::ok :timeout timeout)))
 
 ;;; Answers whatever :value it was given, unchanged.
 
-(nyaa:define-tool :tool-plan-echo
+(miao:define-tool :tool-plan-echo
     (:trust :agent
      :summary "Answer :value"
      :params ((:value any :doc "any value")))
   (:invoke (value)
-    (nyaa::ok :value value)))
+    (miao::ok :value value)))
 
 (defvar *plan-sandbox* nil "The fs tool's sandbox root for the running test.")
 
@@ -74,11 +74,11 @@
     (setf *plan-sandbox* root)
     (unwind-protect
          (progn
-           (m:mount context 'nyaa:tool-fs :root root)
-           (m:mount context 'nyaa:tool-shell)
+           (m:mount context 'miao:tool-fs :root root)
+           (m:mount context 'miao:tool-shell)
            (when sleep-tool (m:mount context 'tool-sleep))
            (dolist (tool extra) (apply #'m:mount context (alexandria:ensure-list tool)))
-           (m:mount context 'nyaa:tool-plan :allow allow :max-steps max-steps)
+           (m:mount context 'miao:tool-plan :allow allow :max-steps max-steps)
            (funcall body))
       (m:stop context)
       (uiop:delete-directory-tree (uiop:ensure-directory-pathname root)
@@ -90,8 +90,8 @@
 
 (defun plan (steps &optional (timeout nil timeout-p))
   (if timeout-p
-      (nyaa:invoke-tool :tool-plan :steps steps :timeout timeout)
-      (nyaa:invoke-tool :tool-plan :steps steps)))
+      (miao:invoke-tool :tool-plan :steps steps :timeout timeout)
+      (miao:invoke-tool :tool-plan :steps steps)))
 
 (defun plan-results (result)
   (getf (second result) :results))
@@ -112,7 +112,7 @@
                                                :data (list :ref "r.data")))
                               (list :as "final" :tool "tool-fs"
                                     :args (list :op :read :path "dst.txt"))))))
-      (is (not (nyaa:tool-error-p result)))
+      (is (not (miao:tool-error-p result)))
       (is (equal "hello ref" (getf (getf (plan-results result) :final) :data)))
       (is (equal 4 (getf (second result) :steps))))))
 
@@ -124,27 +124,27 @@
     (let ((result (plan (list (list :tool "tool-shell" :args (list :cmd "true"))
                               (list :as "w" :tool "tool-fs"
                                     :args (list :op :write :path "never.txt" :data "x"))))))
-      (is (search "allow-list" (second (nyaa:tool-error result))))
+      (is (search "allow-list" (second (miao:tool-error result))))
       (is (not (sandbox-file-exists-p "never.txt"))))))
 
 (test plan-refuses-an-operator-trusted-tool-even-when-allowed
   (call-with-plan '(:tool-fs :tool-shell) 16
     (lambda ()
       (let ((result (plan (list (list :tool "tool-shell" :args (list :cmd "true"))))))
-        (is (search "agent-trusted" (second (nyaa:tool-error result))))))))
+        (is (search "agent-trusted" (second (miao:tool-error result))))))))
 
 (test plan-refuses-an-unregistered-tool
   ;; Allowed by name, but nothing is mounted under it.
   (call-with-plan '(:tool-fs :tool-nonexistent) 16
     (lambda ()
       (let ((result (plan (list (list :tool "tool-nonexistent" :args nil)))))
-        (is (search "no tool named" (second (nyaa:tool-error result))))))))
+        (is (search "no tool named" (second (miao:tool-error result))))))))
 
 (test plans-do-not-nest
   (call-with-plan '(:tool-fs :tool-plan) 16
     (lambda ()
       (let ((result (plan (list (list :tool "tool-plan" :args (list :steps nil))))))
-        (is (search "nest" (second (nyaa:tool-error result))))))))
+        (is (search "nest" (second (miao:tool-error result))))))))
 
 (test plan-refuses-a-duplicate-step-name
   (with-plan
@@ -152,7 +152,7 @@
                                     :args (list :op :read :path "a.txt"))
                               (list :as "x" :tool "tool-fs"
                                     :args (list :op :read :path "b.txt"))))))
-      (is (search "duplicate" (second (nyaa:tool-error result)))))))
+      (is (search "duplicate" (second (miao:tool-error result)))))))
 
 (test plan-refuses-a-ref-to-an-unknown-or-later-step
   (with-plan
@@ -160,13 +160,13 @@
                                     :args (list :op :read :path (list :ref "later.data")))
                               (list :as "later" :tool "tool-fs"
                                     :args (list :op :read :path "a.txt"))))))
-      (is (search "unknown or later step" (second (nyaa:tool-error result)))))))
+      (is (search "unknown or later step" (second (miao:tool-error result)))))))
 
 (test plan-refuses-a-malformed-ref
   (with-plan
     (let ((result (plan (list (list :tool "tool-fs"
                                     :args (list :op :read :path (list :ref "no-dot")))))))
-      (is (search "malformed ref" (second (nyaa:tool-error result)))))))
+      (is (search "malformed ref" (second (miao:tool-error result)))))))
 
 (test plan-refuses-more-than-max-steps
   (call-with-plan '(:tool-fs) 1
@@ -175,7 +175,7 @@
                                       :args (list :op :read :path "a.txt"))
                                 (list :as "b" :tool "tool-fs"
                                       :args (list :op :read :path "b.txt"))))))
-        (is (search "exceeds" (second (nyaa:tool-error result))))))))
+        (is (search "exceeds" (second (miao:tool-error result))))))))
 
 ;;; --- a step that fails ends the plan -------------------------------------
 
@@ -186,8 +186,8 @@
                               (list :tool "tool-fs" :args (list :op :bogus))
                               (list :tool "tool-fs"
                                     :args (list :op :write :path "never.txt" :data "x"))))))
-      (is (nyaa:tool-error-p result))
-      (let ((detail (nyaa:tool-error result)))
+      (is (miao:tool-error-p result))
+      (let ((detail (miao:tool-error result)))
         (is (equal 2 (getf detail :step)))
         (is (equal "tool-fs" (getf detail :tool)))
         (is (member :ok (getf detail :results))))
@@ -196,9 +196,9 @@
 ;;; --- the whole-plan deadline, held over every step ----------------------
 
 (defun timed-out-at-step-p (result step)
-  (and (nyaa:tool-error-p result)
-       (eql step (getf (nyaa:tool-error result) :step))
-       (eq :timeout (getf (nyaa:tool-error result) :reason))))
+  (and (miao:tool-error-p result)
+       (eql step (getf (miao:tool-error result) :step))
+       (eq :timeout (getf (miao:tool-error result) :reason))))
 
 (test plan-honours-its-timeout-between-steps
   (call-with-plan '(:tool-fs :tool-sleep) 16
@@ -234,7 +234,7 @@
 being restarted."
   (loop repeat 50
         for result = (plan steps)
-        unless (nyaa:tool-error-p result) do (return result)
+        unless (miao:tool-error-p result) do (return result)
         do (sleep 0.1)))
 
 (test a-step-that-ignores-cancel-is-killed-and-restarted
@@ -280,7 +280,7 @@ being restarted."
                                 (list :as "default" :tool "tool-timeout-echo"
                                       :args nil))
                           5000)))
-        (is (not (nyaa:tool-error-p result)))
+        (is (not (miao:tool-error-p result)))
         (is (<= (getf (getf (plan-results result) :own) :timeout) 5000))
         (is (<= (getf (getf (plan-results result) :default) :timeout) 5000))))
     :extra '(tool-timeout-echo)))
@@ -322,15 +322,15 @@ being restarted."
 (test a-cancelled-plan-refuses-its-remaining-steps
   (call-with-plan '(:tool-fs :tool-sleep) 16
                   (lambda ()
-                    (let ((token (nyaa:make-cancel-token)))
-                      (bt:make-thread (lambda () (sleep 0.2) (nyaa:cancel token)))
-                      (let ((result (nyaa:invoke-tool
+                    (let ((token (miao:make-cancel-token)))
+                      (bt:make-thread (lambda () (sleep 0.2) (miao:cancel token)))
+                      (let ((result (miao:invoke-tool
                                      :tool-plan :cancel token
                                      :steps (list (list :tool "tool-sleep" :args (list :ms 600))
                                                   (list :tool "tool-fs"
                                                         :args (list :op :write :path "after.txt"
                                                                     :data "x"))))))
-                        (is (eql 2 (getf (nyaa:tool-error result) :step)))
-                        (is (eq :cancelled (getf (nyaa:tool-error result) :reason)))
+                        (is (eql 2 (getf (miao:tool-error result) :step)))
+                        (is (eq :cancelled (getf (miao:tool-error result) :reason)))
                         (is (not (sandbox-file-exists-p "after.txt"))))))
                   :sleep-tool t))

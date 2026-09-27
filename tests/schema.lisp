@@ -1,17 +1,17 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
 ;;; The parameter schema: the closed vocabulary, coercion of the arguments a
 ;;; model supplies, and the JSON Schema rendering both directions.
 
 (defun coerced (schema args)
-  (nyaa:coerce-args schema args))
+  (miao:coerce-args schema args))
 
 (defun problem (schema args)
-  (nth-value 1 (nyaa:coerce-args schema args)))
+  (nth-value 1 (miao:coerce-args schema args)))
 
 (defun json (schema)
-  (com.inuoe.jzon:stringify (nyaa:schema->json-schema schema)))
+  (com.inuoe.jzon:stringify (miao:schema->json-schema schema)))
 
 (defun same-json (json text)
   "JSON, a rendered schema, against TEXT. Compared structurally: a JSON
@@ -42,10 +42,10 @@ object carries no key order."
     (:loud boolean :default nil)
     (:op (member :read :write) :required t)
     (:note (or null string))
-    (:tags (nyaa:array-of string))
-    (:headers (nyaa:map-of string))
-    (:where (nyaa:object (:city string :required t) (:zip string)))
-    (:extra nyaa:any :doc "anything at all")))
+    (:tags (miao:array-of string))
+    (:headers (miao:map-of string))
+    (:where (miao:object (:city string :required t) (:zip string)))
+    (:extra miao:any :doc "anything at all")))
 
 ;;; --- coercion ---------------------------------------------------------
 
@@ -100,7 +100,7 @@ object carries no key order."
                                '()))))
 
 (test required-when-applies-inside-a-nested-object
-  (let ((schema `((:where (nyaa:object ,@+conditional+)))))
+  (let ((schema `((:where (miao:object ,@+conditional+)))))
     (is (search ":where" (problem schema '(:where (:op :write :key "k")))))
     (is (coerced schema '(:where (:op :write :data "d" :key "k"))))))
 
@@ -116,15 +116,15 @@ object carries no key order."
                     ((:op (member :read :write))
                      (:d string :default "x" :required-when (:op :write)))
                     ((:op (member :read :write) :required-when (:op :write)))))
-    (signals error (nyaa:validate-schema schema))))
+    (signals error (miao:validate-schema schema))))
 
 (test required-when-renders-as-prose
-  (let ((properties (gethash "properties" (nyaa:schema->json-schema
+  (let ((properties (gethash "properties" (miao:schema->json-schema
                                            '((:op (member :read :write))
                                              (:data string :required-when (:op :write)
                                               :doc "file contents")
                                              (:key string :required-when (:op (:read :write)))))))
-        (required (gethash "required" (nyaa:schema->json-schema
+        (required (gethash "required" (miao:schema->json-schema
                                        '((:op (member :read :write))
                                          (:data string :required-when (:op :write)))))))
     (is (equal "file contents. Required when op is write."
@@ -138,17 +138,17 @@ object carries no key order."
 
 (test compound-specifiers-coerce-elementwise
   (is (equal '(:tags ("a" "b"))
-             (coerced '((:tags (nyaa:array-of string))) '(:tags (:a "b")))))
-  (is (problem '((:tags (nyaa:array-of integer))) '(:tags ("x"))))
+             (coerced '((:tags (miao:array-of string))) '(:tags (:a "b")))))
+  (is (problem '((:tags (miao:array-of integer))) '(:tags ("x"))))
   (is (equal '(:headers ("x-tag" "abc"))
-             (coerced '((:headers (nyaa:map-of string))) '(:headers (:x-tag "abc")))))
+             (coerced '((:headers (miao:map-of string))) '(:headers (:x-tag "abc")))))
   ;; An alist has an even length too; it must not pass as one empty entry.
-  (is (problem '((:headers (nyaa:map-of string)))
+  (is (problem '((:headers (miao:map-of string)))
                '(:headers (("X-Tag" . "a") ("Y" . "b")))))
   (is (equal '(:where (:city "berlin"))
-             (coerced '((:where (nyaa:object (:city string :required t))))
+             (coerced '((:where (miao:object (:city string :required t))))
                       '(:where (:city "berlin")))))
-  (is (problem '((:where (nyaa:object (:city string :required t))))
+  (is (problem '((:where (miao:object (:city string :required t))))
                '(:where ()))))
 
 (test null-is-allowed-only-where-declared
@@ -157,17 +157,17 @@ object carries no key order."
   (is (problem '((:note string)) '(:note nil))))
 
 (test a-specifier-outside-the-set-is-a-definition-error
-  (signals error (nyaa:validate-schema '((:x pathname))))
-  (signals error (nyaa:validate-schema '((:x (member "read")))))
-  (signals error (nyaa:validate-schema '((:x (or string integer)))))
-  (signals error (nyaa:validate-schema '((:x string :colour t))))
-  (signals error (nyaa:validate-schema '(("x" string))))
-  (is (eq :ok (progn (nyaa:validate-schema +every-specifier+) :ok))))
+  (signals error (miao:validate-schema '((:x pathname))))
+  (signals error (miao:validate-schema '((:x (member "read")))))
+  (signals error (miao:validate-schema '((:x (or string integer)))))
+  (signals error (miao:validate-schema '((:x string :colour t))))
+  (signals error (miao:validate-schema '(("x" string))))
+  (is (eq :ok (progn (miao:validate-schema +every-specifier+) :ok))))
 
 ;;; --- JSON Schema ------------------------------------------------------
 
 (test rendering-produces-a-tools-array-object-schema
-  (is (same-json (nyaa:schema->json-schema '((:cmd string :required t :doc "run it")))
+  (is (same-json (miao:schema->json-schema '((:cmd string :required t :doc "run it")))
                  "{\"type\":\"object\",
                    \"properties\":{\"cmd\":{\"type\":\"string\",\"description\":\"run it\"}},
                    \"required\":[\"cmd\"],
@@ -176,7 +176,7 @@ object carries no key order."
 (test rendering-covers-every-specifier
   (flet ((rendered (spec)
            (gethash "x" (gethash "properties"
-                                 (nyaa:schema->json-schema (list (list :x spec)))))))
+                                 (miao:schema->json-schema (list (list :x spec)))))))
     (is (same-json (rendered 'string) "{\"type\":\"string\"}"))
     (is (same-json (rendered '(integer 1)) "{\"type\":\"integer\",\"minimum\":1}"))
     (is (same-json (rendered '(integer 1 100))
@@ -186,49 +186,49 @@ object carries no key order."
     (is (same-json (rendered '(member :read :write))
                    "{\"type\":\"string\",\"enum\":[\"read\",\"write\"]}"))
     (is (same-json (rendered '(or null string)) "{\"type\":[\"string\",\"null\"]}"))
-    (is (same-json (rendered '(nyaa:array-of string))
+    (is (same-json (rendered '(miao:array-of string))
                    "{\"type\":\"array\",\"items\":{\"type\":\"string\"}}"))
-    (is (same-json (rendered '(nyaa:map-of string))
+    (is (same-json (rendered '(miao:map-of string))
                    "{\"type\":\"object\",\"additionalProperties\":{\"type\":\"string\"}}"))
-    (is (same-json (rendered '(nyaa:object (:city string :required t)))
+    (is (same-json (rendered '(miao:object (:city string :required t)))
                    "{\"type\":\"object\",
                      \"properties\":{\"city\":{\"type\":\"string\"}},
                      \"required\":[\"city\"],
                      \"additionalProperties\":false}"))
-    (is (same-json (rendered 'nyaa:any) "{}"))))
+    (is (same-json (rendered 'miao:any) "{}"))))
 
 (test rendering-keeps-declaration-order
   "Property order follows declaration, not alphabetical or hash order --
 SBCL's hash tables iterate in insertion order, so a rendered schema renders
 the same way on every run."
   (is (string= (json '((:zeta string :doc "last letter" :default "z")
-                        (:alpha (nyaa:object (:yak integer :required t) (:bee boolean)))
+                        (:alpha (miao:object (:yak integer :required t) (:bee boolean)))
                         (:mid (integer 1 9))))
                "{\"type\":\"object\",\"properties\":{\"zeta\":{\"type\":\"string\",\"description\":\"last letter\",\"default\":\"z\"},\"alpha\":{\"type\":\"object\",\"properties\":{\"yak\":{\"type\":\"integer\"},\"bee\":{\"type\":\"boolean\"}},\"required\":[\"yak\"],\"additionalProperties\":false},\"mid\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9}},\"required\":[],\"additionalProperties\":false}")))
 
 (test any-coerces-whatever-it-is-given
-  (is (equal '(:x 7) (coerced '((:x nyaa:any)) '(:x 7))))
-  (is (equal '(:x "s") (coerced '((:x nyaa:any)) '(:x "s"))))
-  (is (equal '(:x (:a 1)) (coerced '((:x nyaa:any)) '(:x (:a 1))))))
+  (is (equal '(:x 7) (coerced '((:x miao:any)) '(:x 7))))
+  (is (equal '(:x "s") (coerced '((:x miao:any)) '(:x "s"))))
+  (is (equal '(:x (:a 1)) (coerced '((:x miao:any)) '(:x (:a 1))))))
 
 (defun sorted-schema (schema)
   "SCHEMA by parameter name: a JSON object carries no order to preserve."
   (sort (copy-list schema) #'string< :key #'first))
 
 (test a-schema-survives-a-round-trip-through-json
-  (let ((back (nyaa:json-schema->schema
+  (let ((back (miao:json-schema->schema
                (com.inuoe.jzon:parse (json +every-specifier+)))))
     (is (equal (sorted-schema +every-specifier+) (sorted-schema back)))))
 
 (test json-schema-survives-a-round-trip-through-a-schema
   (let ((source (json +every-specifier+)))
-    (is (same-json (nyaa:schema->json-schema
-                    (nyaa:json-schema->schema (com.inuoe.jzon:parse source)))
+    (is (same-json (miao:schema->json-schema
+                    (miao:json-schema->schema (com.inuoe.jzon:parse source)))
                    source))))
 
 (test importing-an-unknown-construct-is-an-error
-  (signals error (nyaa:json-schema->schema
+  (signals error (miao:json-schema->schema
                   (com.inuoe.jzon:parse "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"date\"}}}")))
-  (signals error (nyaa:json-schema->schema
+  (signals error (miao:json-schema->schema
                   (com.inuoe.jzon:parse "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"array\"}}}")))
-  (signals error (nyaa:json-schema->schema (com.inuoe.jzon:parse "{\"type\":\"string\"}"))))
+  (signals error (miao:json-schema->schema (com.inuoe.jzon:parse "{\"type\":\"string\"}"))))

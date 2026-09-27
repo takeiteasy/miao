@@ -1,8 +1,8 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; nyaa/ui: the fold of events into client state, and the client that
-;;; attaches to a named agent (~takeiteasy/nyaa#167).
+;;; miao/ui: the fold of events into client state, and the client that
+;;; attaches to a named agent (~takeiteasy/miao#167).
 
 (defun ev (type &rest keys)
   (list* :type type :ref nil keys))

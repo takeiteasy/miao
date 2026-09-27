@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; The protocol convention. A protocol is a meow service named
 ;;; :PROTOCOL-<name> whose METADATA carries :KIND :PROTOCOL, and which answers
@@ -36,7 +36,7 @@ messages, so both reach a backend through here."
 ;;; legacy blocking connect, which does fail a refusal immediately (an
 ;;; unreachable host is still bounded by :timeout). Drop it once usocket's
 ;;; new connect loop checks SO_ERROR itself. Tracked in
-;;; ~takeiteasy/nyaa#61.
+;;; ~takeiteasy/miao#61.
 (defmacro with-immediate-connect-refusal (&body body)
   "Run BODY -- which must make its USOCKET:SOCKET-CONNECT call directly,
 inside the same thread -- so a refused connection fails at once rather
@@ -67,7 +67,7 @@ single-text-block case."
 
 ;;; Shared by every protocol that speaks JSON over HTTP: what OpenAI and
 ;;; Ollama's native endpoint both need, so the second protocol to want it
-;;; found it already here rather than duplicated (~takeiteasy/nyaa#33).
+;;; found it already here rather than duplicated (~takeiteasy/miao#33).
 
 (defun named-p (value)
   (and (stringp value) (plusp (length value))))
@@ -514,7 +514,7 @@ runs in the pool of REQUEST's :DEPTH, and completions it makes run one deeper."
                (abandon ()
                  (when (pool-abandon job)
                    (bt:make-thread (lambda () (answer-unrun (fail :timeout)))
-                                   :name "nyaa-abandon")))
+                                   :name "miao-abandon")))
                (remaining ()
                  (- timeout (floor (* 1000 (- (get-internal-real-time) queued-at))
                                    internal-time-units-per-second))))

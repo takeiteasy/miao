@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Ollama's native chat endpoint. No key, so it is the provider a development
 ;;; machine can run end to end -- and this route carries the usage counters

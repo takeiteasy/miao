@@ -1,8 +1,8 @@
-(in-package #:nyaa/cli)
+(in-package #:miao/cli)
 
 ;;; The command line's entry point. docs/cli.md.
 
-(defun main (args &key context (home (nyaa/launcher:nyaa-home))
+(defun main (args &key context (home (miao/launcher:miao-home))
                     (in *standard-input*) (out *standard-output*) (err *error-output*))
   "Run the command ARGS names and return its exit code. CONTEXT is the
 context to mount into; by default one is started and stopped here. HOME is
@@ -32,8 +32,8 @@ from."
          0)
         (t (usage-error "unknown command ~a" (first args))))
     (usage-error (e)
-      (format err "nyaa: ~a~%~a~%" e *usage*)
+      (format err "miao: ~a~%~a~%" e *usage*)
       2)
     (error (e)
-      (format err "nyaa: ~a~%" e)
+      (format err "miao: ~a~%" e)
       1)))

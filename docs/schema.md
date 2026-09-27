@@ -94,8 +94,8 @@ declared type, and carries no coercion of its own.
 ## JSON Schema
 
 ```lisp
-(nyaa:schema->json-schema (nyaa:tool-schema (nyaa:describe-tool :tool-shell)))
-(nyaa:json-schema->schema (com.inuoe.jzon:parse text))
+(miao:schema->json-schema (miao:tool-schema (miao:describe-tool :tool-shell)))
+(miao:json-schema->schema (com.inuoe.jzon:parse text))
 ```
 
 `schema->json-schema` returns a hash table, which jzon serialises directly, so

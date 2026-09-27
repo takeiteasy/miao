@@ -1,14 +1,14 @@
-;;; The worker's read/eval/print loop. This file is not part of the nyaa
+;;; The worker's read/eval/print loop. This file is not part of the miao
 ;;; system: it is read as text at compile time and handed to a bare child
 ;;; Lisp on its command line, so it must stay a single form that loads
 ;;; nothing. See worker.lisp for the protocol.
 
-(let ((p (or (find-package "NYAA-WORKER")
-             (make-package "NYAA-WORKER" :use '("CL")))))
+(let ((p (or (find-package "MIAO-WORKER")
+             (make-package "MIAO-WORKER" :use '("CL")))))
   ;; Where the gate's fresh symbols live (gate.lisp): it uses nothing, so a
   ;; name a form invents can never be a name the worker already has.
-  (unless (find-package "NYAA-GATE")
-    (make-package "NYAA-GATE" :use '()))
+  (unless (find-package "MIAO-GATE")
+    (make-package "MIAO-GATE" :use '()))
   (labels ((render-under (v length level)
              (let ((*print-length* length) (*print-level* level)
                    (*print-readably* nil) (*print-circle* t))

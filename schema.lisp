@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Typed parameter schemas. A schema is canonical in both directions: it
 ;;; renders to the JSON Schema a model expects, and imports from one an

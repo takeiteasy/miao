@@ -15,7 +15,7 @@ so a model can call it.
 ```
 
 A refused form answers `:bad-request` and starts no worker. State does not
-survive a call; `tool-repl` has no gated form ([#162](https://todo.sr.ht/~takeiteasy/nyaa/162)).
+survive a call; `tool-repl` has no gated form ([#162](https://todo.sr.ht/~takeiteasy/miao/162)).
 
 This gate is for untrusted input. The operator's own code is not gated, and
 [`tool-plan`](plan.md) is the other gate: it limits what a plan may *call*,
@@ -95,7 +95,7 @@ An allowlist bounds what a form can reach, not what it spends.
 | Output | 4000 characters; more sets `:elided` |
 
 ```lisp
-(m:mount context 'nyaa:tool-gated-eval :heap 512)
+(m:mount context 'miao:tool-gated-eval :heap 512)
 ```
 
 A worker that runs out of memory answers an error, or `:unavailable` if it
@@ -105,16 +105,16 @@ had to exit, and never waits in the debugger for its deadline. A
 ## Limitations
 
 - No `tool-repl` form
-  ([#162](https://todo.sr.ht/~takeiteasy/nyaa/162)).
+  ([#162](https://todo.sr.ht/~takeiteasy/miao/162)).
 - `format` and `error` need a literal control string; `warn`, `signal`,
   `cerror` and `assert` are refused
-  ([#163](https://todo.sr.ht/~takeiteasy/nyaa/163)).
+  ([#163](https://todo.sr.ht/~takeiteasy/miao/163)).
 - No `declare` or `the`
-  ([#164](https://todo.sr.ht/~takeiteasy/nyaa/164)).
+  ([#164](https://todo.sr.ht/~takeiteasy/miao/164)).
 - No backquote, `defmacro`, CLOS, `catch` or `throw`
-  ([#165](https://todo.sr.ht/~takeiteasy/nyaa/165)).
+  ([#165](https://todo.sr.ht/~takeiteasy/miao/165)).
 - No condition accessors or restarts
-  ([#166](https://todo.sr.ht/~takeiteasy/nyaa/166)).
+  ([#166](https://todo.sr.ht/~takeiteasy/miao/166)).
 
 [^invariant]: Adding an allowlist entry means asking whether it returns a
     symbol the form did not contain, as `type-of`, `class-of`, `intern` and

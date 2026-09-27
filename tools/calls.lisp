@@ -1,7 +1,7 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
-;;; The call log tool (~takeiteasy/nyaa#179): list and compact the log calls.lisp
-;;; keeps, and resume (~takeiteasy/nyaa#77) the calls in it that a crash or restore
+;;; The call log tool (~takeiteasy/miao#179): list and compact the log calls.lisp
+;;; keeps, and resume (~takeiteasy/miao#77) the calls in it that a crash or restore
 ;;; cut short by sending :RESUME to the agent that dispatched them.
 ;;;
 ;;; :trust :operator: resuming runs a tool again, and listing shows what its

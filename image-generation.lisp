@@ -1,14 +1,14 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
 
-;;; Image generations (~takeiteasy/nyaa#48): a generation (checkpoint.lisp)
+;;; Image generations (~takeiteasy/miao#48): a generation (checkpoint.lisp)
 ;;; that also carries the running image itself, so a rollback -- unlike a
 ;;; declared-state-only one -- can undo code, not just state. SAVE-IMAGE
 ;;; forks, suspends nothing on the calling thread's own account (M:SUSPEND,
 ;;; meow#64) so every other thread is gone, then has the child
 ;;; SAVE-LISP-AND-DIE while the parent resumes and carries on. RELAUNCH
-;;; re-execs into a saved core; roswell/nyaa.ros is the launcher and
+;;; re-execs into a saved core; miao.ros is the launcher and
 ;;; recovery side.
 
 ;;; --- refusals -----------------------------------------------------------
@@ -47,12 +47,12 @@ just respawns threads over them, no re-discovery needed. FORGET-WORKERS
 and FORGET-POOLS first: the workers and pooled threads that heap holds
 belong to the process that saved it, and
 so do the vault claims on its agents' queued steers, which are claimed again
-as this image (RECLAIM-STEER-CLAIMS). NYAA_IMAGE_PROBE
+as this image (RECLAIM-STEER-CLAIMS). MIAO_IMAGE_PROBE
 set skips all of that: the launcher and the integration tests use it to check
 a core loads without actually reviving its services."
   (lambda ()
     (cond
-      ((uiop:getenv "NYAA_IMAGE_PROBE") (sb-ext:exit :code 0 :abort t))
+      ((uiop:getenv "MIAO_IMAGE_PROBE") (sb-ext:exit :code 0 :abort t))
       (t (forget-workers)
          (forget-pools)
          ;; TODO: reads meow's internal suspension-entries; upgrade path is
@@ -90,7 +90,7 @@ leaving a truncated core, is never mistaken for one that finished."
 internal-real-time reading) passes. FORK's own check backs this up --
 newborn threads it can see that LIST-ALL-THREADS still hides -- but this
 turns the common case (a just-stopped context's thread still mid-unwind,
-~takeiteasy/nyaa#72) into a bounded wait instead of an outright refusal.
+~takeiteasy/miao#72) into a bounded wait instead of an outright refusal.
 Signals, naming every other thread by name, if any are still running once
 DEADLINE passes."
   (loop for others = (remove sb-thread:*current-thread* (sb-thread:list-all-threads))
@@ -125,7 +125,7 @@ PROVIDER holds an :API-KEY.
 
 TIMEOUT (seconds, default 5) bounds both M:SUSPEND and the wait for any
 thread outside CONTEXT's tree to exit on its own -- a just-stopped
-context's thread still mid-unwind (~takeiteasy/nyaa#72), say. Past that,
+context's thread still mid-unwind (~takeiteasy/miao#72), say. Past that,
 SAVE-IMAGE refuses rather than let FORK's own single-threaded check do it
 less informatively.
 
@@ -153,7 +153,7 @@ because of a stray thread."
     (setf *last-image* (%canonical-path core-path) *self-dirty* nil)
     (values *last-image* (%canonical-path generation-path))))
 
-;;; --- SELF-DEFINE (~takeiteasy/nyaa#63) ---------------------------------
+;;; --- SELF-DEFINE (~takeiteasy/miao#63) ---------------------------------
 ;;;
 ;;; tool-self's :define, even checkpointed, can only be undone back to
 ;;; declared state -- never the redefinition itself. SELF-DEFINE closes
@@ -222,30 +222,30 @@ signals an error on failure, execv's usual contract."
 
 (defun relaunch (core)
   "Replace the running SBCL process with CORE (EXECV), after confirming it
-loads (NYAA/LAUNCHER:PROBE-CORE), killing this process's workers and running shell
+loads (MIAO/LAUNCHER:PROBE-CORE), killing this process's workers and running shell
 commands first so none outlives it as an orphan. A generation's core is code-exact -- unlike
 declared-state ROLLBACK, this is the manual way tool-self's :DEFINE
-writes can actually be undone (~takeiteasy/nyaa#63) until an operator
+writes can actually be undone (~takeiteasy/miao#63) until an operator
 does it. Never returns on success."
   (unless (probe-file core) (error "no such core: ~a" core))
-  (unless (nyaa/launcher:probe-core core) (error "~a did not load cleanly; refusing to relaunch into it" core))
+  (unless (miao/launcher:probe-core core) (error "~a did not load cleanly; refusing to relaunch into it" core))
   (kill-live-workers)
   (kill-live-commands)
   (finish-output) (finish-output *error-output*)
-  (let ((argv (nyaa/launcher:launch-argv core nil)))
+  (let ((argv (miao/launcher:launch-argv core nil)))
     (%execv (first argv) argv)))
 
 (defun save-recovery-image (path)
-  "A plain image with no services mounted, for `nyaa install`: the
+  "A plain image with no services mounted, for `miao install`: the
 image the launcher falls back to when a generation's core fails
-NYAA/LAUNCHER:PROBE-CORE. Must run on the main thread, same as SAVE-IMAGE."
+MIAO/LAUNCHER:PROBE-CORE. Must run on the main thread, same as SAVE-IMAGE."
   (%require-main-thread)
   (ensure-directories-exist path)
   (sb-ext:save-lisp-and-die
    (namestring path)
    :toplevel (lambda ()
-               (unless (uiop:getenv "NYAA_IMAGE_PROBE")
+               (unless (uiop:getenv "MIAO_IMAGE_PROBE")
                  (cl+ssl:reload))
-               (if (uiop:getenv "NYAA_IMAGE_PROBE")
+               (if (uiop:getenv "MIAO_IMAGE_PROBE")
                    (sb-ext:exit :code 0 :abort t)
                    (sb-impl::toplevel-init)))))

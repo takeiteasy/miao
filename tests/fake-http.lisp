@@ -1,4 +1,4 @@
-(in-package #:nyaa/tests)
+(in-package #:miao/tests)
 
 ;;; Offline stand-in for an HTTP backend. A sequential accept loop serving
 ;;; one request per connection and always answering Connection: close --
@@ -30,7 +30,7 @@
                                  :handler handler)))
     (setf (fake-thread server)
           (bt:make-thread (lambda () (fake-http-loop server))
-                          :name "nyaa-fake-http"))
+                          :name "miao-fake-http"))
     server))
 
 (defun fake-http-url (server)

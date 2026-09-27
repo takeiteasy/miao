@@ -1,6 +1,6 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
-;;; Self-modification (~takeiteasy/nyaa#12): evaluate in the host image,
+;;; Self-modification (~takeiteasy/miao#12): evaluate in the host image,
 ;;; redefine functions and classes, and reload a mounted child -- the three
 ;;; things tool-eval, tool-repl and a worker can never reach, since a worker
 ;;; loads nothing and shares no state with the running harness.
@@ -24,12 +24,12 @@
 ;;; durable copy.
 
 (defvar *self-log* nil
-  "Default log path for TOOL-SELF: ~/.nyaa/self.log, resolved lazily so
+  "Default log path for TOOL-SELF: ~/.miao/self.log, resolved lazily so
 loading this file never touches the filesystem or the user's home.")
 
 (defun %default-self-log ()
   (or *self-log*
-      (setf *self-log* (merge-pathnames ".nyaa/self.log" (user-homedir-pathname)))))
+      (setf *self-log* (merge-pathnames ".miao/self.log" (user-homedir-pathname)))))
 
 (defvar *last-image* nil
   "SAVE-IMAGE's (image-generation.lisp, loaded after this file) most
@@ -45,7 +45,7 @@ performs, regardless of :op.")
 
 (a:define-constant +definition-heads+
     '(defun defmacro defgeneric defmethod defclass defstruct defparameter
-      defvar m:defservice nyaa:define-tool)
+      defvar m:defservice miao:define-tool)
   :test #'equal
   :documentation "Heads :DEFINE accepts. Anything else -- PROGN, LET, a bare
 call -- is :EVAL's job instead, so :DEFINE's checkpoint label and
@@ -63,7 +63,7 @@ here; :LOG always answers.")
              (log-path :initarg :log :initform nil :reader self-log-path)
              (require-image :initarg :require-image :initform nil :reader self-require-image-p
                             :documentation "T refuses :eval and :define
-unless an image generation (~takeiteasy/nyaa#48) has been taken and
+unless an image generation (~takeiteasy/miao#48) has been taken and
 nothing has written since (*LAST-IMAGE*, *SELF-DIRTY*) -- SELF-DEFINE is
 then the only way an operator can still redefine anything, and every
 :define stays code-exact, undoable by relaunching that image."))
@@ -93,7 +93,7 @@ then the only way an operator can still redefine anything, and every
 taken before any tool-self write, but with a write since, is stale: it
 would roll back to before the write tool-self is about to make, not to
 before this one."
-  (cond ((null *last-image*) "take an image generation first (~takeiteasy/nyaa#48)")
+  (cond ((null *last-image*) "take an image generation first (~takeiteasy/miao#48)")
         (*self-dirty* "the last image generation is stale -- take another first")))
 
 (defun self-log-file (service)
@@ -172,9 +172,9 @@ exist is a problem, never created on the operator's behalf."
   "PARSED's defined name's current SYMBOL-SOURCE (tools/image.lisp), for
 :DEFINE only, so a log entry that redefines something still points at where
 it used to live. Declared-state ROLLBACK never restores code
-(~takeiteasy/nyaa#48); an ordinary tool-self :define therefore has no way
+(~takeiteasy/miao#48); an ordinary tool-self :define therefore has no way
 back but this pointer -- SELF-DEFINE (image-generation.lisp,
-~takeiteasy/nyaa#63) is the code-exact one, an image generation taken
+~takeiteasy/miao#63) is the code-exact one, an image generation taken
 immediately before the write."
   (when (and (eq op :define) (second parsed) (symbolp (second parsed)))
     (symbol-source (second parsed))))
@@ -210,7 +210,7 @@ immediately before the write."
                (unless (eq :running (sb-ext:compare-and-swap (car state) :running :done))
                  (ignore-errors (funcall on-late result))))
              (bt:signal-semaphore wake))
-           :name "nyaa-self-reload")
+           :name "miao-self-reload")
           (when cancel
             (on-cancel cancel (lambda () (bt:signal-semaphore wake))))
           (bt:wait-on-semaphore wake :timeout (/ timeout 1000))
@@ -225,7 +225,7 @@ immediately before the write."
         (bad-request "no child named ~(~a~)" name))
     (error (e) (fail (list :error (princ-to-string e))))))
 
-;;; --- CLOS mutation latch (~takeiteasy/nyaa#79, #81) --------------------
+;;; --- CLOS mutation latch (~takeiteasy/miao#79, #81) --------------------
 ;;;
 ;;; SBCL's own PCL/DEFSTRUCT loaders are hooked to say exactly when a form's
 ;;; evaluation is inside a class, method, generic-function or struct
@@ -337,8 +337,8 @@ off, where a user REMOVE-METHOD method could not be interrupted."
   "Idempotent: UNENCAPSULATEs first, so reloading this file never stacks a
 second copy of the same hook."
   (loop for (name . hook) in (%clos-hook-alist)
-        do (sb-int:unencapsulate name 'nyaa-self)
-           (sb-int:encapsulate name 'nyaa-self hook)))
+        do (sb-int:unencapsulate name 'miao-self)
+           (sb-int:encapsulate name 'miao-self hook)))
 
 (defun clos-mutation-hooks-installed-p ()
   "T if every hook %INSTALL-CLOS-MUTATION-HOOKS installs is still in
@@ -346,7 +346,7 @@ place -- checked by a test, so a future SBCL rename of one of these
 internals fails loudly instead of silently reverting :DEFINE to
 pre-emptive-only."
   (loop for (name) in (%clos-hook-alist)
-        always (sb-int:encapsulated-p name 'nyaa-self)))
+        always (sb-int:encapsulated-p name 'miao-self)))
 
 (eval-when (:load-toplevel :execute) (%install-clos-mutation-hooks))
 
@@ -400,7 +400,7 @@ ON-LATE, if given, after the caller has already received :TIMEOUT or
                                (ignore-errors (funcall on-late result))))
                         (bt:signal-semaphore done)
                         (bt:signal-semaphore wake))))
-                  :name "nyaa-self-eval")))
+                  :name "miao-self-eval")))
     ;; A cancel only wakes the wait: DONE stays the worker's, which
     ;; TEAR-AFTER-GRACE waits on.
     (when cancel
@@ -438,7 +438,7 @@ visible on the helper thread."
                       (throw 'self-abandoned
                         (cond ((plusp (clos-latch-depth latch)) (fail :torn))
                               ((clos-latch-mutated latch) (fail :abandoned)))))))))))
-   :name "nyaa-self-grace"))
+   :name "miao-self-grace"))
 
 (defun eval-in-host (form package)
   (let ((out (make-string-output-stream)))
@@ -456,7 +456,7 @@ visible on the helper thread."
   "VALUE printed under the same caps and elision check
 WORKER-PROGRAM.LISP's RENDER applies to a worker value, so a large or
 circular host value cannot flood the reply the way an uncapped one could
-(~takeiteasy/nyaa#26), and a caller sees when it did. Elided when the
+(~takeiteasy/miao#26), and a caller sees when it did. Elided when the
 character cap cut the string outright, or when printing one step wider
 would print more of it -- that second pass only runs when the first
 output looks cut, so a value under both limits prints once."
@@ -475,7 +475,7 @@ output looks cut, so a value under both limits prints once."
   "Every one of VALUES rendered under RENDER-SELF-VALUE's own cap; more
 than 100 values, or a combined printed form past 4000 characters, drops
 the remainder and sets ELIDED -- the same guard
-~takeiteasy/nyaa#105 gave the worker side's own RENDER-VALUES."
+~takeiteasy/miao#105 gave the worker side's own RENDER-VALUES."
   (let* ((many (> (length values) 100))
          (values (if many (subseq values 0 100) values))
          (elided many) (total 0) (rendered '()))

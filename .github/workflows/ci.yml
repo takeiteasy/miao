@@ -35,7 +35,7 @@ jobs:
           curl -sSfLO https://beta.quicklisp.org/quicklisp.lisp
           sbcl --non-interactive --no-userinit --load quicklisp.lisp \
                --eval '(quicklisp-quickstart:install)'
-          cp -R "$GITHUB_WORKSPACE" ~/quicklisp/local-projects/nyaa
+          cp -R "$GITHUB_WORKSPACE" ~/quicklisp/local-projects/miao
 
       - name: Install dependencies outside Quicklisp
         run: |

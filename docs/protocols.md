@@ -19,7 +19,7 @@ A protocol registers under `:protocol-<name>`, and its `metadata` plist carries
 `:kind :protocol`, a `:summary`, and optionally `:params`:
 
 ```lisp
-(nyaa:define-protocol :protocol-example
+(miao:define-protocol :protocol-example
     (:summary "One line on the wire shape"
      :params '((:temperature number :doc "sampling temperature")))
     (service request)
@@ -46,13 +46,13 @@ Meow intercepts the heads `%update-config`, `%effects` and `%timer-fire` before
 ## The request
 
 ```lisp
-(nyaa:complete :protocol-openai
+(miao:complete :protocol-openai
   :messages '((:role :system    :content "Be terse.")
               (:role :user      :content ((:type :text :text "list the files")))
               (:role :assistant :content nil
                :tool-calls ((:id "c1" :name :tool-shell :arguments (:cmd "ls"))))
               (:role :tool      :tool-call-id "c1" :content "a.lisp b.lisp"))
-  :tools (list (nyaa:describe-tool :tool-shell))
+  :tools (list (miao:describe-tool :tool-shell))
   :stream sink :ref :turn-3
   :cancel token
   :timeout 30000
@@ -132,7 +132,7 @@ seconds past the deadline is stopped, and the events still queued for it are
 dropped. A sink that signals an error loses that event and carries on.
 
 Sinks drain on a pool of their own, capped by `*sink-pool-size*` (64) and
-reported by `(nyaa:pool-stats :sink)`. A sink that blocks holds its thread
+reported by `(miao:pool-stats :sink)`. A sink that blocks holds its thread
 until it is stopped, so enough of them delay the sinks queued behind.
 
 A tool call's `:arguments` arrive as text split across deltas; the consumer
@@ -197,7 +197,7 @@ a service's completions run at once; nil, the default, leaves them uncapped.
 Past the cap a completion queues:
 
 ```lisp
-(meow:mount *context* 'nyaa:protocol-openai :max-in-flight 4)
+(meow:mount *context* 'miao:protocol-openai :max-in-flight 4)
 ```
 
 - Time spent queued counts against the request's `:timeout`: the body sees
@@ -235,8 +235,8 @@ a body spawns itself starts outside the job, so wrap its function to make its
 `complete` calls one deeper than the body:
 
 ```lisp
-(bt:make-thread (nyaa:carry-completion-depth
-                 (lambda () (nyaa:complete :protocol-openai ...))))
+(bt:make-thread (miao:carry-completion-depth
+                 (lambda () (miao:complete :protocol-openai ...))))
 ```
 
 A job still running `*pool-abandon-grace*` (5) seconds past its `:timeout`, stuck
@@ -252,7 +252,7 @@ reply arrives as a message.
 
 `*pool-size*` (64) caps each pool's threads, read when a pool is first used. A
 thread idle for `*pool-idle-seconds*` (30) exits, and one is started again as
-work arrives. `(nyaa:pool-stats depth)` reports a pool's threads, idle threads,
+work arrives. `(miao:pool-stats depth)` reports a pool's threads, idle threads,
 queued and running jobs.
 
 ## Cancelling
@@ -261,9 +261,9 @@ A caller that no longer wants a completion passes a cancel token in the request
 and cancels it from any thread:
 
 ```lisp
-(let ((token (nyaa:make-cancel-token)))
-  (bt:make-thread (lambda () (sleep 5) (nyaa:cancel token)))
-  (nyaa:complete :protocol-openai ... :cancel token))
+(let ((token (miao:make-cancel-token)))
+  (bt:make-thread (lambda () (sleep 5) (miao:cancel token)))
+  (miao:complete :protocol-openai ... :cancel token))
 ; => (:error :cancelled)
 ```
 
@@ -284,12 +284,12 @@ llama.cpp-server — so base URL, model and auth travel in the request rather th
 in a config slot.
 
 ```lisp
-(nyaa:complete :protocol-openai
+(miao:complete :protocol-openai
   :base-url "http://127.0.0.1:11434/v1"
   :model "llama3.2"
   :headers '("authorization" "Bearer sk-...")
   :messages '((:role :user :content "hello"))
-  :tools (list (nyaa:describe-tool :tool-shell))
+  :tools (list (miao:describe-tool :tool-shell))
   :stream sink :ref :turn-1
   :temperature 0.2)
 ```
@@ -325,7 +325,7 @@ either is `(:backend-error ...)`.
 Ollama serves this API at `/v1` alongside its native one, so it is testable
 end to end against a local backend with no key — see
 [providers](providers.md). The offline tests run against the fake HTTP
-server; set `NYAA_OLLAMA_URL` (and optionally `NYAA_OLLAMA_MODEL`) to run the
+server; set `MIAO_OLLAMA_URL` (and optionally `MIAO_OLLAMA_MODEL`) to run the
 live ones too.
 
 ## The Ollama protocol
@@ -337,7 +337,7 @@ differs, not just the base URL — this is what carries the usage counters and
 generation options the OpenAI-compatible `/v1` route drops.
 
 ```lisp
-(nyaa:complete :protocol-ollama
+(miao:complete :protocol-ollama
   :base-url "http://127.0.0.1:11434"
   :model "llama3.2"
   :messages '((:role :user :content "hello"))
@@ -378,14 +378,14 @@ Tool schemas render into the `tools` array through the same renderer
 both directions here, rather than the stringified form OpenAI's wire uses.
 
 `:provider-ollama` binds this protocol to a local backend with no key — see
-[providers](providers.md). Set `NYAA_OLLAMA_NATIVE_URL` (and optionally
-`NYAA_OLLAMA_MODEL`) to run its live tests.
+[providers](providers.md). Set `MIAO_OLLAMA_NATIVE_URL` (and optionally
+`MIAO_OLLAMA_MODEL`) to run its live tests.
 
 ## Discovery
 
 ```lisp
-(nyaa:protocols)                       ; => (:protocol-ollama :protocol-openai)
-(nyaa:describe-protocol :protocol-openai)
+(miao:protocols)                       ; => (:protocol-ollama :protocol-openai)
+(miao:describe-protocol :protocol-openai)
 ```
 
 `protocols` scans registration props for `:kind :protocol`, the way `tools`

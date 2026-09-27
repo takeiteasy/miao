@@ -1,9 +1,9 @@
-(in-package #:nyaa/cli)
+(in-package #:miao/cli)
 
-;;; `nyaa chat`: a line REPL over one agent, drawn from nyaa/ui's state.
+;;; `miao chat`: a line REPL over one agent, drawn from miao/ui's state.
 ;;; docs/chat.md.
 
-(defvar *output-lock* (bt:make-lock :name "nyaa chat output")
+(defvar *output-lock* (bt:make-lock :name "miao chat output")
   "Held while the chat writes, so what it printed can be read without a tear.")
 
 (defparameter *abbreviate-at* 200)
@@ -92,7 +92,7 @@ has just ended."
 
 (defstruct (saver (:constructor make-saver (context directory err)))
   context directory err
-  (lock (bt:make-lock :name "nyaa chat saver"))
+  (lock (bt:make-lock :name "miao chat saver"))
   (wake (bt:make-condition-variable))
   pending stopping thread)
 
@@ -101,7 +101,7 @@ has just ended."
 
 (defun first-user-line (messages)
   (a:when-let ((message (find :user messages :key (lambda (message) (getf message :role)))))
-    (let* ((text (nyaa:content-text (getf message :content)))
+    (let* ((text (miao:content-text (getf message :content)))
            (line (subseq text 0 (position #\Newline text))))
       (if (> (length line) *label-length*)
           (format nil "~a..." (subseq line 0 *label-length*))
@@ -111,9 +111,9 @@ has just ended."
   (handler-case
       (let ((label (first-user-line (conversation))))
         (when label
-          (nyaa:checkpoint (saver-context saver) :dir (saver-directory saver) :keep 1 :label label)))
+          (miao:checkpoint (saver-context saver) :dir (saver-directory saver) :keep 1 :label label)))
     (error (e)
-      (format (saver-err saver) "~&nyaa: could not save the chat: ~a~%" e))))
+      (format (saver-err saver) "~&miao: could not save the chat: ~a~%" e))))
 
 (defun request-save (saver)
   (bt:with-lock-held ((saver-lock saver))
@@ -132,7 +132,7 @@ has just ended."
       (save-chat saver))))
 
 (defun start-saver (saver)
-  (setf (saver-thread saver) (bt:make-thread (lambda () (saver-loop saver)) :name "nyaa chat saver")))
+  (setf (saver-thread saver) (bt:make-thread (lambda () (saver-loop saver)) :name "miao chat saver")))
 
 (defun stop-saver (saver)
   "Let a save under way finish, then save once more so a run cut short is kept."
@@ -145,7 +145,7 @@ has just ended."
 ;;; --- sessions -------------------------------------------------------------
 
 (defun session-id ()
-  (nyaa:generation-id))
+  (miao:generation-id))
 
 (defun chats-directory (home)
   (merge-pathnames "chats/" home))
@@ -172,7 +172,7 @@ has just ended."
 (defun list-chats (home out)
   "One line per saved chat, newest first: id, when it was last saved, its first line."
   (dolist (id (session-ids home))
-    (let ((generation (first (nyaa:generations :dir (session-directory home id)))))
+    (let ((generation (first (miao:generations :dir (session-directory home id)))))
       (when generation
         (format out "~a  ~a  ~a~%" id (getf generation :created) (getf generation :label))))))
 
@@ -181,7 +181,7 @@ has just ended."
 (defun replay (messages out)
   "Print MESSAGES, a saved conversation, as the chat would have drawn it."
   (dolist (message messages)
-    (let ((text (nyaa:content-text (getf message :content))))
+    (let ((text (miao:content-text (getf message :content))))
       (ecase (getf message :role)
         (:system)
         (:user (format out "~a~a~%" *prompt* text))
@@ -221,14 +221,14 @@ agent answered."
 Answers the session's id."
   (if (getf options :resume)
       (let* ((id (resolve-session home (getf options :resume)))
-             (generation (first (nyaa:generations :dir (session-directory home id))))
-             (outcome (and generation (nyaa:rollback context (getf generation :path)))))
+             (generation (first (miao:generations :dir (session-directory home id))))
+             (outcome (and generation (miao:rollback context (getf generation :path)))))
         (unless (and outcome (member :chat (getf (second outcome) :restored)))
           (error "could not resume ~a: ~a" id
                  (or (second (assoc :chat (getf (second outcome) :unremounted))) "no saved conversation")))
         id)
       (multiple-value-bind (provider-name tools system) (prepare options context)
-        (apply #'m:mount context 'nyaa:agent :name :chat :model provider-name :system system
+        (apply #'m:mount context 'miao:agent :name :chat :model provider-name :system system
                (agent-options options tools))
         (session-id))))
 

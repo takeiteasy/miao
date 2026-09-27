@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; One session per id, so successive forms see the state the last one left.
 ;;; Each session is its own meow service, mounted under tool-repl's context,
@@ -20,7 +20,7 @@
 ;;;
 ;;; Trust posture: arbitrary evaluation. Trusted operator only. A model
 ;;; reaches evaluation through tool-gated-eval, which checks a form against
-;;; an allowlist (~takeiteasy/nyaa#44); no gated form of this tool exists.
+;;; an allowlist (~takeiteasy/miao#44); no gated form of this tool exists.
 
 (defstruct worker-box
   "A session's current worker, boxed so tool-repl's cleanup can read and
@@ -35,7 +35,7 @@ Set from two processes -- tool-repl's own, and the session's -- so both are
 read and written under LOCK."
   worker closed
   (pending 0) (idle-since (get-internal-real-time))
-  (lock (bt:make-lock :name "nyaa-repl-session-activity")))
+  (lock (bt:make-lock :name "miao-repl-session-activity")))
 
 (defun %box-begin-eval (box)
   (bt:with-lock-held ((worker-box-lock box))
@@ -56,7 +56,7 @@ has been idle if so."
 
 ;;; Unnamed, like an M:AGENT: several ids each mount one, and none is meant
 ;;; to be looked up by name. Unnamed children are invisible to CHECKPOINT
-;;; (~takeiteasy/nyaa#11's %CONTEXT-ENTRIES), which is right -- a REPL
+;;; (~takeiteasy/miao#11's %CONTEXT-ENTRIES), which is right -- a REPL
 ;;; session holds no state of its own worth snapshotting, only a worker.
 (m:defservice repl-session ()
   ((box :initarg :box :reader session-box))

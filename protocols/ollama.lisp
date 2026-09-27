@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Ollama's native chat endpoint: POST <base-url>/api/chat, with optional
 ;;; NDJSON streaming. Distinct from :PROTOCOL-OPENAI because the wire shape

@@ -1,5 +1,5 @@
-(defpackage #:nyaa/tests
+(defpackage #:miao/tests
   (:use #:cl #:fiveam)
   (:local-nicknames (#:m #:meow)
-                    (#:ui #:nyaa/ui)
+                    (#:ui #:miao/ui)
                     (#:bt #:bordeaux-threads-2)))

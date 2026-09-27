@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; The table of service definitions DEFINE-TOOL, DEFINE-PROTOCOL and
 ;;; DEFINE-PROVIDER fill, so a front end can mount a service by name. See

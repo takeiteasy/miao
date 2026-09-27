@@ -1,7 +1,7 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; `nyaa chat` (~takeiteasy/nyaa#99): the session against the echo provider,
+;;; `miao chat` (~takeiteasy/miao#99): the session against the echo provider,
 ;;; and its pieces against a stalling backend.
 
 (defun chat-session (lines &rest args)
@@ -18,7 +18,7 @@ and stderr."
                              (lambda ()
                                (setf text (concatenate
                                            'string text
-                                           (bt:with-lock-held (nyaa/cli::*output-lock*)
+                                           (bt:with-lock-held (miao/cli::*output-lock*)
                                              (get-output-stream-string out))))
                                (and (> (length text) mark)
                                     (alexandria:ends-with-subseq "> " text)))
@@ -35,7 +35,7 @@ and stderr."
                          nil))))
          (err (make-string-output-stream))
          (code (flet ((in-home (home)
-                        (nyaa/cli:main (cons "chat" args) :context *protocol-context* :home home
+                        (miao/cli:main (cons "chat" args) :context *protocol-context* :home home
                                                           :in reader :out out :err err)))
                  (if *home*
                      (in-home *home*)
@@ -43,12 +43,12 @@ and stderr."
     (values code text roles (get-output-stream-string err))))
 
 (defun saved-chats ()
-  (nyaa/cli::session-ids *home*))
+  (miao/cli::session-ids *home*))
 
 (defun saved-conversation (id)
   "The roles and first line of the conversation saved as ID."
-  (let* ((generation (first (nyaa:generations :dir (nyaa/cli::session-directory *home* id))))
-         (state (getf (find :chat (getf (nyaa::%read-generation (getf generation :path)) :services)
+  (let* ((generation (first (miao:generations :dir (miao/cli::session-directory *home* id))))
+         (state (getf (find :chat (getf (miao::%read-generation (getf generation :path)) :services)
                             :key (lambda (entry) (getf entry :name)))
                       :state)))
     (mapcar (lambda (message) (getf message :role)) (getf state :messages))))
@@ -84,21 +84,21 @@ and stderr."
       (multiple-value-bind (code out err) (apply #'cli args)
         (is (= 2 code) "~s exited ~a" args code)
         (is (equal "" out))
-        (is (search "nyaa chat" err))))
-    (is (= 3 (getf (nyaa/cli::parse-args '("--max-turns" "3") :takes-prompt nil) :max-turns)))))
+        (is (search "miao chat" err))))
+    (is (= 3 (getf (miao/cli::parse-args '("--max-turns" "3") :takes-prompt nil) :max-turns)))))
 
 ;;; --- drawing --------------------------------------------------------------
 
 (defun rendered (&rest event-lists)
   "What a renderer prints as each of EVENT-LISTS, in turn, is folded into a state."
   (let ((out (make-string-output-stream))
-        (renderer (nyaa/cli::make-renderer nil))
+        (renderer (miao/cli::make-renderer nil))
         (state (ui:make-state))
         (printed '()))
-    (setf (nyaa/cli::renderer-out renderer) out)
+    (setf (miao/cli::renderer-out renderer) out)
     (dolist (events event-lists)
       (setf state (ui:fold-events events state))
-      (nyaa/cli::render renderer state)
+      (miao/cli::render renderer state)
       (push (get-output-stream-string out) printed))
     (nreverse printed)))
 
@@ -124,7 +124,7 @@ and stderr."
     (is (equal "> " (subseq text (- (length text) 2))))))
 
 (test a-long-result-is-abbreviated
-  (let ((text (nyaa/cli::abbreviate (make-string 500 :initial-element #\a))))
+  (let ((text (miao/cli::abbreviate (make-string 500 :initial-element #\a))))
     (is (< (length text) 300))
     (is (search "..." text))))
 
@@ -137,13 +137,13 @@ and stderr."
            (progn
              (mount-assistant)
              (let ((client (ui:attach :assistant)))
-               (is (eq :ok (nyaa/cli::submit client "go")))
+               (is (eq :ok (miao/cli::submit client "go")))
                (is-true (eventually (lambda ()
                                       (entries-of :text (ui:state-root (ui:client-state client))))
                                     5))
-               (is (eq :ok (nyaa/cli::submit client "shorter"))
+               (is (eq :ok (miao/cli::submit client "shorter"))
                    "the second line is a steer, not a refused run")
-               (is (eq :ok (nyaa/cli::submit client "shorter still")))))
+               (is (eq :ok (miao/cli::submit client "shorter still")))))
         (setf (car release) t)))))
 
 (test ctrl-c-cancels-a-run-and-leaves-an-idle-chat
@@ -153,15 +153,15 @@ and stderr."
            (progn
              (mount-assistant)
              (let ((client (ui:attach :assistant)))
-               (is (eq :exit (nyaa/cli::handle-interrupt client)))
-               (nyaa/cli::submit client "go")
+               (is (eq :exit (miao/cli::handle-interrupt client)))
+               (miao/cli::submit client "go")
                (is-true (eventually (lambda ()
                                       (entries-of :text (ui:state-root (ui:client-state client))))
                                     5))
-               (is (eq :cancelled (nyaa/cli::handle-interrupt client)))
+               (is (eq :cancelled (miao/cli::handle-interrupt client)))
                (wait-for-status client :done)
                (is (eq :cancelled (ui:state-reason (ui:client-state client))))
-               (is (eq :exit (nyaa/cli::handle-interrupt client)))))
+               (is (eq :exit (miao/cli::handle-interrupt client)))))
         (setf (car release) t)))))
 
 ;;; --- saving and resuming (#100) --------------------------------------------
@@ -173,7 +173,7 @@ and stderr."
       (is (= 1 (length (saved-chats))))
       (is (equal '(:system :user :assistant :user :assistant)
                  (saved-conversation (first (saved-chats)))))
-      (is (= 1 (length (nyaa:generations :dir (nyaa/cli::session-directory *home* (first (saved-chats)))))))
+      (is (= 1 (length (miao:generations :dir (miao/cli::session-directory *home* (first (saved-chats)))))))
       (multiple-value-bind (code out) (cli "chats")
         (is (= 0 code))
         (is (search (first (saved-chats)) out))
@@ -232,7 +232,7 @@ and stderr."
         (unwind-protect
              (let ((out (make-string-output-stream)) (err (make-string-output-stream)))
                (is (null (m:lookup :chat)))
-               (is (= 0 (nyaa/cli:main '("chat" "--resume") :context context :home *home*
+               (is (= 0 (miao/cli:main '("chat" "--resume") :context context :home *home*
                                                              :in (lambda () nil) :out out :err err))
                    "~a" (get-output-stream-string err))
                (is (search "> hello" (get-output-stream-string out))))
@@ -260,5 +260,5 @@ and stderr."
                     ("chat" "--resume" "--system-file" "x")))
       (is (= 2 (apply #'cli args)) "~s" args))
     (is (= 2 (cli "run" "hi" "--resume")))
-    (is (eq :latest (getf (nyaa/cli::parse-args '("--resume") :takes-prompt nil) :resume)))
-    (is (equal "abc" (getf (nyaa/cli::parse-args '("--resume" "abc") :takes-prompt nil) :resume)))))
+    (is (eq :latest (getf (miao/cli::parse-args '("--resume") :takes-prompt nil) :resume)))
+    (is (equal "abc" (getf (miao/cli::parse-args '("--resume" "abc") :takes-prompt nil) :resume)))))

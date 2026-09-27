@@ -1,8 +1,8 @@
 #-sbcl
-(error "nyaa requires SBCL; running on ~a." (lisp-implementation-type))
+(error "miao requires SBCL; running on ~a." (lisp-implementation-type))
 
-(defsystem "nyaa/launcher"
-  :description "Core selection for the nyaa launcher."
+(defsystem "miao/launcher"
+  :description "Core selection for the miao launcher."
   :author "George Watson"
   :license "GPLv3"
   :depends-on ("uiop")
@@ -11,16 +11,16 @@
   :components ((:file "package")
                (:file "launcher")))
 
-(defsystem "nyaa"
-  :description "Not Your Average Agent: an agent harness built on meow."
+(defsystem "miao"
+  :description "Model Integration And Orchestration: an agent core built on meow."
   :author "George Watson"
   :license "GPLv3"
   :version "0.1.0"
   :depends-on ("meow" "meow/logger" "alexandria" "com.inuoe.jzon" "drakma" "flexi-streams"
-               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "nyaa/launcher")
+               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "miao/launcher")
   :serial t
   :components ((:file "package")
-               (:file "nyaa")
+               (:file "miao")
                ;; Ahead of worker.lisp and tools/shell.lisp: both launch and
                ;; kill through the process-group helpers declared here.
                (:file "process")
@@ -86,13 +86,13 @@
                ;; M:SUSPEND/M:RESUME, and PROVIDER-API-KEY (provider.lisp)
                ;; to refuse a credentialed mount.
                (:file "image-generation"))
-  :in-order-to ((test-op (test-op "nyaa/tests"))))
+  :in-order-to ((test-op (test-op "miao/tests"))))
 
-(defsystem "nyaa/cli"
-  :description "The nyaa command line: run and chat."
+(defsystem "miao/cli"
+  :description "The miao command line: run and chat."
   :author "George Watson"
   :license "GPLv3"
-  :depends-on ("nyaa" "nyaa/ui" "alexandria" "bordeaux-threads" "uiop")
+  :depends-on ("miao" "miao/ui" "alexandria" "bordeaux-threads" "uiop")
   :pathname "cli/"
   :serial t
   :components ((:file "package")
@@ -100,19 +100,19 @@
                (:file "chat")
                (:file "main")))
 
-(defsystem "nyaa/ui"
-  :description "Headless client state for nyaa front ends."
+(defsystem "miao/ui"
+  :description "Headless client state for miao front ends."
   :author "George Watson"
   :license "GPLv3"
-  :depends-on ("nyaa" "alexandria" "bordeaux-threads")
+  :depends-on ("miao" "alexandria" "bordeaux-threads")
   :pathname "ui/"
   :serial t
   :components ((:file "package")
                (:file "state")
                (:file "client")))
 
-(defsystem "nyaa/tests"
-  :depends-on ("nyaa" "nyaa/cli" "nyaa/ui" "fiveam" "uiop" "usocket")
+(defsystem "miao/tests"
+  :depends-on ("miao" "miao/cli" "miao/ui" "fiveam" "uiop" "usocket")
   :pathname "tests/"
   :serial t
   :components ((:file "package")
@@ -147,5 +147,5 @@
                (:file "image-generation")
                (:file "self"))
   :perform (test-op (o c)
-             (unless (symbol-call :fiveam :run! :nyaa)
-               (error "nyaa tests failed"))))
+             (unless (symbol-call :fiveam :run! :miao)
+               (error "miao tests failed"))))

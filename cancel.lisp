@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; A caller-held handle rather than a message: it reaches a turn through
 ;;; every layer without the caller knowing which service holds it, and

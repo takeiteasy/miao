@@ -1,17 +1,17 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; The call log (~takeiteasy/nyaa#73): the log's own accept/running/done/fold
+;;; The call log (~takeiteasy/miao#73): the log's own accept/running/done/fold
 ;;; API, and AGENT's use of it through :CALL-LOG.
 
 (defun call-statuses (path)
-  (mapcar (lambda (e) (getf e :status)) (nyaa:call-entries path)))
+  (mapcar (lambda (e) (getf e :status)) (miao:call-entries path)))
 
 (defun one-call (path)
-  (first (nyaa:call-entries path)))
+  (first (miao:call-entries path)))
 
 (defun accept-one (path &key (name :tool-echo))
-  (first (nyaa::call-log-accept path :assistant 1 (list (list :id "c1" :name name
+  (first (miao::call-log-accept path :assistant 1 (list (list :id "c1" :name name
                                                               :arguments '(:text "hi"))))))
 
 ;;; --- the log API ---------------------------------------------------------
@@ -20,9 +20,9 @@
   (with-vault-path (path)
     (let ((id (accept-one path)))
       (is (equal '(:accepted) (call-statuses path)))
-      (nyaa::call-log-running path (list id))
+      (miao::call-log-running path (list id))
       (is (equal '(:running) (call-statuses path)))
-      (nyaa::call-log-done path (list (list id :ok "{\"text\":\"hi\"}")))
+      (miao::call-log-done path (list (list id :ok "{\"text\":\"hi\"}")))
       (let ((call (one-call path)))
         (is (eq :ok (getf call :status)))
         (is (equal "{\"text\":\"hi\"}" (getf call :content)))
@@ -35,7 +35,7 @@
 
 (test a-batch-gets-a-log-id-per-call-whatever-the-provider-ids
   (with-vault-path (path)
-    (let ((ids (nyaa::call-log-accept
+    (let ((ids (miao::call-log-accept
                 path nil 1 (list (list :id "c1" :name :tool-echo :arguments nil)
                                  (list :id "c1" :name :tool-echo :arguments nil)))))
       (is (eql 2 (length (remove-duplicates ids :test #'equal)))))))
@@ -43,8 +43,8 @@
 (test a-call-keeps-its-first-outcome
   (with-vault-path (path)
     (let ((id (accept-one path)))
-      (nyaa::call-log-done path (list (list id :ok "a")))
-      (nyaa::call-log-done path (list (list id :abandoned nil)))
+      (miao::call-log-done path (list (list id :ok "a")))
+      (miao::call-log-done path (list (list id :abandoned nil)))
       (is (equal '(:ok) (call-statuses path))))))
 
 (test a-call-whose-owner-is-gone-reads-as-lost
@@ -55,46 +55,46 @@
                    :by (list :pid 999999 :host (machine-instance) :start 1 :token "other"))
              out))
     (is (equal '(:lost) (call-statuses path)))
-    (nyaa::call-log-done path (list (list "x-0" :abandoned nil)))
+    (miao::call-log-done path (list (list "x-0" :abandoned nil)))
     (is (equal '(:abandoned) (call-statuses path)))))
 
 (test compaction-drops-finished-calls-and-keeps-the-rest
   (with-vault-path (path)
     (let ((done (accept-one path))
           (open (accept-one path)))
-      (nyaa::call-log-done path (list (list done :ok "x")))
-      (multiple-value-bind (dropped kept) (nyaa:call-log-compact path :max-age 0)
+      (miao::call-log-done path (list (list done :ok "x")))
+      (multiple-value-bind (dropped kept) (miao:call-log-compact path :max-age 0)
         (is (eql 1 dropped))
         (is (eql 1 kept)))
-      (is (equal (list open) (mapcar (lambda (e) (getf e :id)) (nyaa:call-entries path)))))))
+      (is (equal (list open) (mapcar (lambda (e) (getf e :id)) (miao:call-entries path)))))))
 
 (test compaction-keeps-recently-finished-calls
   (with-vault-path (path)
-    (nyaa::call-log-done path (list (list (accept-one path) :ok "x")))
-    (is (eql 0 (nyaa:call-log-compact path)))
+    (miao::call-log-done path (list (list (accept-one path) :ok "x")))
+    (is (eql 0 (miao:call-log-compact path)))
     (is (equal '(:ok) (call-statuses path)))))
 
 (test a-malformed-call-log-line-is-skipped-and-blocks-compaction
   (with-vault-path (path)
-    (nyaa::call-log-done path (list (list (accept-one path) :ok "x")))
+    (miao::call-log-done path (list (list (accept-one path) :ok "x")))
     (with-open-file (out path :direction :output :if-exists :append)
       (write-line "(:kind :call :id" out))
     (is (equal '(:ok) (call-statuses path)))
-    (is (null (nyaa:call-log-compact path :max-age 0)))))
+    (is (null (miao:call-log-compact path :max-age 0)))))
 
 (test call-log-reading-never-evaluates
   (with-vault-path (path)
     (accept-one path)
     (with-open-file (out path :direction :output :if-exists :append)
       (write-line "(:kind :call :id \"e\" :name #.(error \"evaluated\"))" out))
-    (is (eql 1 (length (nyaa:call-entries path))))))
+    (is (eql 1 (length (miao:call-entries path))))))
 
 (test an-append-compacts-once-the-log-passes-its-size
   (with-vault-path (path)
-    (let ((nyaa:*call-log-compact-size* 1)
-          (nyaa:*call-log-max-age* 0))
-      (nyaa::call-log-done path (list (list (accept-one path) :ok "x")))
-      (is (null (nyaa:call-entries path))))))
+    (let ((miao:*call-log-compact-size* 1)
+          (miao:*call-log-max-age* 0))
+      (miao::call-log-done path (list (list (accept-one path) :ok "x")))
+      (is (null (miao:call-entries path))))))
 
 ;;; --- the agent's own use of the log -----------------------------------------
 
@@ -103,7 +103,7 @@
   `(with-vault-path (,path)
      (with-agent (,answer ,@tools)
        (m:with-process (runner)
-         (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+         (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                   :call-log ,path ,@agent-args)))
            ,@body)))))
 
@@ -227,7 +227,7 @@
                          (final-reply "done")))
                   'tool-echo)
         (m:with-process (runner)
-          (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+          (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                    :tools '(:tool-echo))))
             (run-child child)
             (is-true (m:receive :timeout 5)))))
@@ -246,7 +246,7 @@
       (run-child child)
       (is-true (m:receive :timeout 5))
       (is (equal '(:agent-task :tool-echo)
-                 (sort (mapcar (lambda (e) (getf e :name)) (nyaa:call-entries path))
+                 (sort (mapcar (lambda (e) (getf e :name)) (miao:call-entries path))
                        #'string< :key #'symbol-name)))
       (is (equal '(:ok :ok) (call-statuses path))))))
 
@@ -262,5 +262,5 @@
   (with-vault-path (path)
     (with-agent ((final-reply "x"))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed :call-log path)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :call-log path)))
           (is (equal path (getf (m:call child '(:describe)) :call-log))))))))

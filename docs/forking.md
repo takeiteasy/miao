@@ -5,10 +5,10 @@ prefix of the original's history and carries on down its own path. The
 original is only read, so it keeps its history and, if running, its run.
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
 ;; ... a run has built up a conversation ...
 
-(nyaa:fork-agent *ctx* :assistant :turn 2 :as :retry)   ; => :retry
+(miao:fork-agent *ctx* :assistant :turn 2 :as :retry)   ; => :retry
 (m:cast (m:lookup :retry)
         '(:run :continue t :messages ((:role :user :content "try again, shorter"))))
 ```
@@ -35,7 +35,7 @@ messages, such as a `run-agent` result's `:messages`, and returns the prefix
 and how many assistant turns it holds:
 
 ```lisp
-(nyaa:fork-conversation messages :turn 1)   ; => prefix, 1
+(miao:fork-conversation messages :turn 1)   ; => prefix, 1
 ```
 
 ## A running agent
@@ -48,9 +48,9 @@ the original's call carries on.
 
 - A fork lives in memory. It is [checkpointed](checkpoints.md) like any
   agent, but the branches of a conversation are not kept as a tree
-  ([#177](https://todo.sr.ht/~takeiteasy/nyaa/177)).
+  ([#177](https://todo.sr.ht/~takeiteasy/miao/177)).
 - A model cannot fork; there is no agent message or tool for it
-  ([#178](https://todo.sr.ht/~takeiteasy/nyaa/178)).
+  ([#178](https://todo.sr.ht/~takeiteasy/miao/178)).
 
 [^mount]: Same class, options and restart policy, so `:sink`, `:vault` and
     `:call-log` are shared with the original: a fork's events reach the same

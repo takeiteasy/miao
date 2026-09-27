@@ -1,28 +1,28 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; The allowlist gate on its own (~takeiteasy/nyaa#44): what it reads, what
+;;; The allowlist gate on its own (~takeiteasy/miao#44): what it reads, what
 ;;; it refuses and the canonical text it hands a worker. Nothing here starts
 ;;; a worker; see the gated-eval tests in tools.lisp for that.
 
 (defun gate-refuses (text &optional reason)
-  (multiple-value-bind (source why) (nyaa:gate-check text)
+  (multiple-value-bind (source why) (miao:gate-check text)
     (and (null source) (stringp why)
          (or (null reason) (search reason why)))))
 
 (defun gate-accepts (text)
-  (values (nyaa:gate-check text)))
+  (values (miao:gate-check text)))
 
 (test gate-prints-a-form-in-canonical-text
   (is (equal "(COMMON-LISP:+ 1 2)" (gate-accepts "(+ 1 2)")))
-  (is (equal "(COMMON-LISP:LIST :K NYAA-GATE::FOO COMMON-LISP:NIL)"
+  (is (equal "(COMMON-LISP:LIST :K MIAO-GATE::FOO COMMON-LISP:NIL)"
              (gate-accepts "(list :k foo nil)")))
   (is (equal "(COMMON-LISP:QUOTE (1 2))" (gate-accepts "'(1 2)")))
   (is (equal "(COMMON-LISP:FUNCTION COMMON-LISP:CAR)" (gate-accepts "#'car")))
   (is (equal "()" (gate-accepts "()"))))
 
 (test gate-folds-symbol-names-to-upper-case
-  (is (equal "(COMMON-LISP:CAR NYAA-GATE::XY)" (gate-accepts "(Car xY)"))))
+  (is (equal "(COMMON-LISP:CAR MIAO-GATE::XY)" (gate-accepts "(Car xY)"))))
 
 (test gate-reads-atoms
   (is (equal "(COMMON-LISP:LIST 1 -2 1/2 1.5d0 -0.5d0 100.0d0 2 \"a\\\"b\\\\\" #\\a #\\Space)"
@@ -63,9 +63,9 @@
   (is (gate-refuses "\"a\\nb\"" "escaped")))
 
 (test gate-refuses-a-form-past-its-limits
-  (is (gate-refuses (make-string (1+ nyaa::*gate-max-source*) :initial-element #\1)
+  (is (gate-refuses (make-string (1+ miao::*gate-max-source*) :initial-element #\1)
                     "longer"))
-  (is (gate-refuses (make-string (1+ nyaa::*gate-max-token*) :initial-element #\a)
+  (is (gate-refuses (make-string (1+ miao::*gate-max-token*) :initial-element #\a)
                     "token"))
   (let ((deep (concatenate 'string
                            (make-string 200 :initial-element #\()
@@ -77,10 +77,10 @@
   (is (gate-refuses "1e1000000000" "out of range"))
   (is (gate-refuses "1d400" "out of range"))
   (is (gate-refuses "1/0" "zero"))
-  (is (gate-accepts (make-string nyaa::*gate-max-token* :initial-element #\9))))
+  (is (gate-accepts (make-string miao::*gate-max-token* :initial-element #\9))))
 
 (test gate-reads-a-number-lookalike-as-a-symbol
-  (is (equal "(COMMON-LISP:1+ NYAA-GATE::E5 NYAA-GATE::1F5)"
+  (is (equal "(COMMON-LISP:1+ MIAO-GATE::E5 MIAO-GATE::1F5)"
              (gate-accepts "(1+ e5 1f5)"))))
 
 ;;; --- the allowlist ------------------------------------------------------
@@ -113,10 +113,10 @@
 
 (test gate-allows-a-fresh-name-that-cl-does-not-have
   (is (gate-accepts "(let ((foo 1) (bar 2)) (+ foo bar))"))
-  (is (search "NYAA-GATE::FOO" (gate-accepts "'foo"))))
+  (is (search "MIAO-GATE::FOO" (gate-accepts "'foo"))))
 
 (test gate-allowlist-names-only-cl-externals
-  (dolist (name nyaa::*gate-allowed-names*)
+  (dolist (name miao::*gate-allowed-names*)
     (is (eq :external (nth-value 1 (find-symbol name :common-lisp)))
         "~a is not a CL external" name)))
 
@@ -124,7 +124,7 @@
   (dolist (name '("INTERN" "READ" "EVAL" "COERCE" "TYPE-OF" "CLASS-OF" "GET"
                   "SYMBOL-VALUE" "SYMBOL-FUNCTION" "FDEFINITION" "DECLARE"
                   "THE" "WARN" "SIGNAL" "ASSERT" "OPEN" "FIND-PACKAGE"))
-    (is (not (member name nyaa::*gate-allowed-names* :test #'string=))
+    (is (not (member name miao::*gate-allowed-names* :test #'string=))
         "~a should stay off the allowlist" name)))
 
 ;;; --- loop ---------------------------------------------------------------

@@ -5,14 +5,14 @@ how each was mounted, written as one s-expression file. `checkpoint` takes
 one; `rollback` puts it back, mounting again a service that has gone.
 
 ```lisp
-(nyaa:checkpoint *ctx* :label "before edit")
-;; => #P"~/.nyaa/generations/20260922-171610-129774-482.generation"
+(miao:checkpoint *ctx* :label "before edit")
+;; => #P"~/.miao/generations/20260922-171610-129774-482.generation"
 
-(nyaa:generations)
+(miao:generations)
 ;; => ((:path #P"..." :created "2026-09-22T17:16:10Z" :label "before edit"
 ;;      :services (:tool-fs :assistant)) ...)
 
-(nyaa:rollback *ctx* "~/.nyaa/generations/20260922-171610-129774-482.generation"
+(miao:rollback *ctx* "~/.miao/generations/20260922-171610-129774-482.generation"
                :timeout 30)
 ;; => (:ok (:restored (:tool-fs :assistant) :failed nil :failures nil :interrupted nil
 ;;          :unavailable nil :remounted nil :unremounted nil :missing nil
@@ -62,11 +62,11 @@ as interrupted.
 ## The generation file
 
 ```lisp
-(:nyaa-generation 2
+(:miao-generation 2
  :created "2026-09-22T17:16:10Z"
  :label "before edit"
  :services ((:name :tool-fs :class "tool-fs"
-             :parent nil :package "NYAA" :symbol "TOOL-FS"
+             :parent nil :package "MIAO" :symbol "TOOL-FS"
              :restart :transient :shutdown 5 :backoff nil :backoff-max nil
              :initargs "(:root \"/work/\")" :withheld nil
              :state nil)
@@ -95,7 +95,7 @@ A generation never holds a credential. A class names its own with
 `secret-initargs`, which a provider answers with `(:api-key)`:
 
 ```lisp
-(defmethod nyaa:secret-initargs ((service my-service)) '(:token))
+(defmethod miao:secret-initargs ((service my-service)) '(:token))
 ```
 
 Left out of `:initargs`, and named in `:withheld`:
@@ -134,8 +134,8 @@ reported rather than silently accepted:
 | `:extra` | mounted now, not named by the generation |
 
 ```lisp
-(nyaa:rollback *ctx* path :remount nil)                 ; restore what is mounted, nothing more
-(nyaa:rollback *ctx* path
+(miao:rollback *ctx* path :remount nil)                 ; restore what is mounted, nothing more
+(miao:rollback *ctx* path
                :initargs '((:provider-example :api-key "sk-...")))
 ```
 
@@ -164,15 +164,15 @@ something the default `:agent` trust level should reach.
 | `:restore` | `:path` (required) | as `rollback` |
 
 ```lisp
-(m:mount *ctx* 'nyaa:tool-checkpoint)
-(nyaa:invoke-tool :tool-checkpoint :op :save :label "before edit")
+(m:mount *ctx* 'miao:tool-checkpoint)
+(miao:invoke-tool :tool-checkpoint :op :save :label "before edit")
 ```
 
 `:save` runs inside the tool's own process, which cannot answer its own
 snapshot, so `:tool-checkpoint` is always listed under `:unavailable`.
 
 `:dir` is a mount option (default `*generations-directory*`,
-`~/.nyaa/generations/`), read once at mount time — a caller wanting a
+`~/.miao/generations/`), read once at mount time — a caller wanting a
 different directory per call goes through `checkpoint`/`rollback` directly
 instead, as [`tool-self`](self.md) does before every write it makes.
 

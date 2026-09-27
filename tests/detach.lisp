@@ -1,7 +1,7 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; Detached tool calls (~takeiteasy/nyaa#76): a call past :TOOL-GRACE, or to a
+;;; Detached tool calls (~takeiteasy/miao#76): a call past :TOOL-GRACE, or to a
 ;;; :BACKGROUND tool, is answered with a stub so the turn goes on, and its
 ;;; result folds in later.
 
@@ -11,10 +11,10 @@
   (list :kind :tool :name :tool-bg :trust :agent :background t
         :summary "Answer after a second, in the background" :params nil))
 
-(nyaa::define-tool-handler tool-bg (service args)
+(miao::define-tool-handler tool-bg (service args)
   args
   (sleep 1)
-  (nyaa::ok :bg t))
+  (miao::ok :bg t))
 
 (defun scripted (&rest replies)
   "A backend answering each request with the next of REPLIES, the last one
@@ -40,12 +40,12 @@ repeating."
                          (final-reply "got it"))
                'tool-slow)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-slow) :tool-grace 100))
              (result (run-detached child)))
         (is (eq :stop (getf (second result) :stop-reason)))
         (is (= 3 (getf (second result) :turns)))
-        (is (equal "got it" (nyaa:content-text (getf (second result) :content))))
+        (is (equal "got it" (miao:content-text (getf (second result) :content))))
         (is (= 3 (length (requests))))
         (is (search "running" (request-body 2)))
         (is (not (search "finished" (request-body 2))))
@@ -58,7 +58,7 @@ repeating."
                          (final-reply "got it"))
                'tool-bg)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-bg)))
              (result (run-detached child)))
         (is (= 3 (getf (second result) :turns)))
@@ -69,7 +69,7 @@ repeating."
                          (final-reply "done"))
                'tool-echo)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-echo) :tool-grace 5000))
              (result (run-detached child)))
         (is (= 2 (getf (second result) :turns)))
@@ -91,7 +91,7 @@ repeating."
                  'tool-slow)
       (m:with-process (runner)
         (let* ((recorder (make-recorder))
-               (child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+               (child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                   :tools '(:tool-slow) :tool-grace 100
                                   :sink (recorder-sink recorder))))
           (run-detached child)
@@ -108,7 +108,7 @@ repeating."
                            (final-reply "waiting"))
                  'tool-wait)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :tools '(:tool-wait) :tool-grace 100 :call-log path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually
@@ -119,14 +119,14 @@ repeating."
             (is-true received)
             (is (eq :cancelled (getf (second (fourth message)) :stop-reason))))
           (is-true (eventually (lambda () *tool-wait-cancelled*)))
-          (is (eq :interrupted (getf (first (nyaa:call-entries path)) :status))))))))
+          (is (eq :interrupted (getf (first (miao:call-entries path)) :status))))))))
 
 (test a-snapshot-with-a-detached-call-lists-it-and-keeps-the-stub
   (with-agent ((scripted (tool-call-reply "c1" "tool-wait" "{}")
                          (final-reply "waiting"))
                'tool-wait)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :tools '(:tool-wait) :tool-grace 100)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually
@@ -137,7 +137,7 @@ repeating."
                            :key (lambda (m) (getf m :role)))))
           (is (equal '("c1") (getf (getf snapshot :in-flight) :detached)))
           (is (equal "c1" (getf stub :tool-call-id)))
-          (is (search "running" (nyaa:content-text (getf stub :content)))))
+          (is (search "running" (miao:content-text (getf stub :content)))))
         (m:cast child '(:cancel))))))
 
 (test the-call-log-holds-a-detached-call-running-until-its-result-lands
@@ -147,13 +147,13 @@ repeating."
                            (final-reply "got it"))
                  'tool-slow)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :tools '(:tool-slow) :tool-grace 100 :call-log path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually (lambda () (= 2 (length (requests))))))
-          (is (eq :running (getf (first (nyaa:call-entries path)) :status)))
+          (is (eq :running (getf (first (miao:call-entries path)) :status)))
           (is-true (nth-value 1 (m:receive :timeout 8)))
-          (let ((call (first (nyaa:call-entries path))))
+          (let ((call (first (miao:call-entries path))))
             (is (eq :ok (getf call :status)))
             (is (search "slow" (getf call :content)))))))))
 
@@ -163,7 +163,7 @@ repeating."
                          (final-reply "steered"))
                'tool-wait)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :tools '(:tool-wait) :tool-grace 100)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually (lambda () (= 2 (length (requests))))))
@@ -179,7 +179,7 @@ repeating."
                          (final-reply "got both"))
                'tool-gate 'tool-gate-b)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-gate :tool-gate-b) :tool-grace 50))
              (result (run-detached child))
              (turns (getf (second result) :turns)))
@@ -189,7 +189,7 @@ repeating."
         (is (search "tool call c2" (request-body turns)))))))
 
 ;;; A call's meow timeout is the tool's :TIMEOUT plus 5s. The agent times a call
-;;; itself, only while it is attached (~takeiteasy/nyaa#183).
+;;; itself, only while it is attached (~takeiteasy/miao#183).
 
 (m:defservice tool-unbounded () () (:name :tool-unbounded))
 
@@ -198,10 +198,10 @@ repeating."
         :summary "Answer after six seconds, whatever its timeout"
         :params '((:timeout (integer 1) :default 1 :doc "milliseconds"))))
 
-(nyaa::define-tool-handler tool-unbounded (service args)
+(miao::define-tool-handler tool-unbounded (service args)
   args
   (sleep 6)
-  (nyaa::ok :unbounded t))
+  (miao::ok :unbounded t))
 
 (m:defservice tool-unbounded-attached () () (:name :tool-unbounded-attached))
 
@@ -210,10 +210,10 @@ repeating."
         :summary "Answer after six seconds, whatever its timeout"
         :params '((:timeout (integer 1) :default 1 :doc "milliseconds"))))
 
-(nyaa::define-tool-handler tool-unbounded-attached (service args)
+(miao::define-tool-handler tool-unbounded-attached (service args)
   args
   (sleep 6)
-  (nyaa::ok :unbounded t))
+  (miao::ok :unbounded t))
 
 (test a-detached-call-outlasts-its-call-timeout
   (with-agent ((scripted (tool-call-reply "c1" "tool-unbounded" "{}")
@@ -221,7 +221,7 @@ repeating."
                          (final-reply "got it"))
                'tool-unbounded)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-unbounded)))
              (result (run-detached child 15)))
         (is (= 3 (getf (second result) :turns)))
@@ -234,13 +234,13 @@ repeating."
                          (final-reply "done"))
                'tool-unbounded-attached)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-unbounded-attached)))
              (result (run-detached child 15)))
         (is (= 2 (getf (second result) :turns)))
         (is (search "{\\\"error\\\":\\\"timeout\\\"}" (request-body 2)))))))
 
-;;; :MAX-DETACHED (~takeiteasy/nyaa#184): a call past the cap stays attached
+;;; :MAX-DETACHED (~takeiteasy/miao#184): a call past the cap stays attached
 ;;; and detaches when a slot frees.
 
 (test a-call-past-max-detached-detaches-when-a-slot-frees
@@ -259,7 +259,7 @@ repeating."
                  'tool-slow 'tool-wait)
     (m:with-process (runner)
       (let* ((recorder (make-recorder))
-             (child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+             (child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-slow :tool-wait) :tool-grace 100
                                 :max-detached 1 :sink (recorder-sink recorder))))
         (m:cast child (list :run :messages '((:role :user :content "go"))))

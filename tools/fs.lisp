@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Filesystem tool, sandboxed to a root given at mount time.
 
@@ -44,7 +44,7 @@
 ;;; resolving it. The final component is operated on relative to that
 ;;; directory, so the symlink check and the operation share one file
 ;;; descriptor -- there is no window between them for a swap to land in
-;;; (~takeiteasy/nyaa#52).
+;;; (~takeiteasy/miao#52).
 
 (defun native-absolute (path)
   (if (and (plusp (length path)) (char= (char path 0) #\/))

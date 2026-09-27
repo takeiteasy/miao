@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Shared worker pools. Work that only waits -- a completion -- runs on a
 ;;; pooled thread rather than one spawned for it, and each pool caps how many
@@ -34,7 +34,7 @@ completions. Nil never refuses.")
 
 (defstruct (pool (:constructor %make-pool (key max-threads)))
   key max-threads
-  (lock (bt:make-lock :name "nyaa-pool"))
+  (lock (bt:make-lock :name "miao-pool"))
   (cv (bt:make-condition-variable))
   (queue '())
   (threads 0) (idle 0) (starting 0) (spawned 0) (abandoned 0) (stuck 0)
@@ -46,7 +46,7 @@ completions. Nil never refuses.")
   function key limit registry pool (state :queued))
 
 (defvar *pools* (make-hash-table :test 'eql))
-(defvar *pools-lock* (bt:make-lock :name "nyaa-pools"))
+(defvar *pools-lock* (bt:make-lock :name "miao-pools"))
 
 (defun pool-for (key)
   "The pool for KEY, a completion depth or :SINK."
@@ -109,7 +109,7 @@ of withdrawing it and running it ever happens."
   (incf (pool-starting pool))
   (incf (pool-spawned pool))
   (m:spawn (lambda () (pool-worker-loop pool))
-           :name (format nil "nyaa-pool-~(~a~)" (pool-key pool))))
+           :name (format nil "miao-pool-~(~a~)" (pool-key pool))))
 
 (defun %take-job (pool)
   "The first queued job its key lets start, marked running. Called holding

@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Evaluate one form that passed the allowlist gate (gate.lisp), in a
 ;;; single-use worker with a capped heap. What is evaluated is the gate's

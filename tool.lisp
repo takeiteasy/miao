@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; The tool convention. A tool is a meow service named :TOOL-<name> whose
 ;;; METADATA carries :KIND :TOOL, and which answers (:describe) and
@@ -49,7 +49,7 @@ through, each of which needs that margin over the one it waits on."
   (+ (* 5 hops) (/ (getf args :timeout +default-tool-timeout+) 1000)))
 
 (defun %call-result (reply status)
-  "M:CALL's two values, folded into nyaa's own (:ok ...) | (:error ...)
+  "M:CALL's two values, folded into miao's own (:ok ...) | (:error ...)
 vocabulary. STATUS is nil when the tool answered; otherwise the call itself
 failed below the tool -- its process exited, the deadline lapsed, or the
 call would have deadlocked -- and REPLY carries nothing useful. A process
@@ -110,7 +110,7 @@ result) instead. Signals when no tool is registered under NAME."
 that only a trusted operator may reach."
   (getf metadata :trust :agent))
 
-;;; --- checkpoints (~takeiteasy/nyaa#11) --------------------------------
+;;; --- checkpoints (~takeiteasy/miao#11) --------------------------------
 
 ;;; Declared here, ahead of DEFINE-TOOL-HANDLER below, which every tool's
 ;;; :SNAPSHOT/:RESTORE case calls. See checkpoint.lisp for the generation
@@ -170,7 +170,7 @@ generation file."
                                   (when ,cancel
                                     (setf (cancel-token-phase ,cancel) :settled)
                                     (bt:signal-semaphore (cancel-token-settled ,cancel)))))))))
-           ;; Checkpoints (~takeiteasy/nyaa#11): every tool answers these
+           ;; Checkpoints (~takeiteasy/miao#11): every tool answers these
            ;; through SNAPSHOT/RESTORE, which default to NIL, so a tool that
            ;; holds no state worth carrying needs no method of its own.
            (:snapshot (snapshot ,service))
@@ -186,7 +186,7 @@ generation file."
 
 (defun %tool-class-name (name)
   "NAME, a keyword such as :TOOL-SHELL, as the class symbol TOOL-SHELL, in
-NYAA. A tool defined outside this package must still name a symbol reachable
+MIAO. A tool defined outside this package must still name a symbol reachable
 from here, since DEFINE-TOOL always expands in the current package."
   (intern (symbol-name name)))
 

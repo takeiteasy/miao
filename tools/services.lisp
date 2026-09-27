@@ -1,8 +1,8 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Read-only introspection over the meow supervision tree this tool is
 ;;; itself mounted under: the registry, the mount tree and a service's
-;;; published state. See ~takeiteasy/nyaa#10.
+;;; published state. See ~takeiteasy/miao#10.
 ;;;
 ;;; Every answer is built from what METADATA already publishes and what
 ;;; M:CHILDREN already reports -- both key-free by construction, so this

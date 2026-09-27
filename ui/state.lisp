@@ -1,4 +1,4 @@
-(in-package #:nyaa/ui)
+(in-package #:miao/ui)
 
 ;;; The state an operator sees, folded from an agent's event stream. Pure: a
 ;;; state is never changed, FOLD-EVENT returns the next one. docs/client-state.md.
@@ -40,7 +40,7 @@
 ;;; --- entries --------------------------------------------------------------
 
 (defun text-of (content)
-  (if (stringp content) content (or (nyaa:content-text content) "")))
+  (if (stringp content) content (or (miao:content-text content) "")))
 
 (defun find-call (node id)
   (find-if (lambda (entry) (and (eq :call (entry-kind entry)) id (equal id (entry-id entry))))

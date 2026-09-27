@@ -1,6 +1,6 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
-;;; The vault (~takeiteasy/nyaa#14): an append-only s-expression log of
+;;; The vault (~takeiteasy/miao#14): an append-only s-expression log of
 ;;; steering messages, each marked consumed once it has been folded into a
 ;;; run or discarded. Backs AGENT's own in-memory steer queue
 ;;; (agent.lisp's QUEUE-STEER/ISSUE-TURN) so a steer survives past the run
@@ -26,12 +26,12 @@
   "Log size in bytes past which an append compacts the log.")
 
 (defvar *vault-log* nil
-  "Default log path: ~/.nyaa/vault.log, resolved lazily so loading this file
+  "Default log path: ~/.miao/vault.log, resolved lazily so loading this file
 never touches the filesystem or the user's home.")
 
 (defun %default-vault-log ()
   (or *vault-log*
-      (setf *vault-log* (merge-pathnames ".nyaa/vault.log" (user-homedir-pathname)))))
+      (setf *vault-log* (merge-pathnames ".miao/vault.log" (user-homedir-pathname)))))
 
 (defun %vault-path (spec)
   "SPEC, an agent's :VAULT mount option, as a log path: T means the default,

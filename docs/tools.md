@@ -108,7 +108,7 @@ tool busy with a long call never holds them up. `describe-tool` asks the tool
 itself.
 
 ```lisp
-(nyaa:tools)  ; => (:tool-fs :tool-http :tool-shell)
+(miao:tools)  ; => (:tool-fs :tool-http :tool-shell)
 ```
 
 ## Definitions
@@ -117,8 +117,8 @@ itself.
 each definition by name, so a front end can mount one without a hand-kept list:
 
 ```lisp
-(nyaa:definitions :kind :provider)              ; => (:provider-ollama)
-(nyaa:ensure-mounted ctx :provider-ollama :model "llama3.2")
+(miao:definitions :kind :provider)              ; => (:provider-ollama)
+(miao:ensure-mounted ctx :provider-ollama :model "llama3.2")
 ```
 
 `ensure-mounted` mounts a provider's protocol first, and does nothing for a
@@ -128,9 +128,9 @@ signals for a name nothing defines.
 ## Invocation
 
 ```lisp
-(nyaa:describe-tool :tool-shell)
-(nyaa:invoke-tool :tool-shell :cmd "ls -la")
-(nyaa:schema->json-schema (nyaa:tool-schema (nyaa:describe-tool :tool-shell)))
+(miao:describe-tool :tool-shell)
+(miao:invoke-tool :tool-shell :cmd "ls -la")
+(miao:schema->json-schema (miao:tool-schema (miao:describe-tool :tool-shell)))
 ```
 
 `invoke-tool` coerces its arguments against the tool's schema first, so a
@@ -148,9 +148,9 @@ kept running.
 coerced against its schema.
 
 ```lisp
-(let ((token (nyaa:make-cancel-token)))
-  (bt:make-thread (lambda () (sleep 1) (nyaa:cancel token)))
-  (nyaa:invoke-tool :tool-shell :cmd "sleep 30" :cancel token))
+(let ((token (miao:make-cancel-token)))
+  (bt:make-thread (lambda () (sleep 1) (miao:cancel token)))
+  (miao:invoke-tool :tool-shell :cmd "sleep 30" :cancel token))
 ; => (:error :cancelled)
 ```
 
@@ -186,18 +186,18 @@ and refuse one. Each tool's exact types are in its `:params`; see
 [schemas](schema.md) for the vocabulary.
 
 ```lisp
-(m:mount context 'nyaa:tool-fs :root "/srv/workspace")
-(m:mount context 'nyaa:tool-shell)
-(m:mount context 'nyaa:tool-http)
-(m:mount context 'nyaa:tool-eval)
-(m:mount context 'nyaa:tool-repl)
-(m:mount context 'nyaa:tool-plan :allow '(:tool-fs))
-(m:mount context 'nyaa:tool-image)
-(m:mount context 'nyaa:tool-services)
-(m:mount context 'nyaa:tool-checkpoint)
-(m:mount context 'nyaa:tool-self :enable '(:eval :define :reload))
-(m:mount context 'nyaa:tool-vault)
-(m:mount context 'nyaa:tool-calls)
+(m:mount context 'miao:tool-fs :root "/srv/workspace")
+(m:mount context 'miao:tool-shell)
+(m:mount context 'miao:tool-http)
+(m:mount context 'miao:tool-eval)
+(m:mount context 'miao:tool-repl)
+(m:mount context 'miao:tool-plan :allow '(:tool-fs))
+(m:mount context 'miao:tool-image)
+(m:mount context 'miao:tool-services)
+(m:mount context 'miao:tool-checkpoint)
+(m:mount context 'miao:tool-self :enable '(:eval :define :reload))
+(m:mount context 'miao:tool-vault)
+(m:mount context 'miao:tool-calls)
 ```
 
 `tool-fs` `delete` refuses directories, and there is no recursive delete: a tool
@@ -268,11 +268,11 @@ the server answers. The exchange runs on the tool's own thread.
 ## Workers
 
 `tool-eval`, `tool-gated-eval` and `tool-repl` evaluate in a worker: a separate Lisp process that
-loads nothing — no Quicklisp, no meow, no nyaa — and runs a read/eval/print loop
+loads nothing — no Quicklisp, no meow, no miao — and runs a read/eval/print loop
 over stdio. A crash or a hang there costs a deadline, never the host image.
 
 Both sides read with `*read-eval*` bound to nil, and the worker evaluates in a
-fresh `NYAA-WORKER` package. One exchange per line:
+fresh `MIAO-WORKER` package. One exchange per line:
 
 ```lisp
 (:eval "(+ 1 2)")            ; host to worker
@@ -363,7 +363,7 @@ or `tool-self`'s job. See [introspection](introspection.md).
 
 - `tool-services`'s `:state` is `m:children`'s restart bookkeeping, not the
   richer lifecycle `service-status` tracks
-  ([#46](https://todo.sr.ht/~takeiteasy/nyaa/46)).
+  ([#46](https://todo.sr.ht/~takeiteasy/miao/46)).
 - `tool-vault`'s compaction is safe within one process only
-  ([#84](https://todo.sr.ht/~takeiteasy/nyaa/84)). See
+  ([#84](https://todo.sr.ht/~takeiteasy/miao/84)). See
   [the vault](vault.md#limitations).

@@ -1,17 +1,17 @@
-(in-package #:nyaa/cli)
+(in-package #:miao/cli)
 
-;;; `nyaa run`: one agent run to completion. docs/cli.md.
+;;; `miao run`: one agent run to completion. docs/cli.md.
 
 (defparameter *usage*
-  "usage: nyaa run PROMPT [--model PROVIDER:MODEL] [--tools NAME,...]
+  "usage: miao run PROMPT [--model PROVIDER:MODEL] [--tools NAME,...]
                  [--system-file FILE] [--system-replace] [--max-turns N] [-v]
-       nyaa chat [--model PROVIDER:MODEL] [--tools NAME,...]
+       miao chat [--model PROVIDER:MODEL] [--tools NAME,...]
                  [--system-file FILE] [--system-replace] [--max-turns N]
-       nyaa chat --resume [ID]
-       nyaa chats")
+       miao chat --resume [ID]
+       miao chats")
 
 (defparameter *default-system*
-  "You are nyaa, an agent run from the command line. Do the task, then answer briefly.")
+  "You are miao, an agent run from the command line. Do the task, then answer briefly.")
 
 (defparameter *default-model* "ollama:llama3.2")
 
@@ -112,12 +112,12 @@ for one cut short by :max-turns or :timeout, 1 for anything else."
 
 (defun report (result out err)
   (if (eq (first result) :ok)
-      (let ((text (nyaa:content-text (getf (second result) :content)))
+      (let ((text (miao:content-text (getf (second result) :content)))
             (reason (getf (second result) :stop-reason)))
         (when (plusp (length text)) (format out "~a~%" text))
         (unless (eq reason :stop)
-          (format err "nyaa: run ended: ~(~a~)~%" reason)))
-      (format err "nyaa: ~a~%" (second result))))
+          (format err "miao: run ended: ~(~a~)~%" reason)))
+      (format err "miao: ~a~%" (second result))))
 
 (defun prepare (options context)
   "Mount the provider and tools OPTIONS name on CONTEXT. Answers the
@@ -125,18 +125,18 @@ provider's service name, the tool names and the system prompt."
   (multiple-value-bind (provider model) (split-model (getf options :model))
     (let ((provider-name (named "provider-" provider))
           (tools (mapcar (lambda (name) (named "" name)) (getf options :tools))))
-      (unless (member provider-name (nyaa:definitions :kind :provider))
+      (unless (member provider-name (miao:definitions :kind :provider))
         (usage-error "no provider ~s; defined: ~{~(~a~)~^, ~}" provider
                      (mapcar (lambda (name) (subseq (string name) (length "provider-")))
-                             (nyaa:definitions :kind :provider))))
+                             (miao:definitions :kind :provider))))
       (dolist (tool tools)
-        (unless (member tool (nyaa:definitions :kind :tool))
-          (usage-error "no tool ~(~a~); defined: ~{~(~a~)~^, ~}" tool (nyaa:definitions :kind :tool))))
-      (nyaa:ensure-mounted context provider-name :model model)
+        (unless (member tool (miao:definitions :kind :tool))
+          (usage-error "no tool ~(~a~); defined: ~{~(~a~)~^, ~}" tool (miao:definitions :kind :tool))))
+      (miao:ensure-mounted context provider-name :model model)
       (dolist (tool tools)
         (if (eq tool :tool-fs)
-            (nyaa:ensure-mounted context tool :root (namestring (uiop:getcwd)))
-            (nyaa:ensure-mounted context tool)))
+            (miao:ensure-mounted context tool :root (namestring (uiop:getcwd)))
+            (miao:ensure-mounted context tool)))
       (values provider-name tools
               (system-prompt (getf options :system-file) (getf options :system-replace))))))
 
@@ -147,7 +147,7 @@ provider's service name, the tool names and the system prompt."
 
 (defun run (options context out err)
   (multiple-value-bind (provider-name tools system) (prepare options context)
-    (let ((result (apply #'nyaa:run-agent context
+    (let ((result (apply #'miao:run-agent context
                          :model provider-name :system system
                          :messages (list (list :role :user :content (getf options :prompt)))
                          (append (agent-options options tools)

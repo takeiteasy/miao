@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Single-shot HTTP client. One request in, one response out, bounded by a
 ;;; caller deadline. Redirects are not followed and statuses pass through

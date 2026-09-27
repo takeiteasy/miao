@@ -1,9 +1,9 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; Workers: a bare Lisp child process evaluating forms over stdio, so a
 ;;; crash or a hang costs at most a deadline and never the host image.
 ;;;
-;;; The child loads nothing -- no Quicklisp, no meow, no nyaa. Loading
+;;; The child loads nothing -- no Quicklisp, no meow, no miao. Loading
 ;;; Quicklisp alone costs ten times a bare launch, which is what makes a
 ;;; fresh process per evaluation cheaper than pooling one.
 ;;;
@@ -73,7 +73,7 @@ under, so one inherited through a saved core reads as stale.")
   "Workers started and not yet killed, so RELAUNCH can kill them before it
 replaces the process.")
 
-(defvar *live-workers-lock* (bt:make-lock :name "nyaa-live-workers"))
+(defvar *live-workers-lock* (bt:make-lock :name "miao-live-workers"))
 
 (defstruct (worker (:constructor %make-worker (process &aux (boot *boot*))))
   process boot)
@@ -172,7 +172,7 @@ always comes from here."
                           (error () nil))
                   read t)
          (bt:signal-semaphore done)))
-     :name "nyaa-worker-reply")
+     :name "miao-worker-reply")
     (when cancel
       (on-cancel cancel (lambda () (bt:signal-semaphore done))))
     (bt:wait-on-semaphore done :timeout (/ timeout-ms 1000))

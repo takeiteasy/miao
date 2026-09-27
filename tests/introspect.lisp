@@ -1,14 +1,14 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
-;;; TOOL-IMAGE and TOOL-SERVICES (~takeiteasy/nyaa#10). Both mount already,
+;;; TOOL-IMAGE and TOOL-SERVICES (~takeiteasy/miao#10). Both mount already,
 ;;; via WITH-TOOLS (tests/tools.lisp).
 
 ;;; --- tool-image ----------------------------------------------------
 
 (test image-describe-a-known-function
   (with-tools
-    (let ((result (tool :tool-image :op :describe :symbol "complete" :package "nyaa")))
+    (let ((result (tool :tool-image :op :describe :symbol "complete" :package "miao")))
       (is (eq :ok (first result)))
       (is (eq :function (result-value result :kind)))
       (is (eq t (result-value result :fboundp)))
@@ -24,25 +24,25 @@ travels in a TOOL-IMAGE reply.")
   ;; a bound special's value must never travel, whatever op is asked.
   (with-tools
     (let ((result (tool :tool-image :op :describe :symbol "*introspect-secret*"
-                                    :package "nyaa/tests")))
+                                    :package "miao/tests")))
       (is (eq t (result-value result :boundp)))
       (is (null (search "sk-secret" (format nil "~s" result)))))))
 
 (test image-describe-an-unknown-symbol-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error
+               (first (miao:tool-error
                        (tool :tool-image :op :describe
                                         :symbol "totally-unknown-symbol-xyz"
-                                        :package "nyaa")))))))
+                                        :package "miao")))))))
 
 (test image-describe-requires-symbol
   (with-tools
-    (is (equal :bad-request (first (nyaa:tool-error (tool :tool-image :op :describe)))))))
+    (is (equal :bad-request (first (miao:tool-error (tool :tool-image :op :describe)))))))
 
 (test image-apropos-finds-and-caps-results
   (with-tools
-    (let ((result (tool :tool-image :op :apropos :pattern "TOOL" :package "nyaa"
+    (let ((result (tool :tool-image :op :apropos :pattern "TOOL" :package "miao"
                                     :external-only nil :limit 2)))
       (is (eq :ok (first result)))
       (is (<= (length (result-value result :symbols)) 2))
@@ -52,17 +52,17 @@ travels in a TOOL-IMAGE reply.")
 
 (test image-apropos-requires-pattern
   (with-tools
-    (is (equal :bad-request (first (nyaa:tool-error (tool :tool-image :op :apropos)))))))
+    (is (equal :bad-request (first (miao:tool-error (tool :tool-image :op :apropos)))))))
 
 (test image-documentation-reads-a-docstring
   (with-tools
     (is (stringp (result-value (tool :tool-image :op :documentation
-                                                 :symbol "complete" :package "nyaa")
+                                                 :symbol "complete" :package "miao")
                                :documentation)))))
 
 (test image-source-locates-a-loaded-function
   (with-tools
-    (let ((result (tool :tool-image :op :source :symbol "complete" :package "nyaa")))
+    (let ((result (tool :tool-image :op :source :symbol "complete" :package "miao")))
       (is (eq :ok (first result)))
       (is (eq t (result-value result :available)))
       (is (stringp (result-value result :file))))))
@@ -73,9 +73,9 @@ travels in a TOOL-IMAGE reply.")
 
 (test image-source-shows-the-form-of-an-in-image-definition
   (with-tools
-    (define-in-image 'nyaa/tests::%introspect-repl-fn '(1+ x))
+    (define-in-image 'miao/tests::%introspect-repl-fn '(1+ x))
     (let ((result (tool :tool-image :op :source :symbol "%introspect-repl-fn"
-                                    :package "nyaa/tests")))
+                                    :package "miao/tests")))
       (is (eq t (result-value result :available)))
       (is (search "1+" (result-value result :form)))
       (is (eq nil (result-value result :truncated)))
@@ -83,18 +83,18 @@ travels in a TOOL-IMAGE reply.")
 
 (test image-source-caps-a-long-form
   (with-tools
-    (define-in-image 'nyaa/tests::%introspect-long-fn
+    (define-in-image 'miao/tests::%introspect-long-fn
       `(quote ,(loop for i below 2000 collect i)))
     (let ((result (tool :tool-image :op :source :symbol "%introspect-long-fn"
-                                    :package "nyaa/tests")))
+                                    :package "miao/tests")))
       (is (eq t (result-value result :truncated)))
       (is (= 4000 (length (result-value result :form)))))))
 
 (test image-describe-carries-the-form
   (with-tools
-    (define-in-image 'nyaa/tests::%introspect-describe-fn '(1+ x))
+    (define-in-image 'miao/tests::%introspect-describe-fn '(1+ x))
     (let ((result (tool :tool-image :op :describe :symbol "%introspect-describe-fn"
-                                    :package "nyaa/tests")))
+                                    :package "miao/tests")))
       (is (stringp (getf (result-value result :source) :form))))))
 
 (defgeneric %introspect-generic (x))
@@ -104,7 +104,7 @@ travels in a TOOL-IMAGE reply.")
 (test image-source-lists-a-generic-functions-methods
   (with-tools
     (let ((result (tool :tool-image :op :source :symbol "%introspect-generic"
-                                    :package "nyaa/tests")))
+                                    :package "miao/tests")))
       (is (eq t (result-value result :available)))
       (is (= 2 (result-value result :methods-total)))
       (is (eq nil (result-value result :methods-truncated)))
@@ -115,13 +115,13 @@ travels in a TOOL-IMAGE reply.")
 
 (test image-describe-carries-a-plain-function-without-methods
   (with-tools
-    (let ((result (tool :tool-image :op :describe :symbol "complete" :package "nyaa")))
+    (let ((result (tool :tool-image :op :describe :symbol "complete" :package "miao")))
       (is (eq t (getf (result-value result :source) :available)))
       (is (null (getf (result-value result :source) :methods))))))
 
 (test image-packages-lists-the-loaded-image
   (with-tools
-    (is (member "NYAA" (mapcar (lambda (p) (getf p :name))
+    (is (member "MIAO" (mapcar (lambda (p) (getf p :name))
                                (result-value (tool :tool-image :op :packages) :packages))
                 :test #'string=))))
 
@@ -151,12 +151,12 @@ travels in a TOOL-IMAGE reply.")
 (test services-describe-an-unregistered-name-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error
+               (first (miao:tool-error
                        (tool :tool-services :op :describe :name "does-not-exist")))))))
 
 (test services-describe-requires-name
   (with-tools
-    (is (equal :bad-request (first (nyaa:tool-error (tool :tool-services :op :describe)))))))
+    (is (equal :bad-request (first (miao:tool-error (tool :tool-services :op :describe)))))))
 
 (test services-describe-reports-props-and-effects
   (with-tools

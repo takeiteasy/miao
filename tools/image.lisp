@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;; SB-INTROSPECT backs the lambda lists and source locations below; it
 ;; ships with SBCL itself, so REQUIRE rather than a Quicklisp dependency,
@@ -6,7 +6,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-introspect))
 
 ;;; Read-only introspection over the live CL image: describe, apropos,
-;;; documentation and source locations. See ~takeiteasy/nyaa#10.
+;;; documentation and source locations. See ~takeiteasy/miao#10.
 ;;;
 ;;; Never a value, never a slot. A provider's API key lives in a slot
 ;;; (provider.lisp), and PROVIDER.LISP:93 keeps it out of published
@@ -26,7 +26,7 @@
      :params ((:op (member :describe :apropos :documentation :source :packages)
                :required t :doc "operation to perform")
               (:symbol string :required-when (:op (:describe :documentation :source))
-               :doc "symbol name, e.g. \"nyaa:complete\" or \"complete\"")
+               :doc "symbol name, e.g. \"miao:complete\" or \"complete\"")
               (:package string :doc "package to resolve :symbol or :pattern against")
               (:pattern string :required-when (:op :apropos) :doc "substring to search for")
               (:external-only boolean :default t
@@ -186,7 +186,7 @@ or NIL if it cannot be printed."
   (ignore-errors
    (with-standard-io-syntax
      (let ((*print-readably* nil) (*print-pretty* nil)
-           (*package* (find-package '#:nyaa)))
+           (*package* (find-package '#:miao)))
        (prin1-to-string object)))))
 
 (defun symbol-methods (symbol)

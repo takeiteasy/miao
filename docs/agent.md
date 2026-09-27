@@ -15,15 +15,15 @@ one.
 ## Running one
 
 ```lisp
-(m:mount *ctx* 'nyaa:protocol-ollama)
-(m:mount *ctx* 'nyaa:provider-ollama :model "llama3.2")
-(m:mount *ctx* 'nyaa:tool-shell)
+(m:mount *ctx* 'miao:protocol-ollama)
+(m:mount *ctx* 'miao:provider-ollama :model "llama3.2")
+(m:mount *ctx* 'miao:tool-shell)
 
-(nyaa:run-agent *ctx* :model :provider-ollama :tools '(:tool-shell)
+(miao:run-agent *ctx* :model :provider-ollama :tools '(:tool-shell)
                 :messages '((:role :user :content "How many .lisp files are here?")))
 ```
 
-`run-agent` is the one place nyaa reaches the loop synchronously: it
+`run-agent` is the one place miao reaches the loop synchronously: it
 delegates an agent on `*ctx*` (a mounted context's process), runs it to
 completion, and returns `(:ok plist)` or `(:error reason)`.
 
@@ -31,7 +31,7 @@ A mounted, named agent works the same way any tool or provider does, driven
 by messages instead:
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
 (m:cast (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))))
 ```
 
@@ -75,7 +75,7 @@ when its run ends, so use `run-agent` for a one-shot run.[^conversation]
 site names them explicitly:
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :model :provider-ollama :tools '(:tool-shell))
+(m:mount *ctx* 'miao:agent :model :provider-ollama :tools '(:tool-shell))
 ```
 
 A call naming a tool outside the allow-list, and a tool error of any kind,
@@ -177,7 +177,7 @@ past `:tool-grace`, or at once when its tool's [metadata](tools.md) says
 | The run ends | a call still detached is [cancelled](#cancelling-tool-calls), emitted as `(:error :interrupted)` and logged `:interrupted` |
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :model :provider-ollama :tools '(:tool-shell)
+(m:mount *ctx* 'miao:agent :model :provider-ollama :tools '(:tool-shell)
                            :tool-grace 5000)
 ```
 
@@ -338,11 +338,11 @@ events go to its parent's sinks, with `:agent nil` and `:parent` set.
 Reaching the parent's `handle` from a delegated child needs
 [`~takeiteasy/meow#59`](https://todo.sr.ht/~takeiteasy/meow/59): meow's
 `%dispatch` dropped a service parent's `:agent-done`/`:agent-down` before
-that fix, so a mounted or delegated `nyaa:agent` on an unpatched meow will
+that fix, so a mounted or delegated `miao:agent` on an unpatched meow will
 never see a sub-agent finish.
 
 Which models and tool sets a child may be given beyond inheriting the
-parent's is [`~takeiteasy/nyaa#22`](https://todo.sr.ht/~takeiteasy/nyaa/22)'s
+parent's is [`~takeiteasy/miao#22`](https://todo.sr.ht/~takeiteasy/miao/22)'s
 policy (the orchestrator DSL), not this loop's.
 
 ## Checkpoints
@@ -365,19 +365,19 @@ leaving the original alone -- see [forking](forking.md).
 ## Limitations
 
 - A request over `:max-context` drops old turns rather than summarising them
-  ([#139](https://todo.sr.ht/~takeiteasy/nyaa/139)).
+  ([#139](https://todo.sr.ht/~takeiteasy/miao/139)).
 - A streamed turn on an OpenAI-style backend reports no prompt-token count,
   so it does not recalibrate the ratio
-  ([#142](https://todo.sr.ht/~takeiteasy/nyaa/142)).
+  ([#142](https://todo.sr.ht/~takeiteasy/miao/142)).
 - A detached call still ends with its run, so work longer than the run's
   `:deadline` has no home; that needs a job a tool hands back and the agent
-  polls ([#189](https://todo.sr.ht/~takeiteasy/nyaa/189)).
+  polls ([#189](https://todo.sr.ht/~takeiteasy/miao/189)).
 - A tool that ignores a cancel and never answers keeps its call pending for
-  good ([#188](https://todo.sr.ht/~takeiteasy/nyaa/188)).
+  good ([#188](https://todo.sr.ht/~takeiteasy/miao/188)).
 - A restored agent runs a call detached when it was checkpointed again rather
-  than reattaching to it ([#185](https://todo.sr.ht/~takeiteasy/nyaa/185)).
+  than reattaching to it ([#185](https://todo.sr.ht/~takeiteasy/miao/185)).
 - The first turn is measured at the default ratio; an exact count before it
-  needs a tokenizer ([#143](https://todo.sr.ht/~takeiteasy/nyaa/143)).
+  needs a tokenizer ([#143](https://todo.sr.ht/~takeiteasy/miao/143)).
 
 [^ratio]: The ratio is per agent, not per content type: code and JSON
     tokenise worse than prose, which the 10% margin absorbs. A reading under 1

@@ -11,7 +11,7 @@ hears back as events. Nothing else crosses the line.
 [Client state](client-state.md) folds these events for a front end to draw.
 
 ```lisp
-(m:mount *ctx* 'nyaa:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
 (m:call (m:lookup :assistant) (list :subscribe #'draw-event))
 (m:cast (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))))
 ```
@@ -114,12 +114,12 @@ events, each once and in order. The replay covers the current run only.[^replay]
 ## Limitations
 
 - A run's events are all held until it ends, for a mid-run subscriber's replay
-  ([#202](https://todo.sr.ht/~takeiteasy/nyaa/202)).
+  ([#202](https://todo.sr.ht/~takeiteasy/miao/202)).
 - A subscriber that attaches to an idle agent is not sent the conversation it
-  holds ([#203](https://todo.sr.ht/~takeiteasy/nyaa/203)).
-- Operator approvals ([#118](https://todo.sr.ht/~takeiteasy/nyaa/118)) and the
+  holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
+- Operator approvals ([#118](https://todo.sr.ht/~takeiteasy/miao/118)) and the
   live list of agents and sub-agents
-  ([#121](https://todo.sr.ht/~takeiteasy/nyaa/121)) are not part of the
+  ([#121](https://todo.sr.ht/~takeiteasy/miao/121)) are not part of the
   contract yet. Until #121, a sub-agent reports `:agent nil` and cannot be
   steered or cancelled.
 

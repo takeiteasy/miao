@@ -1,4 +1,4 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 ;;; The provider convention. A provider is data -- a protocol to speak, a base
 ;;; URL, how to authenticate, a model catalogue and any quirks -- and

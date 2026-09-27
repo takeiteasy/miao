@@ -1,5 +1,5 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
 ;;; The agent loop against the fake HTTP backend and the provider harness
 ;;; PROVIDER.LISP set up: allow-list resolution, the tool round trip,
@@ -15,8 +15,8 @@
         :summary "Echo TEXT back"
         :params '((:text string :required t :doc "text to echo"))))
 
-(nyaa::define-tool-handler tool-echo (service args)
-  (nyaa::ok :text (getf args :text)))
+(miao::define-tool-handler tool-echo (service args)
+  (miao::ok :text (getf args :text)))
 
 (m:defservice tool-boom () () (:name :tool-boom))
 
@@ -24,9 +24,9 @@
   (list :kind :tool :name :tool-boom :trust :agent
         :summary "Always fails" :params nil))
 
-(nyaa::define-tool-handler tool-boom (service args)
+(miao::define-tool-handler tool-boom (service args)
   args
-  (nyaa::fail (list :error "boom")))
+  (miao::fail (list :error "boom")))
 
 ;;; Holds a call in flight long enough to cancel or snapshot around it.
 
@@ -36,10 +36,10 @@
   (list :kind :tool :name :tool-hold :trust :agent
         :summary "Hold the call open, then answer" :params nil))
 
-(nyaa::define-tool-handler tool-hold (service args)
+(miao::define-tool-handler tool-hold (service args)
   args
   (sleep 0.5)
-  (nyaa::ok :slept t))
+  (miao::ok :slept t))
 
 ;;; Holds a call until it is cancelled, or 3s pass, and notes the cancel.
 
@@ -51,13 +51,13 @@
   (list :kind :tool :name :tool-wait :trust :agent
         :summary "Wait until cancelled" :params nil))
 
-(nyaa::define-tool-handler tool-wait (service args cancel)
+(miao::define-tool-handler tool-wait (service args cancel)
   args
   (let ((woken (bt:make-semaphore)))
-    (nyaa::on-cancel cancel (lambda () (bt:signal-semaphore woken)))
+    (miao::on-cancel cancel (lambda () (bt:signal-semaphore woken)))
     (if (bt:wait-on-semaphore woken :timeout 3)
-        (progn (setf *tool-wait-cancelled* t) (nyaa::fail :cancelled))
-        (nyaa::ok :waited t))))
+        (progn (setf *tool-wait-cancelled* t) (miao::fail :cancelled))
+        (miao::ok :waited t))))
 
 ;;; Slower than a turn's round trip, faster than TOOL-WAIT.
 
@@ -67,10 +67,10 @@
   (list :kind :tool :name :tool-slow :trust :agent
         :summary "Answer after a second" :params nil))
 
-(nyaa::define-tool-handler tool-slow (service args)
+(miao::define-tool-handler tool-slow (service args)
   args
   (sleep 1)
-  (nyaa::ok :slow t))
+  (miao::ok :slow t))
 
 ;;; Two services sharing one count of the calls running at once, and the
 ;;; most there ever were: one service answers its calls one at a time, so
@@ -88,7 +88,7 @@
     (setf *gate-peak* (max *gate-peak* (incf *gate-running*))))
   (sleep 0.2)
   (bt:with-lock-held (*gate-lock*) (decf *gate-running*))
-  (nyaa::ok :gated t))
+  (miao::ok :gated t))
 
 (defmacro define-gate (name)
   `(progn
@@ -96,7 +96,7 @@
      (defmethod m:metadata ((service ,name))
        (list :kind :tool :name ,(intern (symbol-name name) :keyword) :trust :agent
              :summary "Hold the call briefly, counting overlap" :params nil))
-     (nyaa::define-tool-handler ,name (service args)
+     (miao::define-tool-handler ,name (service args)
        args
        (pass-gate))))
 
@@ -118,8 +118,8 @@ the keyed provider, ready for RUN-AGENT."
     (setf *backend* server)
     (unwind-protect
          (progn
-           (m:mount context 'nyaa:protocol-openai)
-           (m:mount context 'nyaa:protocol-ollama)
+           (m:mount context 'miao:protocol-openai)
+           (m:mount context 'miao:protocol-ollama)
            (let ((mount (keyed)))
              (apply #'m:mount context (first mount)
                     :base-url (fake-http-url server) (rest mount)))
@@ -134,7 +134,7 @@ the keyed provider, ready for RUN-AGENT."
 (defvar *ctx* nil "The running context, bound by WITH-AGENT.")
 
 (defun agent-turn (&rest extra)
-  (apply #'nyaa:run-agent *ctx* :model :provider-test-keyed extra))
+  (apply #'miao:run-agent *ctx* :model :provider-test-keyed extra))
 
 (defun requests () (fake-http-requests *backend*))
 
@@ -197,7 +197,7 @@ object)."
       (is (eq :ok (first result)))
       (is (eq :stop (getf (second result) :stop-reason)))
       (is (= 1 (getf (second result) :turns)))
-      (is (equal "hi there" (nyaa:content-text (getf (second result) :content))))
+      (is (equal "hi there" (miao:content-text (getf (second result) :content))))
       (is (= 1 (length (requests)))))))
 
 (test a-tool-call-round-trips-and-the-run-continues
@@ -217,7 +217,7 @@ object)."
         (let ((tool-message (find :tool (getf (second result) :messages)
                                   :key (lambda (m) (getf m :role)))))
           (is (equal "c1" (getf tool-message :tool-call-id)))
-          (is (search "hi" (nyaa:content-text (getf tool-message :content)))))))))
+          (is (search "hi" (miao:content-text (getf tool-message :content)))))))))
 
 (test a-disallowed-tool-comes-back-as-a-tool-message
   (let ((n 0))
@@ -236,7 +236,7 @@ object)."
         (is (eq :stop (getf (second result) :stop-reason)))
         (let ((tool-message (find :tool (getf (second result) :messages)
                                   :key (lambda (m) (getf m :role)))))
-          (is (search "error" (nyaa:content-text (getf tool-message :content)))))))))
+          (is (search "error" (miao:content-text (getf tool-message :content)))))))))
 
 (test an-erroring-tool-comes-back-as-a-tool-message-and-the-run-continues
   (let ((n 0))
@@ -254,7 +254,7 @@ object)."
         (is (= 2 (length (requests))))
         (let ((tool-message (find :tool (getf (second result) :messages)
                                   :key (lambda (m) (getf m :role)))))
-          (is (search "boom" (nyaa:content-text (getf tool-message :content)))))))))
+          (is (search "boom" (miao:content-text (getf tool-message :content)))))))))
 
 ;;; --- the allow-list -----------------------------------------------------
 
@@ -299,7 +299,7 @@ object)."
                  (sleep 0.3)
                  (final-reply "too late")))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (m:cast child '(:cancel))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -313,7 +313,7 @@ object)."
   (with-agent ((stalled-stream "application/json" "{\"choices\":["))
     (with-hold
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :turn-timeout 30000)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually #'completion-running-p))
@@ -333,7 +333,7 @@ object)."
                        (final-reply "done")))
                 'tool-echo)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :tools '(:tool-echo))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (m:cast child (list :steer :content "also do this"))
@@ -341,7 +341,7 @@ object)."
             (is-true received)
             (is (eq :agent-done (first message)))
             (is (find "also do this" (getf (second (fourth message)) :messages)
-                     :key (lambda (m) (nyaa:content-text (getf m :content)))
+                     :key (lambda (m) (miao:content-text (getf m :content)))
                      :test #'equal))))))))
 
 ;;; --- interrupting steers ---------------------------------------------
@@ -382,7 +382,7 @@ sink's events, oldest first."
     (with-agent ((interruptible-backend release))
       (unwind-protect
            (m:with-process (runner)
-             (let ((child (apply #'m:delegate *ctx* 'nyaa:agent
+             (let ((child (apply #'m:delegate *ctx* 'miao:agent
                                  :model :provider-test-keyed
                                  :sink (recorder-sink recorder)
                                  delegate-args)))
@@ -402,7 +402,7 @@ sink's events, oldest first."
     (is (eq :stop (getf (second result) :stop-reason)))
     (is (eql 2 (getf (second result) :turns)))
     (is (equal '((:assistant . "partial ") (:user . "change of plan") (:assistant . "done"))
-               (mapcar (lambda (m) (cons (getf m :role) (nyaa:content-text (getf m :content))))
+               (mapcar (lambda (m) (cons (getf m :role) (miao:content-text (getf m :content))))
                        (last (getf (second result) :messages) 3))))
     (let ((body (getf (second requests) :body)))
       (is (< (search "partial " body) (search "change of plan" body))))
@@ -422,7 +422,7 @@ sink's events, oldest first."
                        (progn (sleep 0.5) (final-reply "too late"))
                        (final-reply "done"))))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually (lambda () (requests))))
           (m:cast child (list :steer :content "change of plan" :interrupt t))
@@ -431,7 +431,7 @@ sink's events, oldest first."
             (is (equal '(:user :user :assistant)
                        (mapcar (lambda (m) (getf m :role))
                                (getf (second (fourth message)) :messages))))
-            (is (equal "done" (nyaa:content-text
+            (is (equal "done" (miao:content-text
                                (getf (second (fourth message)) :content))))))))))
 
 (test an-interrupt-before-the-first-turn-issues-one-turn
@@ -439,7 +439,7 @@ sink's events, oldest first."
   ;; interrupt: the steer folds into the first turn, and only one is issued.
   (with-agent ((final-reply "done"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (m:cast child (list :steer :content "early" :interrupt t))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -471,7 +471,7 @@ and the seconds from the steer to it."
    answer tool-classes
    (lambda (*ctx*)
      (m:with-process (runner)
-       (let ((child (apply #'m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+       (let ((child (apply #'m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                            delegate-args)))
          (m:cast child (list :run :messages '((:role :user :content "go"))))
          (is-true (eventually (lambda () (funcall ready (m:call child '(:snapshot))))))
@@ -484,7 +484,7 @@ and the seconds from the steer to it."
                         internal-time-units-per-second)))))))))
 
 (defun message-texts (result)
-  (mapcar (lambda (m) (cons (getf m :role) (nyaa:content-text (getf m :content))))
+  (mapcar (lambda (m) (cons (getf m :role) (miao:content-text (getf m :content))))
           (getf (second result) :messages)))
 
 (test an-interrupt-during-the-tool-phase-closes-the-calls
@@ -524,8 +524,8 @@ and the seconds from the steer to it."
       (let ((tools (remove :tool (getf (second result) :messages)
                            :key (lambda (m) (getf m :role)) :test-not #'eq)))
         (is (equal '("c1" "c2") (mapcar (lambda (m) (getf m :tool-call-id)) tools)))
-        (is (search "kept" (nyaa:content-text (getf (first tools) :content))))
-        (is (search "interrupted" (nyaa:content-text (getf (second tools) :content))))))))
+        (is (search "kept" (miao:content-text (getf (first tools) :content))))
+        (is (search "interrupted" (miao:content-text (getf (second tools) :content))))))))
 
 (test an-interrupt-in-the-last-turns-tool-phase-finishes-the-run
   (multiple-value-bind (result seconds)
@@ -565,7 +565,7 @@ and the seconds from the steer to it."
       (is (eq :stop (getf (second result) :stop-reason)))
       (let ((answer (find :tool (reverse (getf (second result) :messages))
                           :key (lambda (m) (getf m :role)))))
-        (is (search "waited" (nyaa:content-text (getf answer :content))))))))
+        (is (search "waited" (miao:content-text (getf answer :content))))))))
 
 (test an-interrupt-cancels-a-sub-agent-in-flight
   (let ((n 0))
@@ -579,7 +579,7 @@ and the seconds from the steer to it."
      '()
      (lambda (*ctx*)
        (m:with-process (runner)
-         (let ((parent (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+         (let ((parent (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                    :sub-agents t)))
            (m:cast parent (list :run :messages '((:role :user :content "go"))))
            (let ((sub (other-agent-child *ctx* parent)))
@@ -597,7 +597,7 @@ and the seconds from the steer to it."
   (setf *tool-wait-cancelled* nil)
   (with-agent ((tool-call-reply "c1" "tool-wait" "{}") 'tool-wait)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :tools '(:tool-wait))))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually
@@ -616,7 +616,7 @@ and the seconds from the steer to it."
                'tool-hold)
     (m:with-process (runner)
       (let* ((recorder (make-recorder))
-             (child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+             (child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                 :tools '(:tool-hold)
                                 :sink (recorder-sink recorder))))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -630,7 +630,7 @@ and the seconds from the steer to it."
                  (last-message (car (last messages))))
             (is (eq :tool (getf last-message :role)))
             (is (equal "c1" (getf last-message :tool-call-id)))
-            (is (search "interrupted" (nyaa:content-text (getf last-message :content))))
+            (is (search "interrupted" (miao:content-text (getf last-message :content))))
             (let ((event (find :tool-result (recorded-events recorder)
                                :key (lambda (e) (getf e :type)))))
               (is (equal "c1" (getf event :id)))
@@ -647,7 +647,7 @@ and the seconds from the steer to it."
   "Restore a three-message conversation onto a fresh agent, :RUN it with
 RUN-ARGS and return the run's result."
   (m:with-process (runner)
-    (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+    (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                              :system "be brief")))
       (m:call child (list :restore (list :messages (restored-conversation) :turns 3)))
       (m:cast child (list* :run run-args))
@@ -670,7 +670,7 @@ RUN-ARGS and return the run's result."
 (test a-snapshot-keeps-its-messages-when-the-conversation-grows
   (with-agent ((final-reply "ok"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
         (m:call child (list :restore (list :messages (restored-conversation) :turns 3)))
         (let* ((snapshot (getf (m:call child (list :snapshot)) :messages))
                (before (copy-tree snapshot)))
@@ -685,7 +685,7 @@ RUN-ARGS and return the run's result."
     (is (not (search "earlier answer" (getf (first (requests)) :body))))
     (is (search "fresh" (getf (first (requests)) :body)))))
 
-;;; --- forking (~takeiteasy/nyaa#74) ------------------------------------
+;;; --- forking (~takeiteasy/miao#74) ------------------------------------
 
 (defun tooled-conversation ()
   "system, user, an assistant turn with a call and its result, user, assistant."
@@ -701,36 +701,36 @@ RUN-ARGS and return the run's result."
 
 (test fork-conversation-keeps-a-prefix-at-a-message-index
   (let ((messages (tooled-conversation)))
-    (multiple-value-bind (prefix turns) (nyaa:fork-conversation messages :at 2)
+    (multiple-value-bind (prefix turns) (miao:fork-conversation messages :at 2)
       (is (equal '(:system :user) (roles-of prefix)))
       (is (= 0 turns)))
-    (is (equal '(:system :user :assistant :tool) (roles-of (nyaa:fork-conversation messages :at 4))))
-    (is (= 6 (length (nyaa:fork-conversation messages))))
-    (is (null (nyaa:fork-conversation messages :at 0)))))
+    (is (equal '(:system :user :assistant :tool) (roles-of (miao:fork-conversation messages :at 4))))
+    (is (= 6 (length (miao:fork-conversation messages))))
+    (is (null (miao:fork-conversation messages :at 0)))))
 
 (test fork-conversation-refuses-a-cut-inside-a-tool-call-turn
-  (signals error (nyaa:fork-conversation (tooled-conversation) :at 3))
-  (signals error (nyaa:fork-conversation (tooled-conversation) :at 7))
-  (signals error (nyaa:fork-conversation (tooled-conversation) :at -1)))
+  (signals error (miao:fork-conversation (tooled-conversation) :at 3))
+  (signals error (miao:fork-conversation (tooled-conversation) :at 7))
+  (signals error (miao:fork-conversation (tooled-conversation) :at -1)))
 
 (test fork-conversation-cuts-at-a-turn
   (let ((messages (tooled-conversation)))
-    (multiple-value-bind (prefix turns) (nyaa:fork-conversation messages :turn 1)
+    (multiple-value-bind (prefix turns) (miao:fork-conversation messages :turn 1)
       (is (equal '(:system :user :assistant :tool) (roles-of prefix)))
       (is (= 1 turns)))
-    (is (equal '(:system :user) (roles-of (nyaa:fork-conversation messages :turn 0))))
-    (is (= 6 (length (nyaa:fork-conversation messages :turn 2))))
-    (signals error (nyaa:fork-conversation messages :turn 3))))
+    (is (equal '(:system :user) (roles-of (miao:fork-conversation messages :turn 0))))
+    (is (= 6 (length (miao:fork-conversation messages :turn 2))))
+    (signals error (miao:fork-conversation messages :turn 3))))
 
 (test fork-conversation-takes-one-cut-and-leaves-its-input-alone
   (let* ((messages (tooled-conversation))
          (before (copy-tree messages)))
-    (signals error (nyaa:fork-conversation messages :at 1 :turn 1))
-    (nyaa:fork-conversation messages :at 2)
+    (signals error (miao:fork-conversation messages :at 1 :turn 1))
+    (miao:fork-conversation messages :at 2)
     (is (equal before messages))))
 
 (defun mount-source-agent (&rest initargs)
-  (apply #'m:mount *ctx* 'nyaa:agent :name :source :model :provider-test-keyed initargs)
+  (apply #'m:mount *ctx* 'miao:agent :name :source :model :provider-test-keyed initargs)
   (m:call (m:lookup :source)
           (list :restore (list :messages (tooled-conversation) :turns 2))))
 
@@ -738,7 +738,7 @@ RUN-ARGS and return the run's result."
   (with-agent ((final-reply "branch") 'tool-echo)
     (mount-source-agent)
     (let ((before (copy-tree (m:call (m:lookup :source) '(:snapshot)))))
-      (is (eq :branch (nyaa:fork-agent *ctx* :source :turn 1 :as :branch)))
+      (is (eq :branch (miao:fork-agent *ctx* :source :turn 1 :as :branch)))
       (m:cast (m:lookup :branch)
               (list :run :continue t :messages '((:role :user :content "instead"))))
       (is-true (eventually (lambda () (plusp (length (getf (first (requests)) :body))))))
@@ -751,8 +751,8 @@ RUN-ARGS and return the run's result."
 (test two-forks-from-one-point-carry-only-the-prefix
   (with-agent ((final-reply "branch") 'tool-echo)
     (mount-source-agent)
-    (nyaa:fork-agent *ctx* :source :at 2 :as :one)
-    (nyaa:fork-agent *ctx* :source :at 2 :as :two)
+    (miao:fork-agent *ctx* :source :at 2 :as :one)
+    (miao:fork-agent *ctx* :source :at 2 :as :two)
     (m:cast (m:lookup :one) (list :run :continue t :messages '((:role :user :content "left"))))
     (m:cast (m:lookup :two) (list :run :continue t :messages '((:role :user :content "right"))))
     (is-true (eventually (lambda () (= 2 (length (requests))))))
@@ -764,30 +764,30 @@ RUN-ARGS and return the run's result."
 
 (test forking-a-running-agent-closes-its-unanswered-calls
   (with-agent ((tool-call-reply "c1" "tool-hold" "{}") 'tool-hold)
-    (m:mount *ctx* 'nyaa:agent :name :source :model :provider-test-keyed
+    (m:mount *ctx* 'miao:agent :name :source :model :provider-test-keyed
                                :tools '(:tool-hold))
     (m:cast (m:lookup :source) (list :run :messages '((:role :user :content "go"))))
     (is-true (eventually
               (lambda ()
                 (getf (getf (m:call (m:lookup :source) '(:snapshot)) :in-flight) :tool-calls))))
-    (nyaa:fork-agent *ctx* :source :as :branch)
+    (miao:fork-agent *ctx* :source :as :branch)
     (let ((messages (getf (m:call (m:lookup :branch) '(:snapshot)) :messages)))
       (is (eq :tool (getf (car (last messages)) :role)))
-      (is (search "interrupted" (nyaa:content-text (getf (car (last messages)) :content)))))
+      (is (search "interrupted" (miao:content-text (getf (car (last messages)) :content)))))
     (is-true (m:process-alive-p (m:lookup :source)))))
 
 (test fork-agent-refuses-a-bad-name
   (with-agent ((final-reply "ok") 'tool-echo)
     (mount-source-agent)
-    (signals error (nyaa:fork-agent *ctx* :nobody :as :branch))
-    (signals error (nyaa:fork-agent *ctx* :tool-echo :as :branch))
-    (signals error (nyaa:fork-agent *ctx* :source :as :source))
-    (signals error (nyaa:fork-agent *ctx* :source))))
+    (signals error (miao:fork-agent *ctx* :nobody :as :branch))
+    (signals error (miao:fork-agent *ctx* :tool-echo :as :branch))
+    (signals error (miao:fork-agent *ctx* :source :as :source))
+    (signals error (miao:fork-agent *ctx* :source))))
 
 (test a-system-prompt-is-not-sent-twice
   (with-agent ((final-reply "ok"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                                  :system "be brief")))
         (m:cast child (list :run :messages (restored-conversation)))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -819,10 +819,10 @@ RUN-ARGS and return the run's result."
            (result (agent-turn :messages '((:role :user :content "hi"))
                                :sink (recorder-sink recorder)))
            (events (recorded-events recorder)))
-      (is (eq :backend-error (first (nyaa:tool-error result))))
+      (is (eq :backend-error (first (miao:tool-error result))))
       (is (equal '(:run-start :turn :done :run-done)
                  (mapcar (lambda (e) (getf e :type)) events)))
-      (is (nyaa:tool-error-p (getf (third events) :reason))))))
+      (is (miao:tool-error-p (getf (third events) :reason))))))
 
 ;;; A function sink is called from one emitter per agent, a sub-agent's
 ;;; events included, one event at a time, so a sink that blocks never holds up
@@ -857,12 +857,12 @@ RUN-ARGS and return the run's result."
 
 (test a-blocking-sink-holds-up-neither-the-run-nor-cancel
   (let ((stuck (bt:make-semaphore))
-        (grace nyaa::*sink-grace*))
-    (setf nyaa::*sink-grace* 0.3)
+        (grace miao::*sink-grace*))
+    (setf miao::*sink-grace* 0.3)
     (unwind-protect
          (with-agent ((sse-tool-call "c1" "tool-wait" "{}") 'tool-wait)
            (m:with-process (runner)
-             (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+             (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                       :tools '(:tool-wait)
                                       :sink (lambda (event)
                                               (declare (ignore event))
@@ -876,7 +876,7 @@ RUN-ARGS and return the run's result."
                  (is-true received)
                  (is (eq :cancelled (getf (second (fourth message)) :stop-reason))))
                (is-true (eventually #'sinks-idle-p 5)))))
-      (setf nyaa::*sink-grace* grace)
+      (setf miao::*sink-grace* grace)
       (bt:signal-semaphore stuck :count 100))))
 
 (test a-cancelled-turn-streams-nothing-after-run-done
@@ -885,7 +885,7 @@ RUN-ARGS and return the run's result."
     (with-agent ((interruptible-backend release))
       (unwind-protect
            (m:with-process (runner)
-             (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+             (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                       :sink (recorder-sink recorder))))
                (m:cast child (list :run :messages '((:role :user :content "go"))))
                (is-true (eventually (lambda () (recorder-has recorder :text-delta))))
@@ -901,7 +901,7 @@ RUN-ARGS and return the run's result."
     (with-agent ((interruptible-backend release))
       (unwind-protect
            (m:with-process (runner)
-             (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+             (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                       :sink (recorder-sink recorder))))
                (m:cast child (list :run :messages '((:role :user :content "go"))))
                (is-true (eventually (lambda () (recorder-has recorder :text-delta))))
@@ -932,7 +932,7 @@ RUN-ARGS and return the run's result."
         (is (= 3 (length (requests))))
         (let ((tool-message (find :tool (getf (second result) :messages)
                                   :key (lambda (m) (getf m :role)))))
-          (is (search "sub-answer" (nyaa:content-text (getf tool-message :content)))))))))
+          (is (search "sub-answer" (miao:content-text (getf tool-message :content)))))))))
 
 (defun other-agent-child (context exclude)
   "Poll CONTEXT's children for a mounted AGENT that is not EXCLUDE, up to
@@ -940,7 +940,7 @@ RUN-ARGS and return the run's result."
 test's."
   (loop repeat 100
         for found = (find-if (lambda (c)
-                                (and (eq (getf c :class) 'nyaa:agent)
+                                (and (eq (getf c :class) 'miao:agent)
                                      (not (eq (getf c :process) exclude))))
                               (m:children context))
         when found return (getf found :process)
@@ -957,7 +957,7 @@ test's."
                        ;; before its own turn would otherwise finish it.
                        (progn (sleep 0.5) (final-reply "recovered")))))
       (m:with-process (runner)
-        (let ((parent (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((parent (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                   :sub-agents t)))
           (m:cast parent (list :run :messages '((:role :user :content "go"))))
           (let ((sub (other-agent-child *ctx* parent)))
@@ -972,15 +972,15 @@ test's."
               (let ((tool-message (find :tool (getf (second (fourth message)) :messages)
                                         :key (lambda (m) (getf m :role)))))
                 (is (search "sub_agent_down"
-                           (nyaa:content-text (getf tool-message :content))))))))))))
+                           (miao:content-text (getf tool-message :content))))))))))))
 
 ;;; --- discovery -----------------------------------------------------
 
 (test a-mounted-agent-is-discoverable-and-describes-itself
   (with-agent ((final-reply "hi"))
-    (m:mount *ctx* 'nyaa:agent :name :agent-under-test :model :provider-test-keyed)
-    (is (member :agent-under-test (nyaa:agents) :test #'equal))
-    (let ((metadata (nyaa:describe-agent :agent-under-test)))
+    (m:mount *ctx* 'miao:agent :name :agent-under-test :model :provider-test-keyed)
+    (is (member :agent-under-test (miao:agents) :test #'equal))
+    (let ((metadata (miao:describe-agent :agent-under-test)))
       (is (eq :agent (getf metadata :kind)))
       (is (eq :provider-test-keyed (getf metadata :model))))))
 ;;; --- the tool cap ------------------------------------------------------
@@ -1038,7 +1038,7 @@ test's."
 (test cancel-closes-queued-calls
   (with-agent (#'wait-then-echo 'tool-wait 'tool-echo)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :tools '(:tool-wait :tool-echo) :max-parallel-tools 1)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually (lambda () (in-tool-phase-p (m:call child '(:snapshot))))))
@@ -1053,7 +1053,7 @@ test's."
 (test a-snapshot-closes-queued-calls-as-interrupted
   (with-agent (#'wait-then-echo 'tool-wait 'tool-echo)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :tools '(:tool-wait :tool-echo) :max-parallel-tools 1)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually (lambda () (in-tool-phase-p (m:call child '(:snapshot))))))
@@ -1111,7 +1111,7 @@ test's."
 (test an-unregistered-model-fails-the-run-at-once
   (with-agent ((final-reply "unused"))
     (let* ((start (get-internal-real-time))
-           (result (nyaa:run-agent *ctx* :model :no-such-model :deadline 20000
+           (result (miao:run-agent *ctx* :model :no-such-model :deadline 20000
                                          :messages '((:role :user :content "go")))))
       (is (eq :error (first result)))
       (is (< (elapsed-since start) 5)))))
@@ -1137,14 +1137,14 @@ test's."
   (list :kind :tool :name :tool-nested :trust :agent
         :summary "Run an agent of its own" :params nil))
 
-(nyaa::define-tool-handler tool-nested (service args)
+(miao::define-tool-handler tool-nested (service args)
   args
-  (let ((result (nyaa:run-agent (m:service-process (m:service-context service))
+  (let ((result (miao:run-agent (m:service-process (m:service-context service))
                                 :model :provider-test-keyed :tools '(:tool-echo)
                                 :messages '((:role :user :content "inner")))))
-    (if (nyaa::tool-error-p result)
+    (if (miao::tool-error-p result)
         result
-        (nyaa::ok :answer (nyaa:content-text (getf (second result) :content))))))
+        (miao::ok :answer (miao:content-text (getf (second result) :content))))))
 
 (test a-tool-that-runs-an-agent-completes
   (let ((n 0))
@@ -1163,7 +1163,7 @@ test's."
         (is (search "inner done" (first (tool-message-texts result))))
         (is (< (elapsed-since start) 10))))))
 
-;;; --- retrying a turn (~takeiteasy/nyaa#42) --------------------------------
+;;; --- retrying a turn (~takeiteasy/miao#42) --------------------------------
 
 (defun error-reply (status)
   (list status '("Content-Type" "application/json") "{\"error\":\"nope\"}"))
@@ -1182,31 +1182,31 @@ test's."
       (is (eq :stop (getf (second result) :stop-reason)))
       (is (= 1 (getf (second result) :turns)))
       (is (= 2 (length (requests))))
-      (is (equal "recovered" (nyaa:content-text (getf (second result) :content)))))))
+      (is (equal "recovered" (miao:content-text (getf (second result) :content)))))))
 
 (test a-failure-past-the-retries-ends-the-run-with-that-error
   (with-agent ((fails-then 10 503 nil))
     (let ((result (agent-turn :messages '((:role :user :content "go"))
                               :turn-retries 2 :retry-backoff 5)))
-      (is (eq :backend-error (first (nyaa:tool-error result))))
-      (is (= 503 (second (nyaa:tool-error result))))
+      (is (eq :backend-error (first (miao:tool-error result))))
+      (is (= 503 (second (miao:tool-error result))))
       (is (= 3 (length (requests)))))))
 
 (test a-failure-a-retry-cannot-fix-is-not-retried
   (with-agent ((fails-then 10 400 nil))
     (let ((result (agent-turn :messages '((:role :user :content "go"))
                               :turn-retries 2 :retry-backoff 5)))
-      (is (eq :backend-error (first (nyaa:tool-error result))))
+      (is (eq :backend-error (first (miao:tool-error result))))
       (is (= 1 (length (requests)))))))
 
 (test a-turn-is-not-retried-by-default
   (with-agent ((fails-then 10 500 nil))
     (let ((result (agent-turn :messages '((:role :user :content "go")))))
-      (is (eq :backend-error (first (nyaa:tool-error result))))
+      (is (eq :backend-error (first (miao:tool-error result))))
       (is (= 1 (length (requests)))))))
 
 (test retryable-p-takes-the-transient-shapes-only
-  (flet ((retryable (reason) (nyaa::retryable-p (nyaa::fail reason))))
+  (flet ((retryable (reason) (miao::retryable-p (miao::fail reason))))
     (is-true (retryable :unavailable))
     (is-true (retryable '(:backend-error 408 "")))
     (is-true (retryable '(:backend-error 429 "")))
@@ -1221,7 +1221,7 @@ test's."
 
 (test retry-delay-waits-for-the-longer-of-backoff-and-retry-after
   (flet ((delay (backoff attempt retry-after)
-           (nyaa::retry-delay backoff attempt retry-after)))
+           (miao::retry-delay backoff attempt retry-after)))
     (dotimes (i 20)
       (is (<= 1000 (delay 1000 1 nil) 1250))
       (is (<= 4000 (delay 1000 3 nil) 5000))
@@ -1229,9 +1229,9 @@ test's."
       (is (<= 4000 (delay 1000 3 1000) 5000)))))
 
 (test retry-after-reads-a-backend-error-reason
-  (is (= 2000 (nyaa::retry-after '(:backend-error 429 "" :retry-after 2000))))
-  (is (null (nyaa::retry-after '(:backend-error 429 ""))))
-  (is (null (nyaa::retry-after :unavailable))))
+  (is (= 2000 (miao::retry-after '(:backend-error 429 "" :retry-after 2000))))
+  (is (null (miao::retry-after '(:backend-error 429 ""))))
+  (is (null (miao::retry-after :unavailable))))
 
 (test a-retry-is-announced-and-is-not-a-new-turn
   (let ((recorder (make-recorder)))
@@ -1253,7 +1253,7 @@ test's."
   (let ((recorder (make-recorder)))
     (with-agent ((fails-then 10 500 nil))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :turn-retries 2 :retry-backoff 300
                                  :sink (recorder-sink recorder))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -1269,7 +1269,7 @@ test's."
   (let ((recorder (make-recorder)))
     (with-agent ((fails-then 1 500 (streamed-reply "ok")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :turn-retries 2 :retry-backoff 300
                                  :sink (recorder-sink recorder))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -1287,7 +1287,7 @@ test's."
   (let ((recorder (make-recorder)))
     (with-agent ((fails-then 1 500 (streamed-reply "ok")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                  :turn-retries 2 :retry-backoff 5000
                                  :sink (recorder-sink recorder))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -1299,7 +1299,7 @@ test's."
             (is (= 1 (getf (second (fourth message)) :turns))))
           (is (search "change of plan" (getf (second (requests)) :body))))))))
 
-;;; --- capping a tool result (~takeiteasy/nyaa#40) --------------------------
+;;; --- capping a tool result (~takeiteasy/miao#40) --------------------------
 
 (defun long-text-backend ()
   (let ((n 0))
@@ -1351,11 +1351,11 @@ test's."
         (is (not (recorder-has recorder :context-trimmed)))))))
 
 (test a-result-within-the-cap-is-untouched
-  (let ((text (nyaa::render-tool-result (nyaa::ok :a 1))))
-    (is (equal "{\"a\":1}" (nyaa::%cut-text text 100)))
-    (is (equal "{\"a\":1}" (nyaa::%cut-text text 7)))))
+  (let ((text (miao::render-tool-result (miao::ok :a 1))))
+    (is (equal "{\"a\":1}" (miao::%cut-text text 100)))
+    (is (equal "{\"a\":1}" (miao::%cut-text text 7)))))
 
-;;; --- fitting the conversation (~takeiteasy/nyaa#39) ----------------------
+;;; --- fitting the conversation (~takeiteasy/miao#39) ----------------------
 
 (defun msg (role text &rest more) (list* :role role :content text more))
 
@@ -1372,14 +1372,14 @@ test's."
 
 (test a-conversation-within-budget-is-sent-as-is
   (let ((messages (long-conversation)))
-    (multiple-value-bind (view record) (nyaa::fit-conversation messages :max-context 10000)
+    (multiple-value-bind (view record) (miao::fit-conversation messages :max-context 10000)
       (is (equal messages view))
       (is (null record)))
-    (is (null (nth-value 1 (nyaa::fit-conversation messages))))))
+    (is (null (nth-value 1 (miao::fit-conversation messages))))))
 
 (test the-oldest-turns-are-left-out-with-a-note
   (multiple-value-bind (view record)
-      (nyaa::fit-conversation (long-conversation) :max-context 250)
+      (miao::fit-conversation (long-conversation) :max-context 250)
     (is (equal '(:system :user :assistant :user) (roles view)))
     (is (equal "be brief" (getf (first view) :content)) "a system message is kept")
     (is (search "earlier messages omitted" (getf (second view) :content)))
@@ -1390,47 +1390,47 @@ test's."
 
 (test a-tool-call-and-its-results-are-left-out-together
   (dolist (budget '(120 150 200 250))
-    (let* ((view (nyaa::fit-conversation (long-conversation) :max-context budget))
+    (let* ((view (miao::fit-conversation (long-conversation) :max-context budget))
            (calls (count-if (lambda (m) (getf m :tool-calls)) view))
            (results (count :tool (roles view))))
       (is (= calls results) "budget ~d: a call is never left without its result" budget))))
 
 (test a-conversation-that-cannot-fit-is-sent-and-said-to-be-over
   (multiple-value-bind (view record)
-      (nyaa::fit-conversation (long-conversation) :max-context 5)
+      (miao::fit-conversation (long-conversation) :max-context 5)
     (is (equal '(:system :user :user) (roles view)) "only the note and the newest turn are left")
     (is-true (getf record :over-budget))
     (is (equal "and now?" (getf (car (last view)) :content)))))
 
 (test fitting-a-conversation-changes-nothing-it-was-given
   (let* ((messages (long-conversation)) (copy (copy-tree messages)))
-    (nyaa::fit-conversation messages :max-context 100 :max-tool-result 10)
+    (miao::fit-conversation messages :max-context 100 :max-tool-result 10)
     (is (equal copy messages))))
 
 (test the-budget-is-in-tokens-at-the-ratio-with-a-margin
   (let ((messages (long-conversation)))
     (multiple-value-bind (view record)
-        (nyaa::fit-conversation messages :max-context 250 :chars-per-token 4)
+        (miao::fit-conversation messages :max-context 250 :chars-per-token 4)
       (is (equal messages view) "250 tokens at 4 characters each holds 1000")
       (is (null record)))
     (multiple-value-bind (view record)
-        (nyaa::fit-conversation messages :max-context 250 :margin 9/10)
+        (miao::fit-conversation messages :max-context 250 :margin 9/10)
       (is (equal '(:system :user :assistant :user) (roles view)))
       (is (<= (getf record :size) 225) "a tenth of the budget is held back")
       (is (= 1 (getf record :ratio))))))
 
 (test reserved-characters-count-against-the-budget
   (let ((messages (long-conversation)))
-    (is (null (nth-value 1 (nyaa::fit-conversation messages :max-context 400))))
+    (is (null (nth-value 1 (miao::fit-conversation messages :max-context 400))))
     (is (equal '(1 2 3)
-               (getf (nth-value 1 (nyaa::fit-conversation messages :max-context 400
+               (getf (nth-value 1 (miao::fit-conversation messages :max-context 400
                                                           :reserved 200))
                      :omitted)))))
 
 (test fitting-answers-the-characters-the-request-measures
   (let ((messages (long-conversation)))
-    (is (= (+ 8 100 (nyaa::%printed-size (getf (third messages) :tool-calls)) 100 100 8 100)
-           (nth-value 2 (nyaa::fit-conversation messages :reserved 100))))))
+    (is (= (+ 8 100 (miao::%printed-size (getf (third messages) :tool-calls)) 100 100 8 100)
+           (nth-value 2 (miao::fit-conversation messages :reserved 100))))))
 
 (defun usage-reply (reply tokens)
   "REPLY, a whole reply from JSON-RESPONSE, with a usage object of TOKENS."
@@ -1481,10 +1481,10 @@ first message of each request as the backend saw it."
     (is (not (noted-p second)))))
 
 (defun calibrated (chars tokens)
-  (let ((service (make-instance 'nyaa:agent)))
-    (setf (nyaa::%last-request-chars service) chars)
-    (nyaa::calibrate service (list :meta (list :usage (list :prompt-tokens tokens))))
-    (nyaa::%chars-per-token service)))
+  (let ((service (make-instance 'miao:agent)))
+    (setf (miao::%last-request-chars service) chars)
+    (miao::calibrate service (list :meta (list :usage (list :prompt-tokens tokens))))
+    (miao::%chars-per-token service)))
 
 (test calibration-sets-characters-over-tokens-within-bounds
   (is (= 4 (calibrated 400 100)))
@@ -1495,7 +1495,7 @@ first message of each request as the backend saw it."
 (test the-ratio-is-in-the-metadata
   (with-agent ((chatty-backend))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :chars-per-token 9/2)))
         (is (= 9/2 (getf (m:call child '(:describe)) :chars-per-token)))))))
 
@@ -1536,13 +1536,13 @@ first message of each request as the backend saw it."
 (test the-context-budget-is-in-the-metadata
   (with-agent ((chatty-backend))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'nyaa:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
                                :max-context 1234)))
         (is (= 1234 (getf (m:call child '(:describe)) :max-context)))))))
 
 (test a-tool-calls-schema-does-not-count-toward-the-context-estimate
   (let ((call (list :id "c1" :name :tool-http :arguments '(:url "x")))
         (schema '((:url string :required t :doc "where to fetch"))))
-    (is (= (nyaa::%message-size (list :role :assistant :tool-calls (list call)))
-           (nyaa::%message-size (list :role :assistant
+    (is (= (miao::%message-size (list :role :assistant :tool-calls (list call)))
+           (miao::%message-size (list :role :assistant
                                       :tool-calls (list (list* :schema schema call))))))))

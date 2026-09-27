@@ -1,4 +1,4 @@
-(defpackage #:nyaa/launcher
+(defpackage #:miao/launcher
   (:use #:cl)
-  (:export #:nyaa-home #:generations-directory #:recovery-core
+  (:export #:miao-home #:generations-directory #:recovery-core
            #:select-core #:probe-core #:launch-argv))

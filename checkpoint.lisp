@@ -1,13 +1,13 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
 
-;;; Generations (~takeiteasy/nyaa#11). A checkpoint is one s-expression file
+;;; Generations (~takeiteasy/miao#11). A checkpoint is one s-expression file
 ;;; recording every named service's own declared state, taken through the
 ;;; SNAPSHOT/RESTORE convention (tool.lisp) shared by every tool, the agent
 ;;; and a provider. Rollback restores that state onto the services mounted
 ;;; now, first remounting one unmounted since the checkpoint from what the
-;;; generation recorded of how it was mounted (~takeiteasy/nyaa#49).
+;;; generation recorded of how it was mounted (~takeiteasy/miao#49).
 ;;;
 ;;; That record is where a provider's :api-key would otherwise end up on disk
 ;;; (providers.md's credentials line, held the same way in tools/image.lisp),
@@ -17,7 +17,7 @@
 ;;; and a remount takes it back from ROLLBACK's :INITARGS.
 ;;;
 ;;; Image generations -- SAVE-LISP-AND-DIE, relaunch-and-restore, an
-;;; install-time recovery image (~takeiteasy/nyaa#48) -- live in
+;;; install-time recovery image (~takeiteasy/miao#48) -- live in
 ;;; image-generation.lisp instead, layered on this file's declared-state
 ;;; generation and M:SUSPEND/M:RESUME (meow#64): SAVE-IMAGE takes one of
 ;;; these first, then writes a sibling .core alongside it.
@@ -31,7 +31,7 @@ which a generation never writes to disk. NIL by default. A class is asked
 through its prototype, so the method reads nothing but the class.")
   (:method ((service m:service)) nil))
 
-(defvar *generations-directory* (nyaa/launcher:generations-directory)
+(defvar *generations-directory* (miao/launcher:generations-directory)
   "Default directory CHECKPOINT writes to and GENERATIONS lists from.")
 
 ;;; --- walking the mount tree ---------------------------------------------
@@ -205,7 +205,7 @@ worker applies to a submitted form."
 ;;; --- shared append-only logs --------------------------------------------
 
 ;;; TOOL-SELF's log (tools/self.lisp) and the vault (vault.lisp,
-;;; ~takeiteasy/nyaa#14) are both one append-only s-expression file, read
+;;; ~takeiteasy/miao#14) are both one append-only s-expression file, read
 ;;; back the same guarded way a generation is. Shared here rather than
 ;;; duplicated.
 ;;;
@@ -218,7 +218,7 @@ worker applies to a submitted form."
 (defvar *log-locks* (make-hash-table :test 'equal)
   "Canonical log namestring -> its lock.")
 
-(defvar *log-locks-lock* (bt:make-lock :name "nyaa-log-registry")
+(defvar *log-locks-lock* (bt:make-lock :name "miao-log-registry")
   "Guards *LOG-LOCKS*.")
 
 (defun %log-key (path)
@@ -339,7 +339,7 @@ of the services snapshotted mid-work and of those unavailable."
          (path (merge-pathnames (%generation-filename) directory)))
     (ensure-directories-exist directory)
     (%write-generation path
-                       (list :nyaa-generation 2 :created (%now-iso8601)
+                       (list :miao-generation 2 :created (%now-iso8601)
                              :label label :services services))
     (when keep (%prune-generations directory keep))
     (values (%canonical-path path)
@@ -347,7 +347,7 @@ of the services snapshotted mid-work and of those unavailable."
             (%entry-names services :unavailable))))
 
 (defun %generation-image (path)
-  "PATH's sibling .core (~takeiteasy/nyaa#48's SAVE-IMAGE writes one
+  "PATH's sibling .core (~takeiteasy/miao#48's SAVE-IMAGE writes one
 alongside its generation, same basename), or nil."
   (let ((core (make-pathname :type "core" :defaults path)))
     (and (probe-file core) (namestring (%canonical-path core)))))
@@ -357,7 +357,7 @@ alongside its generation, same basename), or nil."
 :services :interrupted :unavailable :image), :services naming the services
 it covers rather than their state, :interrupted and :unavailable the ones
 snapshotted mid-work or not at all. :IMAGE is the generation's sibling .core, or nil if none was
-taken (SAVE-IMAGE, ~takeiteasy/nyaa#48)."
+taken (SAVE-IMAGE, ~takeiteasy/miao#48)."
   (sort (loop for path in (ignore-errors
                             (uiop:directory-files (uiop:ensure-directory-pathname dir)
                                                   "*.generation"))

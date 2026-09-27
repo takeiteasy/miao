@@ -1,5 +1,5 @@
-(in-package #:nyaa/tests)
-(in-suite :nyaa)
+(in-package #:miao/tests)
+(in-suite :miao)
 
 ;;; The tool convention exercised through the real registry and service
 ;;; stack: discovery by registration props, the describe/invoke protocol,
@@ -19,15 +19,15 @@
           *context* context)
     (unwind-protect
          (progn
-           (m:mount context 'nyaa:tool-fs :root root)
-           (m:mount context 'nyaa:tool-shell)
-           (m:mount context 'nyaa:tool-http)
-           (m:mount context 'nyaa:tool-eval)
-           (m:mount context 'nyaa:tool-gated-eval)
-           (m:mount context 'nyaa:tool-repl)
-           (m:mount context 'nyaa:tool-plan :allow '(:tool-fs))
-           (m:mount context 'nyaa:tool-image)
-           (m:mount context 'nyaa:tool-services)
+           (m:mount context 'miao:tool-fs :root root)
+           (m:mount context 'miao:tool-shell)
+           (m:mount context 'miao:tool-http)
+           (m:mount context 'miao:tool-eval)
+           (m:mount context 'miao:tool-gated-eval)
+           (m:mount context 'miao:tool-repl)
+           (m:mount context 'miao:tool-plan :allow '(:tool-fs))
+           (m:mount context 'miao:tool-image)
+           (m:mount context 'miao:tool-services)
            (funcall body))
       (m:stop context)
       (uiop:delete-directory-tree (uiop:ensure-directory-pathname root)
@@ -37,7 +37,7 @@
   `(call-with-tools (lambda () ,@body)))
 
 (defun make-sandbox-directory ()
-  (let ((path (format nil "~anyaa-tool-test-~36r"
+  (let ((path (format nil "~amiao-tool-test-~36r"
                       (namestring (uiop:temporary-directory))
                       (random (expt 2 64) (make-random-state t)))))
     (ensure-directories-exist (concatenate 'string path "/"))
@@ -47,7 +47,7 @@
     (string-right-trim "/" (uiop:native-namestring (uiop:truename* path)))))
 
 (defun tool (name &rest args)
-  (apply #'nyaa:invoke-tool name args))
+  (apply #'miao:invoke-tool name args))
 
 (defun result-value (result key)
   (getf (second result) key))
@@ -86,7 +86,7 @@ process has actually exited, so the check polls rather than assume."
 (defun process-group-containment-available-p ()
   "True unless the host has fallen all the way back to :TREE -- the racy
 last resort with no dedicated OS mechanism behind it."
-  (not (eq nyaa::*process-group-strategy* :tree)))
+  (not (eq miao::*process-group-strategy* :tree)))
 
 (defun poll-until (predicate &optional (deadline 5.0) (interval 0.1))
   "True once PREDICATE is false, polled rather than assumed instant."
@@ -95,19 +95,19 @@ last resort with no dedicated OS mechanism behind it."
         do (sleep interval))
   (not (funcall predicate)))
 
-;;; --- M:CALL failures folded into the result vocabulary (~takeiteasy/nyaa#106)
+;;; --- M:CALL failures folded into the result vocabulary (~takeiteasy/miao#106)
 
 (test call-result-passes-through-a-real-reply
-  (is (equal '(:ok (:value "1")) (nyaa::%call-result '(:ok (:value "1")) nil))))
+  (is (equal '(:ok (:value "1")) (miao::%call-result '(:ok (:value "1")) nil))))
 
 (test call-result-folds-a-timeout
-  (is (equal '(:error :timeout) (nyaa::%call-result nil :timeout))))
+  (is (equal '(:error :timeout) (miao::%call-result nil :timeout))))
 
 (test call-result-folds-a-down-status-to-unavailable
-  (is (equal '(:error :unavailable) (nyaa::%call-result nil (list :down :shutdown)))))
+  (is (equal '(:error :unavailable) (miao::%call-result nil (list :down :shutdown)))))
 
 (test call-result-stringifies-a-deadlock-status
-  (let ((result (nyaa::%call-result nil (list :deadlock (list :some-process)))))
+  (let ((result (miao::%call-result nil (list :deadlock (list :some-process)))))
     (is (eq :error (first result)))
     (is (eq :error (first (second result))))
     (is (stringp (second (second result))))))
@@ -120,26 +120,26 @@ last resort with no dedicated OS mechanism behind it."
     ;; the context and meow's own entries must not appear.
     (is (equal '(:tool-eval :tool-fs :tool-gated-eval :tool-http :tool-image :tool-plan
                  :tool-repl :tool-services :tool-shell)
-               (nyaa:tools)))))
+               (miao:tools)))))
 
 (test metadata-carries-a-trust-level
   (with-tools
-    (is (eq :operator (nyaa:tool-trust (nyaa:describe-tool :tool-shell))))
-    (is (eq :agent (nyaa:tool-trust (nyaa:describe-tool :tool-fs))))
-    (is (eq :agent (nyaa:tool-trust (nyaa:describe-tool :tool-plan))))
-    (is (eq :agent (nyaa:tool-trust (nyaa:describe-tool :tool-gated-eval))))
-    (is (eq :agent (nyaa:tool-trust (nyaa:describe-tool :tool-image))))
-    (is (eq :agent (nyaa:tool-trust (nyaa:describe-tool :tool-services))))
+    (is (eq :operator (miao:tool-trust (miao:describe-tool :tool-shell))))
+    (is (eq :agent (miao:tool-trust (miao:describe-tool :tool-fs))))
+    (is (eq :agent (miao:tool-trust (miao:describe-tool :tool-plan))))
+    (is (eq :agent (miao:tool-trust (miao:describe-tool :tool-gated-eval))))
+    (is (eq :agent (miao:tool-trust (miao:describe-tool :tool-image))))
+    (is (eq :agent (miao:tool-trust (miao:describe-tool :tool-services))))
     ;; A tool that names none is an agent tool.
-    (is (eq :agent (nyaa:tool-trust '(:kind :tool))))))
+    (is (eq :agent (miao:tool-trust '(:kind :tool))))))
 
 (test describe-returns-convention-metadata
   (with-tools
-    (let ((metadata (nyaa:describe-tool :tool-shell)))
+    (let ((metadata (miao:describe-tool :tool-shell)))
       (is (eq :tool (getf metadata :kind)))
       (is (stringp (getf metadata :summary)))
       ;; The schema renders, so a protocol can put it in a tools array.
-      (is (nyaa:schema->json-schema (nyaa:tool-schema metadata))))))
+      (is (miao:schema->json-schema (miao:tool-schema metadata))))))
 
 (test arguments-are-coerced-against-the-schema
   (with-tools
@@ -154,7 +154,7 @@ last resort with no dedicated OS mechanism behind it."
 (test an-unknown-parameter-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error
+               (first (miao:tool-error
                        (tool :tool-shell :cmd "echo hi" :colour t)))))))
 
 (test a-bare-call-is-coerced-too
@@ -175,7 +175,7 @@ last resort with no dedicated OS mechanism behind it."
 (test unknown-message-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error
+               (first (miao:tool-error
                        (m:call (m:lookup :tool-shell) '(:nonsense))))))))
 
 ;;; --- fs ---------------------------------------------------------------
@@ -197,7 +197,7 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (tool :tool-fs :op :mkdir :path "keep")
     (is (equal :bad-request
-               (first (nyaa:tool-error
+               (first (miao:tool-error
                        (tool :tool-fs :op :delete :path "keep")))))))
 
 (test fs-rejects-path-escapes
@@ -205,23 +205,23 @@ last resort with no dedicated OS mechanism behind it."
     (dolist (path '("../outside.txt" "/etc/passwd" "../sandbox-root-evil"
                     "a/../../outside.txt"))
       (is (equal '(:forbidden "path escapes sandbox root")
-                 (nyaa:tool-error (tool :tool-fs :op :read :path path))))))
+                 (miao:tool-error (tool :tool-fs :op :read :path path))))))
 
   ;; The sibling-prefix trick specifically: a directory whose name merely
   ;; starts with the root's name is not inside it.
   (with-tools
     (let ((sibling (concatenate 'string *sandbox* "-evil")))
       (is (equal '(:forbidden "path escapes sandbox root")
-                 (nyaa:tool-error (tool :tool-fs :op :list :path sibling)))))))
+                 (miao:tool-error (tool :tool-fs :op :list :path sibling)))))))
 
 (test fs-requires-a-path
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error (tool :tool-fs :op :read)))))))
+               (first (miao:tool-error (tool :tool-fs :op :read)))))))
 
 (test fs-write-without-data-is-refused-before-touching-the-filesystem
   (with-tools
-    (let ((result (nyaa:tool-error (tool :tool-fs :op :write :path "new/dir/f.txt"))))
+    (let ((result (miao:tool-error (tool :tool-fs :op :write :path "new/dir/f.txt"))))
       (is (eq :bad-request (first result)))
       (is (search ":data is required when :op is write" (second result))))
     (is (not (member "new" (result-value (tool :tool-fs :op :list :path ".") :files)
@@ -229,8 +229,8 @@ last resort with no dedicated OS mechanism behind it."
 
 (test a-missing-conditional-parameter-is-refused-by-every-tool
   (with-tools
-    (m:mount *context* 'nyaa:tool-vault)
-    (m:mount *context* 'nyaa:tool-self)
+    (m:mount *context* 'miao:tool-vault)
+    (m:mount *context* 'miao:tool-self)
     (dolist (case '((:tool-services (:op :describe) ":name")
                     (:tool-image (:op :describe) ":symbol")
                     (:tool-image (:op :apropos) ":pattern")
@@ -240,11 +240,11 @@ last resort with no dedicated OS mechanism behind it."
                     (:tool-self (:op :define) ":form")
                     (:tool-self (:op :reload) ":name")))
       (destructuring-bind (name args parameter) case
-        (let ((result (nyaa:tool-error (apply #'tool name args))))
+        (let ((result (miao:tool-error (apply #'tool name args))))
           (is (eq :bad-request (first result)))
           (is (search parameter (second result))))))))
 
-;;; --- fs: symlinks (~takeiteasy/nyaa#15) --------------------------------
+;;; --- fs: symlinks (~takeiteasy/miao#15) --------------------------------
 
 (defun make-symlink (target link)
   (uiop:run-program (list "ln" "-s" target link) :output nil :error-output nil))
@@ -262,7 +262,7 @@ last resort with no dedicated OS mechanism behind it."
            (progn
              (make-symlink outside (concatenate 'string *sandbox* "/link.txt"))
              (is (equal '(:forbidden "path escapes sandbox root")
-                        (nyaa:tool-error (tool :tool-fs :op :read :path "link.txt")))))
+                        (miao:tool-error (tool :tool-fs :op :read :path "link.txt")))))
         (delete-file outside)))))
 
 (test fs-refuses-traversal-through-a-symlinked-directory
@@ -274,7 +274,7 @@ last resort with no dedicated OS mechanism behind it."
            (progn
              (make-symlink outside (concatenate 'string *sandbox* "/linkdir"))
              (is (equal '(:forbidden "path escapes sandbox root")
-                        (nyaa:tool-error (tool :tool-fs :op :read :path "linkdir/x.txt")))))
+                        (miao:tool-error (tool :tool-fs :op :read :path "linkdir/x.txt")))))
         (uiop:delete-directory-tree (uiop:ensure-directory-pathname outside)
                                     :validate t :if-does-not-exist :ignore)))))
 
@@ -283,11 +283,11 @@ last resort with no dedicated OS mechanism behind it."
     (let ((target (format nil "~a-created-by-attack.txt" *sandbox*)))
       (make-symlink target (concatenate 'string *sandbox* "/dangle"))
       (is (equal '(:forbidden "path escapes sandbox root")
-                 (nyaa:tool-error (tool :tool-fs :op :write :path "dangle" :data "x"))))
+                 (miao:tool-error (tool :tool-fs :op :write :path "dangle" :data "x"))))
       (is (not (uiop:file-exists-p target))))))
 
 (test fs-refuses-any-symlink-below-the-root
-  ;; ~takeiteasy/nyaa#52: the atomic walk refuses every symlink below the
+  ;; ~takeiteasy/miao#52: the atomic walk refuses every symlink below the
   ;; root outright, rather than resolving an in-root one and re-checking
   ;; it -- there is no path-based re-check left to race.
   (with-tools
@@ -295,7 +295,7 @@ last resort with no dedicated OS mechanism behind it."
     (make-symlink (concatenate 'string *sandbox* "/real.txt")
                   (concatenate 'string *sandbox* "/alias.txt"))
     (is (equal '(:forbidden "path escapes sandbox root")
-               (nyaa:tool-error (tool :tool-fs :op :read :path "alias.txt"))))))
+               (miao:tool-error (tool :tool-fs :op :read :path "alias.txt"))))))
 
 (test fs-rmdir-removes-an-empty-directory
   (with-tools
@@ -310,14 +310,14 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (tool :tool-fs :op :write :path "full/a.txt" :data "x")
     (is (equal '(:bad-request "directory not empty")
-               (nyaa:tool-error (tool :tool-fs :op :rmdir :path "full"))))
+               (miao:tool-error (tool :tool-fs :op :rmdir :path "full"))))
     (is (equal "x" (result-value (tool :tool-fs :op :read :path "full/a.txt") :data)))))
 
 (test fs-rmdir-refuses-a-file
   (with-tools
     (tool :tool-fs :op :write :path "f.txt" :data "x")
     (is (equal '(:bad-request "not a directory")
-               (nyaa:tool-error (tool :tool-fs :op :rmdir :path "f.txt"))))
+               (miao:tool-error (tool :tool-fs :op :rmdir :path "f.txt"))))
     (is (equal "x" (result-value (tool :tool-fs :op :read :path "f.txt") :data)))))
 
 (test fs-rmdir-refuses-a-symlink-leaf
@@ -326,18 +326,18 @@ last resort with no dedicated OS mechanism behind it."
     (make-symlink (concatenate 'string *sandbox* "/real")
                   (concatenate 'string *sandbox* "/alias"))
     (is (equal '(:forbidden "path escapes sandbox root")
-               (nyaa:tool-error (tool :tool-fs :op :rmdir :path "alias"))))
+               (miao:tool-error (tool :tool-fs :op :rmdir :path "alias"))))
     (is (eq :ok (first (tool :tool-fs :op :list :path "real"))))))
 
 (test fs-rmdir-refuses-the-root
   (with-tools
-    (is (equal :bad-request (first (nyaa:tool-error (tool :tool-fs :op :rmdir :path ".")))))
+    (is (equal :bad-request (first (miao:tool-error (tool :tool-fs :op :rmdir :path ".")))))
     (is (eq :ok (first (tool :tool-fs :op :list :path "."))))))
 
 (test fs-rmdir-reports-a-missing-path
   (with-tools
     (is (equal '(:error "no such file")
-               (nyaa:tool-error (tool :tool-fs :op :rmdir :path "nope"))))))
+               (miao:tool-error (tool :tool-fs :op :rmdir :path "nope"))))))
 
 (test fs-refuses-to-delete-a-symlink-leaf
   (with-tools
@@ -345,26 +345,26 @@ last resort with no dedicated OS mechanism behind it."
     (make-symlink (concatenate 'string *sandbox* "/real.txt")
                   (concatenate 'string *sandbox* "/alias.txt"))
     (is (equal '(:forbidden "path escapes sandbox root")
-               (nyaa:tool-error (tool :tool-fs :op :delete :path "alias.txt"))))
+               (miao:tool-error (tool :tool-fs :op :delete :path "alias.txt"))))
     (is (equal "hello" (result-value (tool :tool-fs :op :read :path "real.txt") :data)))))
 
-;;; --- define-tool: readable defaults (~takeiteasy/nyaa#134) ---------------
+;;; --- define-tool: readable defaults (~takeiteasy/miao#134) ---------------
 
 (defun define-tool-with-defaults (&rest default-forms)
-  (eval `(nyaa:define-tool :tool-default-probe
+  (eval `(miao:define-tool :tool-default-probe
              (:summary "probe"
               :params ,(loop for form in default-forms
                              for i from 0
                              collect `(,(alexandria:make-keyword (format nil "P~d" i))
                                        string :default ,form)))
-           (:invoke () (nyaa::ok)))))
+           (:invoke () (miao::ok)))))
 
 (test define-tool-refuses-a-default-that-does-not-read-back
   (signals error (define-tool-with-defaults 1 '#'identity))
   (signals error (define-tool-with-defaults '(make-hash-table))))
 
 (test define-tool-accepts-a-default-that-reads-back
-  (finishes (define-tool-with-defaults 3 :a "s" t 'nyaa::+default-tool-timeout+)))
+  (finishes (define-tool-with-defaults 3 :a "s" t 'miao::+default-tool-timeout+)))
 
 ;;; A tool built without define-tool is checked when it is mounted (#156).
 
@@ -374,8 +374,8 @@ last resort with no dedicated OS mechanism behind it."
            (defmethod m:metadata ((service tool-hand-probe))
              (list :kind :tool :name :tool-hand-probe :trust :agent :summary "probe"
                    :params (list (list :p 'string :default ,default-form))))
-           (nyaa::define-tool-handler tool-hand-probe (service args)
-             (nyaa::ok)))))
+           (miao::define-tool-handler tool-hand-probe (service args)
+             (miao::ok)))))
 
 (test a-hand-written-tool-with-an-unreadable-default-fails-its-mount
   (define-hand-written-tool '#'identity)
@@ -390,10 +390,10 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (m:mount *context* 'tool-hand-probe)
     (is (equal '(:default 3)
-               (nyaa::param-options (first (nyaa:tool-schema
-                                            (nyaa:describe-tool :tool-hand-probe))))))))
+               (miao::param-options (first (miao:tool-schema
+                                            (miao:describe-tool :tool-hand-probe))))))))
 
-;;; --- fs: fd-relative walk (~takeiteasy/nyaa#59) -------------------------
+;;; --- fs: fd-relative walk (~takeiteasy/miao#59) -------------------------
 
 (test fs-walk-never-changes-the-process-cwd
   (with-tools
@@ -443,7 +443,7 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (listing-fixture)
     (is (equal '(".hidden" "real.txt" "sub")
-               (result-value (nyaa::apply-fs-op :list *sandbox* *sandbox* nil :text t) :files)))))
+               (result-value (miao::apply-fs-op :list *sandbox* *sandbox* nil :text t) :files)))))
 
 ;;; --- shell -------------------------------------------------------------
 
@@ -459,7 +459,7 @@ err
 (test shell-enforces-its-timeout-and-stays-alive
   (with-tools
     (let ((started (get-internal-real-time)))
-      (is (eq :timeout (nyaa:tool-error
+      (is (eq :timeout (miao:tool-error
                         (tool :tool-shell :cmd "sleep 30" :timeout 300))))
       (is (< (/ (- (get-internal-real-time) started)
                 internal-time-units-per-second)
@@ -469,24 +469,24 @@ err
 " (result-value (tool :tool-shell :cmd "echo still-here") :out)))))
 
 (test shell-registers-a-command-only-while-it-runs
-  (nyaa::run-command "true" 5000)
-  (is (null nyaa::*live-commands*))
-  (nyaa::run-command "sleep 30" 200)
-  (is (null nyaa::*live-commands*)))
+  (miao::run-command "true" 5000)
+  (is (null miao::*live-commands*))
+  (miao::run-command "sleep 30" 200)
+  (is (null miao::*live-commands*)))
 
 (test kill-live-commands-kills-a-running-command
   (let* ((result nil)
-         (thread (bt:make-thread (lambda () (setf result (nyaa::run-command "sleep 30" 30000))))))
-    (is-true (eventually (lambda () nyaa::*live-commands*)))
-    (nyaa::kill-live-commands)
+         (thread (bt:make-thread (lambda () (setf result (miao::run-command "sleep 30" 30000))))))
+    (is-true (eventually (lambda () miao::*live-commands*)))
+    (miao::kill-live-commands)
     (is-true (eventually (lambda () (not (bt:thread-alive-p thread)))))
     (is (not (eql 0 (getf (second result) :exit))))
-    (is (null nyaa::*live-commands*))))
+    (is (null miao::*live-commands*))))
 
 (test shell-rejects-a-missing-command
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error (tool :tool-shell :timeout 100)))))))
+               (first (miao:tool-error (tool :tool-shell :timeout 100)))))))
 
 (test invoke-outlives-the-default-call-timeout
   ;; M:CALL defaults to 5s. A tool given a longer deadline must not be cut
@@ -496,17 +496,17 @@ err
                              :exit)))))
 
 (test shell-kills-a-backgrounded-descendant-on-timeout
-  ;; ~takeiteasy/nyaa#16: the deadline used to signal the direct `sh` child
+  ;; ~takeiteasy/miao#16: the deadline used to signal the direct `sh` child
   ;; only, so a backgrounded grandchild outlived it.
   (if (not (process-group-containment-available-p))
       (skip "no process-group mechanism on this host")
       (with-tools
-        (let ((pidfile (format nil "~a/nyaa-shell-pgid-test.pid"
+        (let ((pidfile (format nil "~a/miao-shell-pgid-test.pid"
                                (uiop:native-namestring (uiop:temporary-directory)))))
           (unwind-protect
                (progn
                  (is (eq :timeout
-                        (nyaa:tool-error
+                        (miao:tool-error
                          (tool :tool-shell
                                :cmd (format nil "sleep 30 & echo $! > ~a; wait" pidfile)
                                :timeout 500))))
@@ -515,16 +515,16 @@ err
             (ignore-errors (delete-file pidfile)))))))
 
 (test shell-kills-a-backgrounded-descendant-under-the-tree-fallback
-  ;; ~takeiteasy/nyaa#54: with no OS grouping mechanism at all, containment
+  ;; ~takeiteasy/miao#54: with no OS grouping mechanism at all, containment
   ;; falls back to walking and killing the descendant tree by hand.
-  (let ((nyaa::*process-group-strategy* :tree))
+  (let ((miao::*process-group-strategy* :tree))
     (with-tools
-      (let ((pidfile (format nil "~a/nyaa-shell-tree-test.pid"
+      (let ((pidfile (format nil "~a/miao-shell-tree-test.pid"
                              (uiop:native-namestring (uiop:temporary-directory)))))
         (unwind-protect
              (progn
                (is (eq :timeout
-                      (nyaa:tool-error
+                      (miao:tool-error
                        (tool :tool-shell
                              :cmd (format nil "sleep 30 & echo $! > ~a; wait" pidfile)
                              :timeout 500))))
@@ -570,7 +570,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   ;; fails the write -- must not take the server down for the next request.
   (with-tools
     (with-fake-http (url)
-      (is (nyaa:tool-error-p (tool :tool-http :url (format nil "~a/crash" url)
+      (is (miao:tool-error-p (tool :tool-http :url (format nil "~a/crash" url)
                                    :timeout 2000)))
       (is (eql 200 (result-value (tool :tool-http :url (format nil "~a/echo" url)
                                        :timeout 2000)
@@ -712,7 +712,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (is (equal "" (http-body-of (list :octets 200 '("Content-Type" "image/png") (octets)))))))
 
-;;; --- fs: base64 bytes (~takeiteasy/nyaa#155) -----------------------------
+;;; --- fs: base64 bytes (~takeiteasy/miao#155) -----------------------------
 
 (defun base64-of (octets)
   (cl-base64:usb8-array-to-base64-string octets))
@@ -738,14 +738,14 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (tool :tool-fs :op :write :path "k.txt" :data "keep")
     (is (equal :bad-request
-               (first (nyaa:tool-error (tool :tool-fs :op :write :path "k.txt"
+               (first (miao:tool-error (tool :tool-fs :op :write :path "k.txt"
                                                  :encoding :base64 :data "a$b!")))))
     (is (equal "keep" (result-value (tool :tool-fs :op :read :path "k.txt") :data)))))
 
 (test fs-text-read-of-non-utf-8-is-a-bad-request
   (with-tools
     (tool :tool-fs :op :write :path "n.bin" :encoding :base64 :data (base64-of +png-octets+))
-    (is (eq :bad-request (first (nyaa:tool-error (tool :tool-fs :op :read :path "n.bin")))))
+    (is (eq :bad-request (first (miao:tool-error (tool :tool-fs :op :read :path "n.bin")))))
     (is (equal (base64-of +png-octets+)
                (result-value (tool :tool-fs :op :read :path "n.bin" :encoding :base64) :data)))))
 
@@ -760,12 +760,12 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
                    (format nil "~a/saved.png" *sandbox*)))))))
 
 (test declared-charset-reads-the-charset-parameter
-  (is (eq :utf-8 (nyaa::declared-charset "text/plain; charset=UTF-8")))
-  (is (eq :utf-8 (nyaa::declared-charset "text/plain; charset=\"utf-8\"; format=flowed")))
-  (is (eq :iso-8859-1 (nyaa::declared-charset "text/html;charset=iso-8859-1")))
-  (is (null (nyaa::declared-charset "text/plain")))
-  (is (null (nyaa::declared-charset nil)))
-  (is (null (nyaa::declared-charset "text/plain; charset=x-no-such"))))
+  (is (eq :utf-8 (miao::declared-charset "text/plain; charset=UTF-8")))
+  (is (eq :utf-8 (miao::declared-charset "text/plain; charset=\"utf-8\"; format=flowed")))
+  (is (eq :iso-8859-1 (miao::declared-charset "text/html;charset=iso-8859-1")))
+  (is (null (miao::declared-charset "text/plain")))
+  (is (null (miao::declared-charset nil)))
+  (is (null (miao::declared-charset "text/plain; charset=x-no-such"))))
 
 (test http-honours-a-caller-supplied-content-type
   (with-tools
@@ -792,7 +792,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     ;; An alist has an even length too; it must not pass as one empty header.
     (dolist (headers '((("X-Tag" . "a") ("Y" . "b")) ("X-Tag") (:x-tag 7)))
       (is (equal :bad-request
-                 (first (nyaa:tool-error
+                 (first (miao:tool-error
                          (tool :tool-http :url "http://127.0.0.1:1/x"
                                           :headers headers))))))))
 
@@ -802,7 +802,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (unwind-protect
            (progn
              (is (equal :bad-request
-                        (first (nyaa:tool-error (tool :tool-http :method "GET")))))
+                        (first (miao:tool-error (tool :tool-http :method "GET")))))
              (is (null (fake-http-requests server))))
         (stop-fake-http server)))))
 
@@ -810,7 +810,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (with-fake-http (url)
       (is (eq :timeout
-              (nyaa:tool-error (tool :tool-http :url (format nil "~a/slow" url)
+              (miao:tool-error (tool :tool-http :url (format nil "~a/slow" url)
                                                 :timeout 300)))))))
 
 (test http-unreachable-host-is-unavailable
@@ -819,11 +819,11 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
            (url (fake-http-url server)))
       (stop-fake-http server)
       (is (eq :unavailable
-              (nyaa:tool-error (tool :tool-http :url (format nil "~a/echo" url)
+              (miao:tool-error (tool :tool-http :url (format nil "~a/echo" url)
                                                 :timeout 5000)))))))
 
 (defun http-threads ()
-  (remove-if-not (lambda (name) (and name (search "nyaa-http" name)))
+  (remove-if-not (lambda (name) (and name (search "miao-http" name)))
                  (mapcar #'bt:thread-name (bt:all-threads))))
 
 (test an-http-exchange-runs-on-no-thread-of-its-own
@@ -840,7 +840,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
                                                      :timeout 600)))))
              (sleep 0.3)
              (is (null (http-threads)))
-             (is (eq :timeout (nyaa:tool-error (bt:join-thread call))))
+             (is (eq :timeout (miao:tool-error (bt:join-thread call))))
              (is (null (http-threads))))
         (setf *stall* nil)))))
 
@@ -851,7 +851,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (unwind-protect
            (dotimes (i 2)
              (is (eq :timeout
-                     (nyaa:tool-error (tool :tool-http :url (format nil "~a/stall" url)
+                     (miao:tool-error (tool :tool-http :url (format nil "~a/stall" url)
                                                        :timeout 300)))))
         (setf *stall* nil))
       (is (eql 200 (result-value (tool :tool-http :url (format nil "~a/echo" url)) :status))))))
@@ -859,13 +859,13 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test http-https-round-trip
   ;; Off by default: CI must not depend on the network. Exercises the
   ;; SSL-wrapped stream PERFORM-REQUEST builds for :STREAM
-  ;; (~takeiteasy/nyaa#17), which drakma never attaches on its own.
-  (if (uiop:getenv "NYAA_LIVE_HTTP")
+  ;; (~takeiteasy/miao#17), which drakma never attaches on its own.
+  (if (uiop:getenv "MIAO_LIVE_HTTP")
       (with-tools
         (is (eql 404 (result-value
                       (tool :tool-http :url "https://httpbingo.org/status/404")
                       :status))))
-      (skip "set NYAA_LIVE_HTTP to run live HTTP tests")))
+      (skip "set MIAO_LIVE_HTTP to run live HTTP tests")))
 
 ;;; --- eval --------------------------------------------------------------
 
@@ -878,11 +878,11 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test eval-reports-a-reader-error-as-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error (tool :tool-eval :form "(+ 1")))))))
+               (first (miao:tool-error (tool :tool-eval :form "(+ 1")))))))
 
 (test eval-reports-a-signalled-form-as-an-error
   (with-tools
-    (let ((reason (nyaa:tool-error (tool :tool-eval :form "(error \"boom\")"))))
+    (let ((reason (miao:tool-error (tool :tool-eval :form "(error \"boom\")"))))
       (is (eq :error (first reason)))
       (is (search "boom" (second reason))))))
 
@@ -890,25 +890,25 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   ;; *READ-EVAL* is nil in the worker, so #. never runs.
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error
+               (first (miao:tool-error
                        (tool :tool-eval :form "'#.(error \"read-eval ran\")")))))))
 
 (test eval-keeps-no-state-between-calls
   (with-tools
     (is (eq :ok (first (tool :tool-eval :form "(defparameter *x* 1)"))))
-    (let ((reason (nyaa:tool-error (tool :tool-eval :form "*x*"))))
+    (let ((reason (miao:tool-error (tool :tool-eval :form "*x*"))))
       (is (eq :error (first reason))))))
 
 (test eval-enforces-its-timeout-and-stays-alive
   (with-tools
-    (is (eq :timeout (nyaa:tool-error (tool :tool-eval :form "(loop)"
+    (is (eq :timeout (miao:tool-error (tool :tool-eval :form "(loop)"
                                                        :timeout 500))))
     (is (equal "4" (result-value (tool :tool-eval :form "(+ 2 2)") :value)))))
 
 (test eval-requires-a-form
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error (tool :tool-eval :timeout 100)))))))
+               (first (miao:tool-error (tool :tool-eval :timeout 100)))))))
 
 ;;; --- gated eval --------------------------------------------------------
 
@@ -938,14 +938,14 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 
 (test gated-eval-refuses-a-form-as-a-bad-request-before-any-worker-starts
   (with-tools
-    (let ((before nyaa::*live-workers*))
-      (is (eq :bad-request (first (nyaa:tool-error
+    (let ((before miao::*live-workers*))
+      (is (eq :bad-request (first (miao:tool-error
                                    (tool :tool-gated-eval :form "(intern \"X\")")))))
-      (is (equal before nyaa::*live-workers*)))))
+      (is (equal before miao::*live-workers*)))))
 
 (test gated-eval-reports-a-signalled-form-as-an-error
   (with-tools
-    (let ((reason (nyaa:tool-error (tool :tool-gated-eval :form "(error \"boom ~a\" 1)"))))
+    (let ((reason (miao:tool-error (tool :tool-gated-eval :form "(error \"boom ~a\" 1)"))))
       (is (eq :error (first reason)))
       (is (search "boom 1" (second reason))))))
 
@@ -959,11 +959,11 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test gated-eval-keeps-no-state-between-calls
   (with-tools
     (is (eq :ok (first (tool :tool-gated-eval :form "(defparameter x 1)"))))
-    (is (eq :error (first (nyaa:tool-error (tool :tool-gated-eval :form "x")))))))
+    (is (eq :error (first (miao:tool-error (tool :tool-gated-eval :form "x")))))))
 
 (test gated-eval-enforces-its-timeout-and-stays-alive
   (with-tools
-    (is (eq :timeout (nyaa:tool-error (tool :tool-gated-eval :form "(loop)" :timeout 500))))
+    (is (eq :timeout (miao:tool-error (tool :tool-gated-eval :form "(loop)" :timeout 500))))
     (is (equal "4" (result-value (tool :tool-gated-eval :form "(+ 2 2)") :value)))))
 
 (test gated-eval-cannot-forge-a-reply-through-the-terminal
@@ -987,8 +987,8 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     (let ((started (get-internal-real-time))
           (result (tool :tool-gated-eval
                         :form "(make-array 1000000000000)" :timeout 20000)))
-      (is (nyaa:tool-error result))
-      (is (not (eq :timeout (nyaa:tool-error result))))
+      (is (miao:tool-error result))
+      (is (not (eq :timeout (miao:tool-error result))))
       (is (< (/ (- (get-internal-real-time) started) internal-time-units-per-second)
              15)))
     (is (equal "4" (result-value (tool :tool-gated-eval :form "(+ 2 2)") :value)))))
@@ -997,8 +997,8 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (let ((result (tool :tool-gated-eval
                         :form "(labels ((f (n) (+ 1 (f (1+ n))))) (f 0))" :timeout 20000)))
-      (is (nyaa:tool-error result))
-      (is (not (eq :timeout (nyaa:tool-error result)))))))
+      (is (miao:tool-error result))
+      (is (not (eq :timeout (miao:tool-error result)))))))
 
 ;;; --- repl --------------------------------------------------------------
 
@@ -1011,23 +1011,23 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test repl-sessions-are-isolated
   (with-tools
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
-    (is (eq :error (first (nyaa:tool-error
+    (is (eq :error (first (miao:tool-error
                            (tool :tool-repl :id "b" :form "*x*")))))))
 
 (test repl-pristine-restarts-the-session-empty
   (with-tools
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
-    (is (eq :error (first (nyaa:tool-error
+    (is (eq :error (first (miao:tool-error
                            (tool :tool-repl :id "a" :form "*x*"
                                             :pristine t)))))))
 
 (test repl-timeout-restarts-the-session-empty
   (with-tools
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
-    (is (eq :timeout (nyaa:tool-error (tool :tool-repl :id "a" :form "(loop)"
+    (is (eq :timeout (miao:tool-error (tool :tool-repl :id "a" :form "(loop)"
                                                        :timeout 500))))
     ;; The killed worker is forgotten, so the id answers again -- empty.
-    (is (eq :error (first (nyaa:tool-error
+    (is (eq :error (first (miao:tool-error
                            (tool :tool-repl :id "a" :form "*x*")))))))
 
 (test repl-session-from-an-earlier-image-is-reported-lost-then-starts-empty
@@ -1037,19 +1037,19 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
     (let ((old-pid (parse-integer
                     (result-value (tool :tool-repl :id "a" :form +getpid-form+) :value)))
-          (boot nyaa::*boot*))
+          (boot miao::*boot*))
       (unwind-protect
            (progn
-             (setf nyaa::*boot* (list :later-boot))
+             (setf miao::*boot* (list :later-boot))
              (let ((lost (tool :tool-repl :id "a" :form "*x*")))
-               (is (eq :error (first (nyaa:tool-error lost))))
-               (is (search "relaunch" (second (nyaa:tool-error lost)))))
+               (is (eq :error (first (miao:tool-error lost))))
+               (is (search "relaunch" (second (miao:tool-error lost)))))
              (is (unix-process-alive-p old-pid))
              (is (equal "NIL" (result-value (tool :tool-repl :id "a" :form "(boundp '*x*)")
                                             :value)))
              ;; the second worker dies under the token it started with
              (m:stop-and-wait *context*))
-        (setf nyaa::*boot* boot)
+        (setf miao::*boot* boot)
         (uiop:run-program (list "/bin/kill" "-9" (princ-to-string old-pid))
                           :ignore-error-status t)))))
 
@@ -1067,7 +1067,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (is (wait-for-exit pid)))))
 
 (test worker-leads-its-own-process-group
-  ;; ~takeiteasy/nyaa#16 also covers workers: a form that backgrounds a
+  ;; ~takeiteasy/miao#16 also covers workers: a form that backgrounds a
   ;; process must be signalled along with the worker at kill time, which
   ;; needs the worker itself to lead its own group.
   (if (not (process-group-containment-available-p))
@@ -1080,9 +1080,9 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test repl-requires-a-form
   (with-tools
     (is (equal :bad-request
-               (first (nyaa:tool-error (tool :tool-repl :timeout 100)))))))
+               (first (miao:tool-error (tool :tool-repl :timeout 100)))))))
 
-;;; --- repl concurrency (~takeiteasy/nyaa#27) ------------------------------
+;;; --- repl concurrency (~takeiteasy/miao#27) ------------------------------
 
 (test repl-sessions-run-concurrently
   ;; A long eval on one id must not block another, or the tool's own
@@ -1095,7 +1095,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
                                      :value)))
         (is (< (- (get-internal-real-time) start)
                internal-time-units-per-second))
-        (is (nyaa:describe-tool :tool-repl)))
+        (is (miao:describe-tool :tool-repl)))
       (bt:join-thread thread))))
 
 (test repl-calls-on-one-id-still-run-in-order
@@ -1113,7 +1113,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   ;; Whichever settles the caller's cell first -- the session replying
   ;; (:error :unavailable), or tool-repl's own process exiting under it as
   ;; an ordinary M:CALL failure, folded by INVOKE-TOOL into the same shape
-  ;; (~takeiteasy/nyaa#106) -- the caller must not be left waiting out its
+  ;; (~takeiteasy/miao#106) -- the caller must not be left waiting out its
   ;; full timeout, and either way sees a proper (:error ...) result.
   (with-tools
     (let* ((result nil)
@@ -1125,7 +1125,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
         (bt:join-thread thread)
         (is (< (- (get-internal-real-time) start)
                (* 2 internal-time-units-per-second))))
-      (is-true (nyaa:tool-error-p result)))))
+      (is-true (miao:tool-error-p result)))))
 
 (test unmounting-tool-repl-refuses-an-eval-queued-behind-the-live-one
   ;; The second call sits in the session's mailbox behind the first, so it
@@ -1146,10 +1146,10 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
         (bt:join-thread second)
         (is (< (- (get-internal-real-time) start)
                (* 2 internal-time-units-per-second))))
-      (is-true (nyaa:tool-error-p first-result))
-      (is-true (nyaa:tool-error-p second-result)))))
+      (is-true (miao:tool-error-p first-result))
+      (is-true (miao:tool-error-p second-result)))))
 
-;;; --- elision and REPL history (~takeiteasy/nyaa#26) ---------------------
+;;; --- elision and REPL history (~takeiteasy/miao#26) ---------------------
 
 (test repl-history-reaches-an-elided-value
   (with-tools
@@ -1167,10 +1167,10 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test repl-history-is-untouched-by-an-erroring-form
   (with-tools
     (tool :tool-repl :id "a" :form "41")
-    (nyaa:tool-error (tool :tool-repl :id "a" :form "(error \"boom\")"))
+    (miao:tool-error (tool :tool-repl :id "a" :form "(error \"boom\")"))
     (is (equal "41" (result-value (tool :tool-repl :id "a" :form "*") :value)))))
 
-;;; --- multiple values (~takeiteasy/nyaa#105) -----------------------------
+;;; --- multiple values (~takeiteasy/miao#105) -----------------------------
 
 (test repl-form-returning-several-values-carries-them-all
   (with-tools
@@ -1193,12 +1193,12 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (is (eq t (result-value result :elided)))
       (is (equal "1" (first (result-value result :values)))))))
 
-;;; --- idle reaping (~takeiteasy/nyaa#104) --------------------------------
+;;; --- idle reaping (~takeiteasy/miao#104) --------------------------------
 
 (test idle-tool-repl-reaps-an-unused-id
   (with-tools
     (m:unmount *context* :tool-repl)
-    (m:mount *context* 'nyaa:tool-repl :idle 0.3)
+    (m:mount *context* 'miao:tool-repl :idle 0.3)
     (let ((pid (parse-integer
                 (result-value (tool :tool-repl :id "a" :form +getpid-form+) :value))))
       (is (wait-for-exit pid 2.0))
@@ -1210,7 +1210,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test idle-tool-repl-keeps-a-session-with-an-eval-still-in-flight
   (with-tools
     (m:unmount *context* :tool-repl)
-    (m:mount *context* 'nyaa:tool-repl :idle 0.3)
+    (m:mount *context* 'miao:tool-repl :idle 0.3)
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
     ;; the sleep runs well past :idle; the idle timer must see the eval as
     ;; in flight and re-arm rather than drop the session out from under it
@@ -1220,40 +1220,40 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test idle-nil-never-reaps
   (with-tools
     (m:unmount *context* :tool-repl)
-    (m:mount *context* 'nyaa:tool-repl :idle nil)
+    (m:mount *context* 'miao:tool-repl :idle nil)
     (let ((pid (parse-integer
                 (result-value (tool :tool-repl :id "a" :form +getpid-form+) :value))))
       (sleep 0.5)
       (is (equal (princ-to-string pid)
                  (result-value (tool :tool-repl :id "a" :form +getpid-form+) :value))))))
 
-;;; --- cancelling a call (~takeiteasy/nyaa#111) --------------------------
+;;; --- cancelling a call (~takeiteasy/miao#111) --------------------------
 
 (defun cancelled-call (seconds name &rest args)
   "Invoke NAME with ARGS and a cancel token cancelled SECONDS in. Answers the
 result and the seconds the call took."
-  (let ((token (nyaa:make-cancel-token))
+  (let ((token (miao:make-cancel-token))
         (start (get-internal-real-time)))
-    (bt:make-thread (lambda () (sleep seconds) (nyaa:cancel token)))
+    (bt:make-thread (lambda () (sleep seconds) (miao:cancel token)))
     (values (apply #'tool name :cancel token args)
             (/ (- (get-internal-real-time) start) internal-time-units-per-second))))
 
 (test a-call-cancelled-before-it-starts-never-runs
   (with-tools
-    (let ((token (nyaa:make-cancel-token))
-          (marker (format nil "~a/nyaa-cancel-marker"
+    (let ((token (miao:make-cancel-token))
+          (marker (format nil "~a/miao-cancel-marker"
                           (uiop:native-namestring (uiop:temporary-directory)))))
       (ignore-errors (delete-file marker))
-      (nyaa:cancel token)
-      (is (eq :cancelled (nyaa:tool-error
+      (miao:cancel token)
+      (is (eq :cancelled (miao:tool-error
                           (tool :tool-shell :cancel token
                                 :cmd (format nil "touch ~a" marker)))))
       (is (not (probe-file marker))))))
 
 (test a-call-queued-behind-a-busy-tool-is-refused-once-cancelled
   (with-tools
-    (let* ((token (nyaa:make-cancel-token))
-           (marker (format nil "~a/nyaa-queued-marker"
+    (let* ((token (miao:make-cancel-token))
+           (marker (format nil "~a/miao-queued-marker"
                            (uiop:native-namestring (uiop:temporary-directory))))
            (busy (progn (ignore-errors (delete-file marker))
                         (tool-thread (tool :tool-shell :cmd "sleep 1"))))
@@ -1261,20 +1261,20 @@ result and the seconds the call took."
                           (tool-thread (tool :tool-shell :cancel token
                                              :cmd (format nil "touch ~a" marker))))))
       (sleep 0.2)
-      (nyaa:cancel token)
+      (miao:cancel token)
       (bt:join-thread busy)
-      (is (eq :cancelled (nyaa:tool-error (bt:join-thread queued))))
+      (is (eq :cancelled (miao:tool-error (bt:join-thread queued))))
       (is (not (probe-file marker))))))
 
 (test shell-kills-a-cancelled-command-and-its-group
   (with-tools
-    (let ((pidfile (format nil "~a/nyaa-shell-cancel-test.pid"
+    (let ((pidfile (format nil "~a/miao-shell-cancel-test.pid"
                            (uiop:native-namestring (uiop:temporary-directory)))))
       (unwind-protect
            (multiple-value-bind (result seconds)
                (cancelled-call 0.5 :tool-shell
                                :cmd (format nil "sleep 30 & echo $! > ~a; wait" pidfile))
-             (is (eq :cancelled (nyaa:tool-error result)))
+             (is (eq :cancelled (miao:tool-error result)))
              (is (< seconds 5))
              (let ((grandchild (with-open-file (s pidfile) (parse-integer (read-line s)))))
                (is (wait-for-exit grandchild))))
@@ -1289,14 +1289,14 @@ result and the seconds the call took."
       (unwind-protect
            (multiple-value-bind (result seconds)
                (cancelled-call 0.3 :tool-http :url (format nil "~a/stall" url))
-             (is (eq :cancelled (nyaa:tool-error result)))
+             (is (eq :cancelled (miao:tool-error result)))
              (is (< seconds 5)))
         (setf *stall* nil)))))
 
 (test eval-kills-a-cancelled-worker
   (with-tools
     (multiple-value-bind (result seconds) (cancelled-call 0.5 :tool-eval :form "(loop)")
-      (is (eq :cancelled (nyaa:tool-error result)))
+      (is (eq :cancelled (miao:tool-error result)))
       (is (< seconds 5)))))
 
 (test repl-cancel-kills-the-session-worker
@@ -1304,13 +1304,13 @@ result and the seconds the call took."
     (tool :tool-repl :id "c" :form "(defparameter *kept* 1)")
     (multiple-value-bind (result seconds)
         (cancelled-call 0.5 :tool-repl :id "c" :form "(sleep 30)")
-      (is (eq :cancelled (nyaa:tool-error result)))
+      (is (eq :cancelled (miao:tool-error result)))
       (is (< seconds 5)))
     (is (equal "NIL" (result-value (tool :tool-repl :id "c" :form "(boundp '*kept*)")
                                    :value)))))
 
 (test an-interrupt-kills-an-agents-shell-command-and-its-group
-  (let* ((pidfile (format nil "~a/nyaa-agent-interrupt-test.pid"
+  (let* ((pidfile (format nil "~a/miao-agent-interrupt-test.pid"
                           (uiop:native-namestring (uiop:temporary-directory))))
          (n 0)
          (call (format nil "{\"cmd\":\"sleep 30 & echo $! > ~a; wait\"}" pidfile)))
@@ -1322,7 +1322,7 @@ result and the seconds the call took."
                                      (if (= (incf n) 1)
                                          (tool-call-reply "c1" "tool-shell" call)
                                          (final-reply "done")))
-                                   '(nyaa:tool-shell)
+                                   '(miao:tool-shell)
                                    '(:tools (:tool-shell))
                                    :ready (lambda (snapshot)
                                             (and (in-tool-phase-p snapshot)

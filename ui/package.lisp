@@ -1,4 +1,4 @@
-(defpackage #:nyaa/ui
+(defpackage #:miao/ui
   (:use #:cl)
   (:local-nicknames (#:a #:alexandria)
                     (#:m #:meow)

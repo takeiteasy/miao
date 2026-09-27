@@ -1,12 +1,12 @@
 # The command line
 
-`nyaa run` runs one [agent](agent.md) to completion, prints the answer and
-exits. [`nyaa chat`](chat.md) talks to one agent turn by turn, and `nyaa chats`
+`miao run` runs one [agent](agent.md) to completion, prints the answer and
+exits. [`miao chat`](chat.md) talks to one agent turn by turn, and `miao chats`
 lists the chats it [saved](chat.md#saving-and-resuming). All are in the
-secondary system `nyaa/cli`, started through [the launcher](launcher.md).
+secondary system `miao/cli`, started through [the launcher](launcher.md).
 
 ```sh
-nyaa run "how many .lisp files are here?" --model ollama:llama3.2 \
+miao run "how many .lisp files are here?" --model ollama:llama3.2 \
     --tools tool-fs,tool-shell -v
 ```
 
@@ -26,8 +26,8 @@ nyaa run "how many .lisp files are here?" --model ollama:llama3.2 \
 [carries on a saved chat](chat.md#saving-and-resuming). A provider or tool is mounted by name from the [definitions](tools.md#definitions)
 table, so anything `define-provider` or `define-tool` has defined in the
 launched core is available. `tool-fs` is rooted at the current directory.
-`$NYAA_HOME/init.lisp`, when it exists, is loaded first, so it can define
-more. Chats are saved under `$NYAA_HOME/chats/`.
+`$MIAO_HOME/init.lisp`, when it exists, is loaded first, so it can define
+more. Chats are saved under `$MIAO_HOME/chats/`.
 
 ## Output and exit codes
 
@@ -42,7 +42,7 @@ errors, `-v` events, the reason a run was cut short -- goes to stderr.
 | 3 | the run was cut short by `:max-turns` or `:timeout`; any text so far is on stdout |
 
 ```sh
-if answer=$(nyaa run "summarise README.md" --tools tool-fs); then
+if answer=$(miao run "summarise README.md" --tools tool-fs); then
   echo "$answer"
 fi
 ```

@@ -1,8 +1,8 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
 
-;;; Primitives for tool-fs's atomic sandbox walk (~takeiteasy/nyaa#52, #53,
+;;; Primitives for tool-fs's atomic sandbox walk (~takeiteasy/miao#52, #53,
 ;;; #59). Each path component is opened with O_NOFOLLOW relative to the
 ;;; directory fd held for its parent -- refusing a symlink outright rather
 ;;; than resolving it -- and the final component is operated on relative to

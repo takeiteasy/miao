@@ -1,11 +1,15 @@
-# nyaa
+# miao
 
-**N**ot **Y**our **A**verage **A**gent
+**M**odel **I**ntegration **A**nd **O**rchestration
 
-An agent harness in Common Lisp, built on
-[meow](https://github.com/takeiteasy/meow). Tools, model adapters and the
-agent loop are meow services under one root context, so they mount in any
-order, restart under supervision, and are discovered through the registry.
+An agent core in Common Lisp, built on
+[meow](https://github.com/takeiteasy/meow), for others to build agent
+harnesses on. Tools, model adapters and the agent loop are meow services
+under one root context, so they mount in any order, restart under
+supervision, and are discovered through the registry.
+
+`cli/` and `launcher/` ship as example front ends, useful for testing this
+core before a full harness exists.
 
 Runs on SBCL.
 
@@ -36,7 +40,7 @@ Runs on SBCL.
 ## License
 
 ```
-nyaa
+miao
 Copyright (C) 2026 George Watson
 
 This program is free software: you can redistribute it and/or modify

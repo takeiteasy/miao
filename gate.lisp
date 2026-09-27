@@ -1,12 +1,12 @@
-(in-package #:nyaa)
+(in-package #:miao)
 
-;;; The allowlist gate for untrusted Lisp (~takeiteasy/nyaa#44). GATE-CHECK
+;;; The allowlist gate for untrusted Lisp (~takeiteasy/miao#44). GATE-CHECK
 ;;; reads a form with its own reader, never the CL reader, so nothing is
 ;;; interned and no reader macro runs on the host. It then prints the form
 ;;; back as canonical text, which is what a worker evaluates.
 ;;;
 ;;; Invariant: every symbol in the form is a keyword, an allowlisted CL
-;;; external, or a fresh name in NYAA-GATE, a package that uses nothing. No
+;;; external, or a fresh name in MIAO-GATE, a package that uses nothing. No
 ;;; allowlisted operator returns a symbol the source did not contain, so
 ;;; nothing outside the allowlist is reachable however the form is shaped.
 ;;; Adding an entry means asking whether it breaks that.
@@ -305,7 +305,7 @@ them. A float is always a double, whatever its exponent marker."
     (write-string (ecase kind
                     (:keyword ":")
                     (:cl "COMMON-LISP:")
-                    (:fresh "NYAA-GATE::"))
+                    (:fresh "MIAO-GATE::"))
                   out)
     (write-string (gsym-name sym) out)))
 
