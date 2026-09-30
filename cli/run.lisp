@@ -90,7 +90,9 @@ options that describe a new agent."
   (let ((init (merge-pathnames "init.lisp" home)))
     (when (probe-file init) (load init))))
 
-(defun verbose-sink (stream)
+(defun verbose-sink (stream done)
+  "A sink printing events to STREAM; DONE, a semaphore, is signalled once the
+run's :RUN-DONE is printed, since sinks drain after RUN-AGENT returns."
   (lambda (event)
     (case (getf event :type)
       (:text-delta (write-string (getf event :text "") stream))
@@ -98,7 +100,9 @@ options that describe a new agent."
       (:tool-result (format stream "~&[result ~s]~%" (getf event :result)))
       (:turn-retry (format stream "~&[retry ~s]~%" (getf event :reason)))
       (:run-done (format stream "~&[done ~(~a~)]~%" (getf event :reason))))
-    (finish-output stream)))
+    (finish-output stream)
+    (when (eq (getf event :type) :run-done)
+      (bt:signal-semaphore done))))
 
 (defun exit-code (result)
   "RESULT, run-agent's answer, as an exit code: 0 for a run that stopped, 3
@@ -147,11 +151,14 @@ provider's service name, the tool names and the system prompt."
 
 (defun run (options context out err)
   (multiple-value-bind (provider-name tools system) (prepare options context)
-    (let ((result (apply #'miao:run-agent context
+    (let* ((printed (bt:make-semaphore))
+           (result (apply #'miao:run-agent context
                          :model provider-name :system system
                          :messages (list (list :role :user :content (getf options :prompt)))
                          (append (agent-options options tools)
                                  (and (getf options :verbose)
-                                      (list :sink (verbose-sink err)))))))
+                                      (list :sink (verbose-sink err printed)))))))
+      (when (getf options :verbose)
+        (bt:wait-on-semaphore printed :timeout 5))
       (report result out err)
       (exit-code result))))
