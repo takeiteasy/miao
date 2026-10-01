@@ -236,6 +236,39 @@ stream, so SSE answers in its place."
     (is (search "hook-failed" (run-with)))
     (is (search "hi" (run-with :on-error :pass)))))
 
+;;; --- a function hook's service ----------------------------------------------------------------
+
+(defun hook-function-count (context)
+  (count 'miao::hook-function (m:children context) :key (lambda (child) (getf child :class))))
+
+(defun pass-before-turn ()
+  (list (lambda (phase request) (declare (ignore phase request)) :pass) :phases '(:before-turn)))
+
+(test a-function-hooks-service-goes-with-the-run-that-mounted-it
+  (call-with-agent (final-reply "hi") +test-hooks+
+                   (lambda (*ctx*)
+                     (dotimes (i 3)
+                       (agent-turn :messages '((:role :user :content "go"))
+                                   :hooks (list (pass-before-turn))))
+                     (is-true (eventually (lambda () (zerop (hook-function-count *ctx*))))))))
+
+(test unmounting-an-agent-stops-its-function-hook-and-the-context-still-stops-promptly
+  (let ((start (get-internal-real-time)))
+    (call-with-agent (final-reply "hi") +test-hooks+
+                     (lambda (*ctx*)
+                       (flet ((mount-and-run (name)
+                                (let ((agent (m:mount *ctx* 'miao:agent :name name
+                                                                         :model :provider-test-keyed
+                                                                         :hooks (list (pass-before-turn)))))
+                                  (m:call agent (list :run :messages '((:role :user :content "go"))))
+                                  (is-true (eventually (lambda ()
+                                                         (= 1 (hook-function-count *ctx*))))))))
+                         (mount-and-run :first)
+                         (m:unmount *ctx* :first)
+                         (is-true (eventually (lambda () (zerop (hook-function-count *ctx*)))))
+                         (mount-and-run :second))))
+    (is (< (/ (- (get-internal-real-time) start) internal-time-units-per-second) 3))))
+
 ;;; --- not blocking the agent --------------------------------------------------------------------
 
 (test a-hook-that-is-waiting-does-not-hold-up-cancel

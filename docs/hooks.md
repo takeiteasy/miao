@@ -109,8 +109,12 @@ too.
 
 ## What is recorded
 
-Events, the [call log](calls.md), the conversation and checkpoints carry the
-values after the hooks, so a redacted secret is in none of them.
+A tool call and its result are recorded as the hooks left them, in events, the
+[call log](calls.md), the conversation and checkpoints, so a secret a
+before-tool-call or after-tool-result hook redacts is in none of them.
+A `:before-turn` rewrite is not recorded: it keeps a secret off the wire only.
+The conversation, checkpoints and the `:run-start` and `:steer` events keep
+the original text.
 
 | Where | Holds |
 |---|---|
