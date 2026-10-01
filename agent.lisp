@@ -128,6 +128,9 @@ string or pathname: record there instead.")
    (hooks-resolved :initform nil :accessor %hooks)
    ;; (spec . process) for each function hook this agent mounted a service for.
    (hook-services :initform nil :accessor %hook-services)
+   ;; The root run's handle, which a sub-agent is given: what a hook's :RUN and
+   ;; :EMIT reach.
+   (run-handle :initarg :run-handle :initform nil :accessor %run-handle)
    (chains :initform nil :accessor %chains)
    (chain-seq :initform 0 :accessor %chain-seq)
    ;; The calls of the turn under way, so a result can be matched to its tool.
@@ -280,6 +283,8 @@ log or the id was used for other messages."
         (%running-p service) t)
   (unless (%fanout service)
     (open-fanout service))
+  (unless (slot-boundp service 'parent-name)
+    (setf (%run-handle service) (make-run-handle (%fanout service))))
   (let* ((ids (getf args :resume))
          (answer nil)
          (resumed nil))
@@ -820,6 +825,7 @@ reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child."
                             :vault (agent-vault service)
                             :call-log (agent-call-log service)
                             :hooks (%hooks service)
+                            :run-handle (%run-handle service)
                             :log-raw (agent-log-raw service))))
     (on-cancel (call-token service id) (lambda () (m:cast child '(:cancel))))
     (m:cast child (list :run :messages (list (list :role :user :content task))))
@@ -1395,7 +1401,9 @@ drops."
 
 (defun hook-request (service chain)
   (append (list :phase (chain-phase chain) :agent (m:service-name service)
-                :cancel (chain-token chain))
+                :cancel (chain-token chain)
+                :run (run-handle-id (%run-handle service))
+                :emit (hook-emitter service (hook-entry-name (chain-current chain))))
           (and (slot-boundp service 'parent-name) (list :parent (agent-parent-name service)))
           (chain-extra chain)
           (list (getf +hook-subject-keys+ (chain-phase chain)) (chain-subject chain))))
@@ -1472,6 +1480,48 @@ or failed closed."
   (list* :type :hook :ref ref :phase phase :hook hook :id id :action action
          (and reason (list :reason reason))))
 
+;;; A hook reaches the front end through :EMIT, which puts an event of its own
+;;; into the root's event stream, and tells runs apart by :RUN. Both belong to
+;;; the root run, so a sub-agent's hooks share them with its parent's.
+
+(defvar *run-seq-lock* (bt:make-lock))
+(defvar *run-seq* 0)
+
+(defstruct (run-handle (:constructor make-run-handle (fanout)))
+  (id (bt:with-lock-held (*run-seq-lock*) (incf *run-seq*)))
+  fanout (live t) (lock (bt:make-lock)))
+
+(defparameter +loop-event-types+
+  '(:run-start :steer :turn :turn-retry :turn-interrupted :text-delta :tool-call-delta
+    :done :tool-call :tool-detached :tool-resumed :tool-result :hook :context-trimmed
+    :run-done)
+  "The events the loop emits itself, which a hook may not forge.")
+
+(defun close-run-handle (service)
+  "End the root run's handle, once its :RUN-DONE is to go out: a hook's event
+after that is dropped."
+  (a:when-let ((handle (and (not (slot-boundp service 'parent-name)) (%run-handle service))))
+    (bt:with-lock-held ((run-handle-lock handle))
+      (setf (run-handle-live handle) nil))))
+
+(defun hook-emitter (service hook)
+  "The :EMIT function of HOOK's calls from SERVICE: it delivers a plist event,
+tagged with the hook and the agent, while the root run lasts. Under the
+handle's lock, so :RUN-DONE is the last event of the run."
+  (let ((handle (%run-handle service))
+        (ref (m:agent-ref service))
+        (tags (append (list :agent (m:service-name service))
+                      (and (slot-boundp service 'parent-name)
+                           (list :parent (agent-parent-name service))))))
+    (lambda (event)
+      (when (and (a:proper-list-p event) (evenp (length event))
+                 (keywordp (getf event :type))
+                 (not (member (getf event :type) +loop-event-types+)))
+        (bt:with-lock-held ((run-handle-lock handle))
+          (when (run-handle-live handle)
+            (emit-event (run-handle-fanout handle)
+                        (append event (list :hook hook :ref ref) tags))))))))
+
 ;;; --- the sink -----------------------------------------------------------
 
 ;;; Every event reaches the sink through AGENT-EVENTS: a function sink is
@@ -1539,6 +1589,7 @@ has not taken that within *SINK-GRACE*."
 (defun retire-emitters (service)
   "Retire the emitters SERVICE started, and only those: a child's sink is its
 parent's fanout, which the parent's own run-end retires."
+  (close-run-handle service)
   (setf (%fanout service) nil)
   (dolist (cell (shiftf (%emitters service) nil))
     (retire-emitter (cdr cell))))
@@ -1629,6 +1680,7 @@ timeout."
   ;; Invalidates any turn already in flight, so its late TURN-REPLY is
   ;; dropped rather than reopening a run that has already finished.
   (incf (%step-ref service))
+  (close-run-handle service)
   (emit service
               (run-done-event (m:agent-ref service)
                               (if (tool-error-p result)

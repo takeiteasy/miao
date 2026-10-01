@@ -68,6 +68,8 @@
                              (:file "self")
                              (:file "vault")
                              (:file "calls")))
+               (:module "hooks"
+                :components ((:file "approval")))
                (:module "protocols"
                 :components ((:file "openai")
                              (:file "ollama")))
@@ -146,6 +148,7 @@
                (:file "chat")
                (:file "resume")
                (:file "hooks")
+               (:file "approval")
                (:file "inputs")
                (:file "image-generation")
                (:file "self"))

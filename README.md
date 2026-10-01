@@ -36,6 +36,7 @@ Runs on SBCL.
 - [The vault](docs/vault.md)
 - [The call log](docs/calls.md)
 - [Interceptor hooks](docs/hooks.md)
+- [Operator approval](docs/approvals.md)
 - [Redelivered inputs](docs/inputs.md)
 
 ## License

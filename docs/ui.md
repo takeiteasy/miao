@@ -82,6 +82,7 @@ A front end tells a sub-agent's events from the root's by whether the
 | `:tool-resumed` | `:id`, `:name` | a logged call is [run again](calls.md#resuming-a-call) |
 | `:tool-result` | `:id`, `:result` | a call answered, `(:ok ...)` or `(:error ...)`, after any hooks. A denied call's is `(:error (:denied hook reason))` |
 | `:hook` | `:phase`, `:hook`, `:id`, `:action`, `:reason` | an [interceptor hook](hooks.md) acted: `:action` is `:rewrite`, `:deny` or `:failed`, `:reason` is on the last two, `:id` is the call's and nil before a turn. It never carries the payload |
+| `:approval-request`, `:approval-done` | see [approval](approvals.md#events) | an [operator approval](approvals.md) is waiting, and ends. They are answered with `miao:answer-approval`, not an agent command. Any hook may emit events of its own, with `:hook` |
 | `:context-trimmed` | see [the loop](agent.md#events) | a request left out or cut something |
 | `:run-done` | `:reason` | the run ended, with its stop reason or `(:error r)` |
 
@@ -118,9 +119,8 @@ events, each once and in order. The replay covers the current run only.[^replay]
   ([#202](https://todo.sr.ht/~takeiteasy/miao/202)).
 - A subscriber that attaches to an idle agent is not sent the conversation it
   holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
-- Operator approvals ([#118](https://todo.sr.ht/~takeiteasy/miao/118)) and the
-  live list of agents and sub-agents
-  ([#121](https://todo.sr.ht/~takeiteasy/miao/121)) are not part of the
+- The live list of agents and sub-agents
+  ([#121](https://todo.sr.ht/~takeiteasy/miao/121)) is not part of the
   contract yet. Until #121, a sub-agent reports `:agent nil` and cannot be
   steered or cancelled.
 

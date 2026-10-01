@@ -80,6 +80,9 @@ site names them explicitly:
 (m:mount *ctx* 'miao:agent :model :provider-ollama :tools '(:tool-shell))
 ```
 
+Once named, an operator tool runs unasked. The [approval hook](approvals.md)
+asks the operator per call.
+
 A call naming a tool outside the allow-list, and a tool error of any kind,
 both come back to the model as a `:tool` message rather than ending the run —
 the model gets a chance to recover, the same way a backend error does not

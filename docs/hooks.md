@@ -30,7 +30,8 @@ happens.
 | `:after-tool-result` | after a call answers | `:id`, `:name`, `:result` | rewrite the result |
 
 Every request also carries `:phase`, `:agent`, `:cancel` (the
-[cancel token](#not-blocking-the-agent)) and, on a sub-agent, `:parent`.
+[cancel token](#not-blocking-the-agent)), `:run`, `:emit` (see
+[emitting events](#emitting-events)) and, on a sub-agent, `:parent`.
 A `:before-turn` rewrite changes the request only; the conversation, and so a
 [checkpoint](checkpoints.md), keeps what was said.[^order]
 
@@ -107,6 +108,18 @@ A [sub-agent](agent.md#sub-agents) inherits its parent's hooks, so a permission
 hook is not escaped by delegating. The reserved `agent-task` call is itself a
 tool call: it passes through `:before-tool-call`, and the child's own calls do
 too.
+
+## Emitting events
+
+`:run` is an id for the root run, unique in the image and the same for its
+sub-agents' hooks. `:emit` is a function of one plist event, which joins the
+run's events tagged with `:hook`, `:agent`, `:ref` and `:parent`. It needs a
+keyword `:type` the loop does not use itself, and drops anything after the
+root's `:run-done`. [Operator approval](approvals.md) is built on both:
+
+```lisp
+(funcall (getf request :emit) '(:type :progress :note "scanning"))
+```
 
 ## What is recorded
 

@@ -23,7 +23,7 @@
    ;; provider convention
    #:define-provider #:providers #:describe-provider #:provider
    ;; hook convention
-   #:hooks #:describe-hook #:define-hook #:hook-function
+   #:hooks #:describe-hook #:define-hook #:hook-function #:hook-approval #:answer-approval
    ;; agent convention
    #:agent #:agents #:describe-agent #:run-agent
    #:fork-conversation #:fork-agent
