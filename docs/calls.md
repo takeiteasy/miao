@@ -35,6 +35,7 @@ calls land in the same file. A [fork](forking.md) is mounted as its source was.
 | `:running` | handed to its tool, or [detached](agent.md#detached-tool-calls) and still running, until its result lands |
 | `:ok` | answered |
 | `:error` | the tool failed, or the call was outside the allow-list |
+| `:denied` | a [hook](hooks.md) denied the call before it ran |
 | `:interrupted` | closed unanswered by `:cancel`, `:deadline`, an interrupting `:steer`, or a [restore](checkpoints.md) |
 | `:abandoned` | the agent's process exited with the call outstanding |
 | `:lost` | accepted or running, and the process that dispatched it is gone[^liveness] |
@@ -46,9 +47,9 @@ A call keeps the first outcome written for it.
 ```lisp
 (:kind :call    :id "..." :at "iso" :agent :assistant :call-id "c1"
  :name :tool-shell :arguments "<json>" :turn 1 :by (:pid 4242 ...)
- :cut t :resumes "<id>")
+ :cut t :resumes "<id>" :raw-arguments "<json>")
 (:kind :running :id "..." :at "iso")
-(:kind :done    :id "..." :at "iso" :outcome :ok :content "<json>")
+(:kind :done    :id "..." :at "iso" :outcome :ok :content "<json>" :raw-content "<json>")
 (:kind :input   :id "..." :at "iso" :agent :assistant :input-id "k"
  :digest "<md5>" :by (:pid 4242 ...))
 ```
@@ -59,6 +60,11 @@ redelivery](inputs.md). A `:done` entry finishes it as it does a call.
 
 `:cut t` is on a `:call` whose `:arguments` were cut to the size below, and
 `:resumes` on one that [runs another again](#resuming-a-call).
+
+A call's `:arguments` and a `:done` entry's `:content` are what the
+[hooks](hooks.md#what-is-recorded) left. With `:log-raw t` on the agent, a
+`:call` also holds `:raw-arguments` and a `:done` holds `:raw-content`, the
+model's arguments and the tool's result, where a hook changed them.
 
 `:id` is the log's own, one per dispatch. `:call-id` is the provider's, which
 a provider may reuse on a later turn. `:arguments` and `:content` are JSON

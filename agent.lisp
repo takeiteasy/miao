@@ -76,6 +76,14 @@ is sent again before the run ends.")
                   :type (real 0) :reader agent-retry-backoff
                   :documentation "Milliseconds before the first retry; each
 further one waits twice as long, plus jitter.")
+   (hooks :initarg :hooks :initform nil :reader agent-hooks-spec
+          :documentation "The interceptor hooks a run goes through, in order: a
+hook service name, a function of (phase request), or a list of either followed
+by :ON-ERROR, :PHASES, :TIMEOUT and, for a function, :NAME overrides. A
+sub-agent inherits its parent's. NIL is none. See docs/hooks.md.")
+   (log-raw :initarg :log-raw :initform nil :reader agent-log-raw
+            :documentation "True: the call log also keeps the arguments and
+result a hook rewrote, as the model and the tool first had them.")
    (sampling :initarg :sampling :initform nil :reader agent-sampling
              :documentation "A plist of sampling parameters passed through
 to COMPLETE, e.g. :TEMPERATURE.")
@@ -117,6 +125,13 @@ string or pathname: record there instead.")
    (turn-stream :initform nil :accessor %turn-stream)
    (last-request-chars :initform nil :accessor %last-request-chars)
    (fanout :initform nil :accessor %fanout)
+   (hooks-resolved :initform nil :accessor %hooks)
+   ;; (spec . process) for each function hook this agent mounted a service for.
+   (hook-services :initform nil :accessor %hook-services)
+   (chains :initform nil :accessor %chains)
+   (chain-seq :initform 0 :accessor %chain-seq)
+   ;; The calls of the turn under way, so a result can be matched to its tool.
+   (calls :initform nil :accessor %calls)
    ;; (sink . emitter) for each function sink this agent started an emitter for.
    (emitters :initform nil :accessor %emitters)
    (local-subscribers :initform nil :accessor %local-subscribers)
@@ -141,7 +156,9 @@ string or pathname: record there instead.")
         :turn-retries (agent-turn-retries service)
         :retry-backoff (agent-retry-backoff service)
         :vault (agent-vault service)
-        :call-log (agent-call-log service)))
+        :call-log (agent-call-log service)
+        :hooks (mapcar #'hook-spec-label (agent-hooks-spec service))
+        :log-raw (agent-log-raw service)))
 
 (defun agents (&key (registry m:*registry*))
   "Every registered agent name, sorted."
@@ -177,7 +194,7 @@ string or pathname: record there instead.")
     ;; Not routed through CALL-RESULT: a detached call has no timeout to hit,
     ;; and its cell holds a stub that TOOL-REPLY leaves alone.
     (:call-timeout (destructuring-bind (ref id) (rest message)
-                     (when (eql ref (%step-ref service))
+                     (when (and (eql ref (%step-ref service)) (call-pending-p service id))
                        (tool-reply service id (fail :timeout)))
                      nil))
     (:retry (when (and (%retry-pending service) (eql (second message) (%step-ref service)))
@@ -194,13 +211,18 @@ string or pathname: record there instead.")
     (t (bad-request "unknown message ~s" (first message)))))
 
 (defun start-run (service args)
-  (or (resume-problem service args)
-      (let ((keyed (and (getf args :input-id)
-                        (accept-input service args :record (not (%running-p service))))))
-        (cond ((tool-error-p keyed) keyed)
-              ((consp keyed) keyed)
-              ((%running-p service) (bad-request "agent is already running"))
-              (t (begin-run service args keyed))))))
+  (multiple-value-bind (entries problem) (resolve-hooks service)
+    (or problem
+        (progn
+          (unless (%running-p service)
+            (setf (%hooks service) entries))
+          (resume-problem service args))
+        (let ((keyed (and (getf args :input-id)
+                          (accept-input service args :record (not (%running-p service))))))
+          (cond ((tool-error-p keyed) keyed)
+                ((consp keyed) keyed)
+                ((%running-p service) (bad-request "agent is already running"))
+                (t (begin-run service args keyed)))))))
 
 (defun messages-digest (messages)
   (format nil "~(~{~2,'0x~}~)"
@@ -249,6 +271,7 @@ log or the id was used for other messages."
         (%detach-deferred service) nil
         (%call-tokens service) nil
         (%call-log-ids service) nil
+        (%chains service) nil
         ;; %STEER-QUEUE is deliberately not cleared here: a steer (or
         ;; a vault :restore) sent while the agent was idle waits in
         ;; the queue rather than being dropped, and folds in on the
@@ -381,6 +404,7 @@ another process holds or that is already consumed."
   (close-detached service :abandoned)
   (record-input-done service :abandoned)
   (retire-emitters service)
+  (stop-hook-services service)
   (when (or (eq reason :shutdown) (not (m:will-restart-p service reason)))
     (setf (subscribers service) nil)))
 
@@ -428,10 +452,20 @@ lands ahead of the assistant reply or tool results already owed."
         (%turn-stream service) (and (%fanout service)
                                    (fanout-listening-p (%fanout service))
                                    (make-turn-stream)))
-  (let ((ref (incf (%step-ref service)))
-        (request (build-request service
+  (let ((ref (incf (%step-ref service))))
+    (run-chain service :before-turn (conversation service) nil
+               (lambda (status value)
+                 (ecase status
+                   (:ok (send-turn-request service ref value))
+                   (:failed (setf (%turn-in-flight service) nil)
+                    (finish-run service (hook-failure value))))))))
+
+(defun send-turn-request (service ref messages)
+  "Send the turn for MESSAGES, the conversation as the before-turn hooks left it."
+  (let ((request (build-request service
                                 (setf (%turn-token service) (make-cancel-token))
-                                (%turn-stream service))))
+                                (%turn-stream service)
+                                messages)))
     (send-call service (list :turn ref) #'%completion-call (agent-model service) request)
     nil))
 
@@ -461,22 +495,45 @@ meow pending call alive for good, as call-async cannot withdraw it (#188)."
   (destructuring-bind (kind ref &optional id) tag
     (ecase kind
       (:turn (turn-reply service ref result))
-      (:tool (call-result service ref id result)))))
+      (:tool (call-result service ref id result))
+      (:hook (hook-reply service ref id result)))))
 
 (defun call-result (service ref id result)
   "Hand RESULT to call ID dispatched under step REF: a detached call's late
 result is folded in, and any other counts only under the step it was
 dispatched in."
-  (cond ((assoc (cons ref id) (%detached service) :test #'equal)
-         (detached-reply service (cons ref id) result))
-        ((eql ref (%step-ref service))
-         (tool-reply service id result)))
+  (let ((key (cons ref id))
+        (entry nil))
+    (cond ((setf entry (assoc key (%detached service) :test #'equal))
+           (intercept-result service id (getf (cdr entry) :name) result
+                             (lambda (hooked) (detached-reply service key hooked result))
+                             :detached t))
+          ((and (eql ref (%step-ref service)) (call-pending-p service id)
+                (phase-hooks service :after-tool-result))
+           (setf (cdr (assoc id (%pending service) :test #'equal)) :intercepting)
+           (intercept-result service id (call-name service id) result
+                             (lambda (hooked) (tool-reply service id hooked result))))
+          ((eql ref (%step-ref service))
+           (tool-reply service id result))))
   nil)
 
-(defun build-request (service token stream)
+(defun call-name (service id)
+  (getf (find id (%calls service) :key (lambda (call) (getf call :id)) :test #'equal) :name))
+
+(defun intercept-result (service id name result settle &key detached)
+  "Pass RESULT through the after-tool-result hooks and give SETTLE what they
+leave, or the failure a closed hook ends in. SETTLE runs at once with no hooks."
+  (run-chain service :after-tool-result result (list :id id :name name)
+             (lambda (status value)
+               (funcall settle (if (eq status :ok)
+                                   value
+                                   (hook-refusal status (first value) (second value)))))
+             :detached detached))
+
+(defun build-request (service token stream &optional (conversation (conversation service)))
   (let ((tools (request-tools service)))
     (multiple-value-bind (messages record chars)
-        (fit-conversation (conversation service)
+        (fit-conversation conversation
                           :max-context (agent-max-context service)
                           :max-tool-result (agent-max-tool-result service)
                           :chars-per-token (%chars-per-token service)
@@ -609,17 +666,35 @@ interrupt -- leaves the timer's :RETRY unmatchable."
         (%pending-order service) (mapcar (lambda (call) (getf call :id)) calls)
         (%call-tokens service) (mapcar (lambda (call) (cons (getf call :id) (make-cancel-token)))
                                        calls)
-        (%queued service) calls)
-  (record-accepted service calls)
-  (dolist (call calls)
-    (emit service
-                (tool-call-event (m:agent-ref service) (getf call :id)
-                                 (getf call :name) (getf call :arguments))))
+        (%queued service) calls
+        (%calls service) calls)
+  ;; With before-tool-call hooks a call is announced once they have answered,
+  ;; so neither the log nor a sink ever sees the arguments they redact.
+  (unless (phase-hooks service :before-tool-call)
+    (dolist (call calls)
+      (accept-call service call)))
   (pump-calls service)
   nil)
 
+(defun accept-call (service call &optional (raw-arguments (getf call :arguments)))
+  "Log CALL as accepted and announce it. RAW-ARGUMENTS, the arguments the model
+sent where a hook rewrote them, go to the log under :LOG-RAW."
+  (a:when-let ((path (call-log-of service)))
+    (push (cons (getf call :id)
+                (first (call-log-accept
+                        path (m:service-name service) (%turns service)
+                        (list (if (and (agent-log-raw service)
+                                       (not (equal raw-arguments (getf call :arguments))))
+                                  (list* :raw-arguments raw-arguments call)
+                                  call))
+                        :cap (or (agent-max-tool-result service) *call-log-max-content*))))
+          (%call-log-ids service)))
+  (emit service (tool-call-event (m:agent-ref service) (getf call :id)
+                                 (getf call :name) (getf call :arguments))))
+
 (defun running-calls (service)
-  (count :pending (%pending service) :key #'cdr))
+  (count-if (lambda (status) (member status '(:pending :intercepting))) (%pending service)
+            :key #'cdr))
 
 (defun pump-calls (service)
   "Dispatch queued calls while a slot is free. A call refused outright
@@ -639,16 +714,43 @@ answers at once and never holds one."
 (defun dispatch-call (service call)
   "A call outside the allow-list, and a tool error of any kind, both come
 back as a :TOOL message rather than ending the run: the model gets a chance
-to recover."
+to recover. A call the allow-list passes, the reserved sub-agent call included,
+goes through the before-tool-call hooks first."
   (let ((name (getf call :name)))
     (cond
-      ((and (agent-sub-agents service) (eq name +sub-agent-tool-name+))
-       (dispatch-sub-agent service call))
-      ((member name (%allow-list service))
-       (dispatch-tool service call))
-      (t (tool-reply service (getf call :id)
-                     (bad-request "~(~a~) is not in this agent's tool allow-list"
-                                  name))))))
+      ((not (or (and (agent-sub-agents service) (eq name +sub-agent-tool-name+))
+                (member name (%allow-list service))))
+       (tool-reply service (getf call :id)
+                   (bad-request "~(~a~) is not in this agent's tool allow-list"
+                                name)))
+      ((phase-hooks service :before-tool-call)
+       (run-chain service :before-tool-call (getf call :arguments)
+                  (list :id (getf call :id) :name name)
+                  (lambda (status value) (call-chained service call status value))))
+      (t (run-call service call)))))
+
+(defun run-call (service call)
+  (if (and (agent-sub-agents service) (eq (getf call :name) +sub-agent-tool-name+))
+      (dispatch-sub-agent service call)
+      (dispatch-tool service call)))
+
+(defun call-chained (service call status value)
+  "CALL once the before-tool-call hooks have answered: run with the arguments
+they left, or answered as the denial or failure they ended in."
+  (let ((id (getf call :id)))
+    (ecase status
+      (:ok (let ((hooked (list* :arguments value (a:remove-from-plist call :arguments))))
+             (accept-call service hooked (getf call :arguments))
+             (record-running service (list id))
+             (run-call service hooked)))
+      ((:denied :failed)
+       (destructuring-bind (hook reason arguments) value
+         (accept-call service (list* :arguments arguments (a:remove-from-plist call :arguments))
+                      (getf call :arguments))
+         (tool-reply service id (hook-refusal status hook reason)))))))
+
+(defun call-pending-p (service id)
+  (eq :pending (cdr (assoc id (%pending service) :test #'equal))))
 
 (defun call-token (service id)
   (cdr (assoc id (%call-tokens service) :test #'equal)))
@@ -713,7 +815,9 @@ reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child."
                             :deadline (agent-deadline service)
                             :sink (%fanout service)
                             :vault (agent-vault service)
-                            :call-log (agent-call-log service))))
+                            :call-log (agent-call-log service)
+                            :hooks (%hooks service)
+                            :log-raw (agent-log-raw service))))
     (on-cancel (call-token service id) (lambda () (m:cast child '(:cancel))))
     (m:cast child (list :run :messages (list (list :role :user :content task))))
     (arm-detach service call)
@@ -729,13 +833,15 @@ reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child."
   (call-result service (car ref) (cdr ref) (fail (list :sub-agent-down reason))))
 
 (defun outstanding-p (status)
-  (member status '(:pending :queued)))
+  (member status '(:pending :queued :intercepting)))
 
-(defun tool-reply (service id result)
+(defun tool-reply (service id result &optional (raw result))
+  "Settle call ID with RESULT. RAW is what the tool answered where a hook
+rewrote it."
   (let ((cell (assoc id (%pending service) :test #'equal)))
     (when (and cell (outstanding-p (cdr cell)))
       (setf (cdr cell) result)
-      (record-done service (list (list id result)))
+      (record-done service (list (list id result raw)))
       (emit service (tool-result-event (m:agent-ref service) id result))
       (settle-calls service))
     nil))
@@ -782,15 +888,16 @@ call that has answered, or belongs to an earlier step, is left alone. Past
         do (when (apply #'detach-call service (pop (%detach-deferred service)))
              (return))))
 
-(defun detached-reply (service key result)
+(defun detached-reply (service key result &optional (raw result))
   "Log and announce the result of the detached call KEY, and queue it as a
 :USER message for the next turn, as a steer is. Its slot goes to a call
-deferred by :MAX-DETACHED."
+deferred by :MAX-DETACHED. RAW is what the tool answered where a hook rewrote
+it."
   (let ((entry (assoc key (%detached service) :test #'equal)))
     (when entry
       (setf (%detached service) (remove entry (%detached service)))
       (destructuring-bind (&key name log-id (call-id (cdr key)) &allow-other-keys) (cdr entry)
-        (record-log-done service (list (list log-id result)))
+        (record-log-done service (list (list log-id result raw)))
         (emit service
                     (tool-result-event (m:agent-ref service) call-id result))
         (push (list nil nil
@@ -911,8 +1018,19 @@ detached, so it counts toward :MAX-DETACHED, and one past it is refused."
           (%detached service))
     (call-log-running (call-log-of service) (list log-id))
     (emit service (tool-resumed-event (m:agent-ref service) call-id name))
-    (send-call service (list :tool ref log-id) #'%tool-call name (list* :cancel token arguments)
-              :unbounded t)
+    (flet ((send (arguments)
+             (send-call service (list :tool ref log-id) #'%tool-call name
+                        (list* :cancel token arguments) :unbounded t)
+             nil))
+      (if (phase-hooks service :before-tool-call)
+          (run-chain service :before-tool-call arguments (list :id call-id :name name)
+                     (lambda (status value)
+                       (if (eq status :ok)
+                           (send value)
+                           (detached-reply service (cons ref log-id)
+                                           (hook-refusal status (first value) (second value)))))
+                     :detached t)
+          (send arguments)))
     nil))
 
 (defun pending-tool-messages (service)
@@ -957,39 +1075,37 @@ or an :INTERRUPTED error where none has arrived."
 (defun call-log-id (service id)
   (cdr (assoc id (%call-log-ids service) :test #'equal)))
 
-(defun record-accepted (service calls)
-  (a:when-let ((path (call-log-of service)))
-    (setf (%call-log-ids service)
-          (mapcar #'cons
-                  (mapcar (lambda (call) (getf call :id)) calls)
-                  (call-log-accept path (m:service-name service) (%turns service) calls
-                                   :cap (or (agent-max-tool-result service)
-                                            *call-log-max-content*))))))
-
 (defun record-running (service ids)
   (a:when-let ((path (call-log-of service)))
     (call-log-running path (remove nil (mapcar (lambda (id) (call-log-id service id)) ids)))))
 
 (defun record-done (service results)
-  "Log each of RESULTS, (provider call id, result), as finished."
-  (record-log-done service (loop for (id result) in results
-                                 collect (list (call-log-id service id) result))))
+  "Log each of RESULTS, (provider call id, result, raw result), as finished."
+  (record-log-done service (loop for (id result raw) in results
+                                 collect (list (call-log-id service id) result raw))))
 
 (defun record-log-done (service results)
-  "Log each of RESULTS, (log id, result), as finished; one with no log id is
-skipped."
+  "Log each of RESULTS, (log id, result, raw result), as finished; one with no
+log id is skipped. A raw result that is not RESULT goes to the log under
+:LOG-RAW."
   (a:when-let ((path (call-log-of service)))
-    (call-log-done
-     path
-     (loop for (log-id result) in results
-           when log-id
-             collect (list log-id
-                           (cond ((not (tool-error-p result)) :ok)
-                                 ((eq (tool-error result) :interrupted) :interrupted)
-                                 (t :error))
-                           (%cut-text (render-tool-result result)
-                                      (or (agent-max-tool-result service)
-                                          *call-log-max-content*)))))))
+    (let ((cap (or (agent-max-tool-result service) *call-log-max-content*)))
+      (call-log-done
+       path
+       (loop for (log-id result raw) in results
+             when log-id
+               collect (list log-id
+                             (cond ((not (tool-error-p result)) :ok)
+                                   ((eq (tool-error result) :interrupted) :interrupted)
+                                   ((denial-p result) :denied)
+                                   (t :error))
+                             (%cut-text (render-tool-result result) cap)
+                             (and (agent-log-raw service) raw (not (equal raw result))
+                                  (%cut-text (render-tool-result raw) cap))))))))
+
+(defun denial-p (result)
+  (let ((reason (tool-error result)))
+    (and (consp reason) (eq (first reason) :denied))))
 
 (defun record-outstanding (service outcome)
   "Log every call this turn still awaiting a result as finished with OUTCOME."
@@ -1153,6 +1269,193 @@ one that reads implausibly, leaves the last ratio."
 (defun push-message (service message)
   (push message (%messages service)))
 
+;;; --- interceptor hooks (~takeiteasy/miao#117) -----------------------------
+
+;;; A hook is a service the agent calls with M:CALL-ASYNC, as it does a tool, so
+;;; HANDLE never waits on one: the answer comes back as a (:REPLY (:HOOK ref
+;;; chain) value status) message, under the hook's own timeout. The hooks of a
+;;; phase run as a chain, one at a time, each over what the last left. A chain
+;;; carries the step ref it was started under, so an interrupt, cancel or
+;;; restore, which move it on, drop the answer that is still to come.
+;;;
+;;; The hooks a run goes through are resolved when it starts, and each one's
+;;; metadata is read then, so a hook that dies mid-run still fails by the
+;;; policy it declared.
+
+(defstruct (hook-entry (:constructor make-hook-entry (name target phases on-error timeout)))
+  name target phases on-error timeout)
+
+(defstruct chain id ref phase entries current subject extra k)
+
+(defun hook-spec-label (spec)
+  "SPEC, one of an agent's :HOOKS, as the name it shows under."
+  (typecase spec
+    (hook-entry (hook-entry-name spec))
+    (cons (if (and (keywordp (first spec)) (not (functionp (first spec))))
+              (first spec)
+              (or (getf (rest spec) :name) :function)))
+    (keyword spec)
+    (t :function)))
+
+(defun resolve-hooks (service)
+  "SERVICE's :HOOKS as hook entries, or nil and the bad-request that refuses
+the run: a named hook that is not registered, or a bad option."
+  (let ((entries '()))
+    (dolist (spec (agent-hooks-spec service) (values (nreverse entries) nil))
+      (multiple-value-bind (entry problem) (resolve-hook service spec)
+        (when problem (return (values nil problem)))
+        (push entry entries)))))
+
+(defun resolve-hook (service spec)
+  (if (typep spec 'hook-entry)
+      spec
+      (let* ((spec (a:ensure-list spec))
+             (target (first spec))
+             (options (rest spec))
+             (named (and (keywordp target) (not (functionp target)))))
+        (multiple-value-bind (props problem)
+            (if named
+                (multiple-value-bind (process props)
+                    (m:lookup target :registry (m:service-registry service))
+                  (if (and process (eq (getf props :kind) :hook))
+                      props
+                      (values nil (bad-request "hook ~(~a~) is not registered" target))))
+                (values nil nil))
+          (if problem
+              (values nil problem)
+              (let ((phases (getf options :phases (getf props :phases +hook-phases+)))
+                    (on-error (getf options :on-error (getf props :on-error :deny)))
+                    (timeout (getf options :timeout (getf props :timeout +default-tool-timeout+)))
+                    (label (if named target (getf options :name :function))))
+                (a:if-let ((bad (%check-hook-options phases on-error)))
+                  (values nil (bad-request "~a" bad))
+                  (make-hook-entry label
+                                   (if named
+                                       target
+                                       (hook-function-process service spec label phases
+                                                              on-error timeout))
+                                   phases on-error timeout))))))))
+
+(defun hook-function-process (service spec label phases on-error timeout)
+  "The service running SPEC's function, mounted when first needed and kept for
+the agent's life."
+  (let ((cell (assoc spec (%hook-services service) :test #'eq)))
+    (if (and cell (m:process-alive-p (cdr cell)))
+        (cdr cell)
+        (let ((process (m:mount (m:service-process (m:service-context service))
+                                'hook-function :fn (first spec) :label label :phases phases
+                                :on-error on-error :timeout timeout :restart :temporary)))
+          (setf (%hook-services service)
+                (acons spec process (remove cell (%hook-services service))))
+          process))))
+
+(defun stop-hook-services (service)
+  (dolist (cell (shiftf (%hook-services service) nil))
+    (ignore-errors (m:stop (cdr cell)))))
+
+(defun phase-hooks (service phase)
+  (remove-if-not (lambda (entry) (member phase (hook-entry-phases entry)))
+                 (%hooks service)))
+
+(defun run-chain (service phase subject extra k &key detached)
+  "Pass SUBJECT through PHASE's hooks, in order. EXTRA is the plist the hooks are
+told besides it, :ID and :NAME for a tool call. K is called, and its values
+returned, with :OK and the subject the hooks left; or with :DENIED or :FAILED
+and (hook reason subject), once a hook denies, or one fails that is closed. K
+runs at once when no hook applies, and otherwise from HOOK-REPLY.
+
+A chain is dropped when the step it started under passes, unless it is
+DETACHED: that of a call that outlives its turn, which only the end of the run
+drops."
+  (let ((entries (phase-hooks service phase)))
+    (if (null entries)
+        (funcall k :ok subject)
+        (let ((chain (make-chain :id (incf (%chain-seq service))
+                                 :ref (if detached :detached (%step-ref service))
+                                 :phase phase :entries entries :subject subject
+                                 :extra extra :k k)))
+          (push (cons (chain-id chain) chain) (%chains service))
+          (chain-next service chain)))))
+
+(defun chain-next (service chain)
+  (let ((entry (pop (chain-entries chain))))
+    (cond ((null entry) (chain-done service chain :ok (chain-subject chain)))
+          (t (setf (chain-current chain) entry)
+             (send-call service (list :hook (chain-ref chain) (chain-id chain))
+                        #'%hook-call entry (hook-request service chain))
+             nil))))
+
+(defun chain-done (service chain status value)
+  (setf (%chains service) (remove (chain-id chain) (%chains service) :key #'car))
+  (funcall (chain-k chain) status value))
+
+(defun hook-request (service chain)
+  (append (list :phase (chain-phase chain) :agent (m:service-name service))
+          (and (slot-boundp service 'parent-name) (list :parent (agent-parent-name service)))
+          (chain-extra chain)
+          (list (getf +hook-subject-keys+ (chain-phase chain)) (chain-subject chain))))
+
+(defun %hook-call (entry request &key (registry m:*registry*))
+  "What to send ENTRY's hook to intercept REQUEST: (values process message
+timeout), as %TOOL-CALL answers for a tool."
+  (let ((target (hook-entry-target entry)))
+    (values (if (typep target 'm:process)
+                target
+                (or (m:lookup target :registry registry)
+                    (error "No hook registered under ~s." target)))
+            (cons :intercept request)
+            (/ (hook-entry-timeout entry) 1000))))
+
+(defun hook-reply (service ref id result)
+  "Hand RESULT, a hook's answer, to the chain ID, unless the step it was
+started under has passed."
+  (let ((chain (cdr (assoc id (%chains service)))))
+    (cond ((null chain) nil)
+          ((not (or (eq ref :detached) (eql ref (%step-ref service))))
+           (setf (%chains service) (remove id (%chains service) :key #'car))
+           nil)
+          (t (chain-answer service chain result)))))
+
+(defun chain-answer (service chain result)
+  (let ((entry (chain-current chain))
+        (phase (chain-phase chain))
+        (id (getf (chain-extra chain) :id)))
+    (multiple-value-bind (kind value) (interpret-hook-answer phase result)
+      (flet ((announce (action &optional reason)
+               (emit service (hook-event (m:agent-ref service) phase (hook-entry-name entry)
+                                         id action reason)))
+             (finish (status reason)
+               (chain-done service chain status
+                           (list (hook-entry-name entry) reason (chain-subject chain)))))
+        (ecase kind
+          (:pass (chain-next service chain))
+          (:rewrite (unless (equal value (chain-subject chain))
+                      (announce :rewrite)
+                      (setf (chain-subject chain) value))
+           (chain-next service chain))
+          (:deny (announce :deny value)
+           (finish :denied value))
+          (:failed (announce :failed value)
+           (if (eq (hook-entry-on-error entry) :pass)
+               (chain-next service chain)
+               (finish :failed value))))))))
+
+(defun hook-failure (value)
+  "The error a run ends in when a closed before-turn hook fails: VALUE is (hook
+reason subject)."
+  (fail (list :hook-failed (first value) (second value))))
+
+(defun hook-refusal (status hook reason)
+  "The error a tool call or result is answered with when a hook denied the call
+or failed closed."
+  (fail (if (eq status :denied)
+            (list :denied hook reason)
+            (list :hook-failed hook reason))))
+
+(defun hook-event (ref phase hook id action &optional reason)
+  (list* :type :hook :ref ref :phase phase :hook hook :id id :action action
+         (and reason (list :reason reason))))
+
 ;;; --- the sink -----------------------------------------------------------
 
 ;;; Every event reaches the sink through AGENT-EVENTS: a function sink is
@@ -1302,7 +1605,8 @@ timeout."
         (%pending-order service) nil
         (%queued service) nil
         (%call-tokens service) nil
-        (%call-log-ids service) nil)
+        (%call-log-ids service) nil
+        (%chains service) nil)
   (record-input-done service (if (tool-error-p result)
                                  :error
                                  (getf (second result) :stop-reason)))
@@ -1440,6 +1744,7 @@ ones included, for a caller to resume."
         (%pending-order service) nil
         (%call-tokens service) nil
         (%call-log-ids service) nil
+        (%chains service) nil
         (%input-log-id service) nil
         (%steer-queue service) nil
         (%turn-in-flight service) nil

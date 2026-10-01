@@ -61,6 +61,8 @@ when its run ends, so use `run-agent` for a one-shot run.[^conversation]
 | `:chars-per-token` | 3 | characters per token the estimate starts from; recalibrated from each reply |
 | `:turn-retries` | 0 | times a turn that failed transiently is sent again |
 | `:retry-backoff` | 1000 | milliseconds before the first retry; each later one waits twice as long, or as long as `Retry-After` asks if longer, plus up to 25% jitter |
+| `:hooks` | nil | the [interceptor hooks](hooks.md) a run goes through, in order; a sub-agent inherits them |
+| `:log-raw` | nil | true: the call log also keeps what the hooks replaced |
 | `:sink` | nil | a stream sink, as `complete` takes; the first [subscriber](ui.md#subscribing) |
 | `:sampling` | nil | a plist passed through to `complete`, e.g. `:temperature` |
 | `:vault` | nil | record steering to the [vault](vault.md): nil is off, `t` the default log, a path to record there instead |
@@ -82,6 +84,9 @@ A call naming a tool outside the allow-list, and a tool error of any kind,
 both come back to the model as a `:tool` message rather than ending the run —
 the model gets a chance to recover, the same way a backend error does not
 end a plain `complete` turn early inside a working conversation.
+
+[Hooks](hooks.md) can go further than the allow-list: rewrite a call's
+arguments, deny it, or redact its result.
 
 ## Messages
 
@@ -288,10 +293,16 @@ as lost.
 (:type :tool-detached :ref r :id "c1" :name :tool-shell)
 (:type :tool-resumed :ref r :id "c1" :name :tool-shell)
 (:type :tool-result :ref r :id "c1" :result (:ok (:out "...")))
+(:type :hook        :ref r :phase :before-tool-call :hook :hook-x :id "c1" :action :deny
+       :reason "...")
 (:type :run-done    :ref r :reason :stop)
 (:type :context-trimmed :ref r :turn n :omitted (1 2 3) :truncated ((4 :from 900 :to 50))
        :size 240 :budget 250 :ratio 3.9 :over-budget nil)
 ```
+
+A `:hook` event says a [hook](hooks.md#what-is-recorded) rewrote, denied or
+failed; it comes before the `:tool-call` it concerns, which is emitted once the
+before-tool-call hooks have answered.
 
 Every event also carries `:agent`, the agent's registered name (nil when it
 has none), and a sub-agent's carries `:parent` as well. `:run-start` opens a
@@ -328,7 +339,7 @@ sink that signals an error loses that event and carries on.
 With `:sub-agents t`, the model gets a reserved tool, `agent-task`, taking one
 `:task` string. Calling it delegates a child agent — under meow's own agent
 supervisor, via `m:delegate` — with this agent's model, allow-list,
-`:max-parallel-tools`, `:vault` and `:call-log`, runs it to completion, and returns its final answer as the tool
+`:max-parallel-tools`, `:vault`, `:call-log` and [`:hooks`](hooks.md), runs it to completion, and returns its final answer as the tool
 result. The child's `:ref`, echoed on its events, is a cons of an internal
 step counter and the call id. A child does not itself get `:sub-agents`, so
 delegation does not nest by default, and it is never registered under a name, so a steer

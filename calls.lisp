@@ -44,8 +44,9 @@ default, anything else is used as given."
         (t spec)))
 
 (defun call-log-accept (path agent turn calls &key (cap *call-log-max-content*))
-  "Append a :CALL entry for each of CALLS, plists of :ID, :NAME and :ARGUMENTS,
-under one lock hold, and return their log ids in order."
+  "Append a :CALL entry for each of CALLS, plists of :ID, :NAME and :ARGUMENTS
+and, where a hook rewrote them, :RAW-ARGUMENTS, under one lock hold, and return
+their log ids in order."
   (let ((owner (%vault-owner))
         (base (%vault-id)))
     (with-log-lock (path)
@@ -58,7 +59,11 @@ under one lock hold, and return their log ids in order."
                                      :call-id (getf call :id) :name (getf call :name)
                                      :arguments (%cut-text text cap)
                                      :turn turn :by owner
-                                     (and cap (> (length text) cap) '(:cut t)))))
+                                     (append (and cap (> (length text) cap) '(:cut t))
+                                             (a:when-let ((raw (getf call :raw-arguments)))
+                                               (list :raw-arguments
+                                                     (%cut-text (json:stringify (untyped->json raw))
+                                                                cap)))))))
                    collect id)))))
 
 (defun call-log-running (path ids)
@@ -69,14 +74,16 @@ under one lock hold, and return their log ids in order."
 
 (defun call-log-done (path results)
   "Append a :DONE entry for each of RESULTS, lists of a log id, an outcome
-(:OK, :ERROR, :INTERRUPTED or :ABANDONED) and the text kept, under one lock
-hold. A call already done keeps its first outcome."
+(:OK, :ERROR, :DENIED, :INTERRUPTED or :ABANDONED), the text kept and, where a
+hook rewrote the result, the raw text kept, under one lock hold. A call already
+done keeps its first outcome."
   (when results
     (with-log-lock (path)
       (dolist (result results)
-        (destructuring-bind (id outcome content) result
-          (%append-log-locked path (list :kind :done :id id :at (%now-iso8601)
-                                         :outcome outcome :content content)))))
+        (destructuring-bind (id outcome content &optional raw) result
+          (%append-log-locked path (list* :kind :done :id id :at (%now-iso8601)
+                                          :outcome outcome :content content
+                                          (and raw (list :raw-content raw)))))))
     (%maybe-compact path *call-log-compact-size* #'call-log-compact)))
 
 (defun %done-by-id (log)

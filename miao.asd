@@ -44,6 +44,8 @@
                ;; and folds a steer through it.
                (:file "vault")
                (:file "calls")
+               ;; Ahead of agent.lisp, which runs the hooks it defines.
+               (:file "hook")
                (:file "protocol")
                (:file "worker")
                ;; Ahead of tools/gated-eval.lisp, which checks a form through it.
@@ -143,6 +145,7 @@
                (:file "ui")
                (:file "chat")
                (:file "resume")
+               (:file "hooks")
                (:file "inputs")
                (:file "image-generation")
                (:file "self"))

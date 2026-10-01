@@ -77,10 +77,11 @@ A front end tells a sub-agent's events from the root's by whether the
 | `:text-delta` | `:text` | streamed text |
 | `:tool-call-delta` | `:id`, `:name`, `:arguments` | a fragment of a call, arguments split across deltas |
 | `:done` | `:reason` | a turn ends, with its finish reason or `(:error r)` |
-| `:tool-call` | `:id`, `:name`, `:arguments` | a call is dispatched |
+| `:tool-call` | `:id`, `:name`, `:arguments` | a call is dispatched, with the arguments after any [hooks](hooks.md#what-is-recorded); with before-tool-call hooks, once they have answered |
 | `:tool-detached` | `:id`, `:name` | a call [runs on](agent.md#detached-tool-calls) without holding the turn |
 | `:tool-resumed` | `:id`, `:name` | a logged call is [run again](calls.md#resuming-a-call) |
-| `:tool-result` | `:id`, `:result` | a call answered, `(:ok ...)` or `(:error ...)` |
+| `:tool-result` | `:id`, `:result` | a call answered, `(:ok ...)` or `(:error ...)`, after any hooks. A denied call's is `(:error (:denied hook reason))` |
+| `:hook` | `:phase`, `:hook`, `:id`, `:action`, `:reason` | an [interceptor hook](hooks.md) acted: `:action` is `:rewrite`, `:deny` or `:failed`, `:reason` is on the last two, `:id` is the call's and nil before a turn. It never carries the payload |
 | `:context-trimmed` | see [the loop](agent.md#events) | a request left out or cut something |
 | `:run-done` | `:reason` | the run ended, with its stop reason or `(:error r)` |
 

@@ -22,6 +22,8 @@
    #:*pool-idle-seconds* #:pool-stats
    ;; provider convention
    #:define-provider #:providers #:describe-provider #:provider
+   ;; hook convention
+   #:hooks #:describe-hook #:define-hook #:hook-function
    ;; agent convention
    #:agent #:agents #:describe-agent #:run-agent
    #:fork-conversation #:fork-agent
