@@ -53,7 +53,8 @@
 
 (defparameter +test-hooks+
   '(hook-deny-echo hook-deny-all hook-upcase hook-redact hook-inject hook-record hook-boom
-    hook-boom-turn hook-boom-open hook-garbage hook-slow hook-blocker))
+    hook-boom-turn hook-boom-open hook-garbage hook-slow hook-blocker hook-wait
+    hook-wait-short hook-check-token))
 
 (defun echo-answer (&key sse)
   "A model that calls tool-echo once, then answers. A sink makes a request
@@ -292,6 +293,94 @@ stream, so SSE answers in its place."
                                        internal-time-units-per-second)
                                     1.5))))
                          (sleep 3.2))))))
+
+;;; --- told to stop (~takeiteasy/miao#210) -----------------------------------------------------
+
+(defvar *hook-told* nil "How each :HOOK-WAIT call ended, newest first.")
+
+(miao:define-hook :hook-wait (:phases (:before-tool-call) :timeout 5000)
+  (:intercept (phase request)
+    (let ((semaphore (bt:make-semaphore)))
+      (miao:on-cancel (getf request :cancel) (lambda () (bt:signal-semaphore semaphore)))
+      (push (if (bt:wait-on-semaphore semaphore :timeout 4) :cancelled :never-told) *hook-told*)
+      :pass)))
+
+(miao:define-hook :hook-wait-short (:phases (:before-tool-call) :timeout 200)
+  (:intercept (phase request)
+    (let ((semaphore (bt:make-semaphore)))
+      (miao:on-cancel (getf request :cancel) (lambda () (bt:signal-semaphore semaphore)))
+      (push (if (bt:wait-on-semaphore semaphore :timeout 4) :cancelled :never-told) *hook-told*)
+      :pass)))
+
+(miao:define-hook :hook-check-token (:phases (:before-tool-call))
+  (:intercept (phase request)
+    (push (miao:cancelled-p (getf request :cancel)) *hook-told*)
+    :pass))
+
+(defun waiting-hook-run (hooks &rest extra)
+  "Mount an echo agent running HOOKS, start a run and call :BODY with the agent
+once its first tool call is waiting on a hook."
+  (setf *hook-told* nil)
+  (let ((body (getf extra :body)))
+    (call-with-agent (echo-answer) (append (list 'tool-echo) +test-hooks+)
+                     (lambda (*ctx*)
+                       (let ((agent (apply #'m:mount *ctx* 'miao:agent :name :hooked
+                                           :model :provider-test-keyed :tools '(:tool-echo)
+                                           :hooks hooks
+                                           (and (getf extra :deadline)
+                                                (list :deadline (getf extra :deadline))))))
+                         (m:cast agent (list :run :messages '((:role :user :content "go"))))
+                         (is-true (eventually (lambda ()
+                                                (getf (getf (m:call agent '(:snapshot)) :in-flight)
+                                                      :tool-calls))))
+                         (funcall body agent))))))
+
+(test a-hook-is-told-when-its-run-is-cancelled
+  (waiting-hook-run '(:hook-wait)
+                    :body (lambda (agent)
+                            (m:cast agent '(:cancel))
+                            (is-true (eventually (lambda () (equal '(:cancelled) *hook-told*)))))))
+
+(test a-hook-is-told-when-the-deadline-passes
+  (waiting-hook-run '(:hook-wait) :deadline 300
+                    :body (lambda (agent)
+                            (declare (ignore agent))
+                            (is-true (eventually (lambda () (equal '(:cancelled) *hook-told*)) 3)))))
+
+(test a-hook-is-told-when-an-interrupting-steer-abandons-its-call
+  (waiting-hook-run '(:hook-wait)
+                    :body (lambda (agent)
+                            (m:cast agent (list :steer :content "change of plan" :interrupt t))
+                            (is-true (eventually (lambda () (equal '(:cancelled) *hook-told*)))))))
+
+(test a-hook-is-told-when-the-agent-gives-up-on-its-timeout
+  (waiting-hook-run '(:hook-wait-short)
+                    :body (lambda (agent)
+                            (declare (ignore agent))
+                            (is-true (eventually (lambda () (equal '(:cancelled) *hook-told*)) 3)))))
+
+(test a-hook-is-told-when-its-agent-is-restored
+  (waiting-hook-run '(:hook-wait)
+                    :body (lambda (agent)
+                            (m:call agent (list :restore (list :messages '((:role :user :content "go")) :turns 1)))
+                            (is-true (eventually (lambda () (equal '(:cancelled) *hook-told*)))))))
+
+(test a-hook-that-answers-in-time-is-not-cancelled-while-it-runs
+  (setf *hook-told* nil)
+  (hooked-run '(:hook-check-token))
+  (is (equal '(nil) *hook-told*)))
+
+(test a-hook-called-with-a-cancelled-token-does-not-run
+  (setf *hook-told* nil)
+  (call-with-agent (echo-answer) '(hook-check-token)
+                   (lambda (*ctx*)
+                     (let ((token (miao:make-cancel-token)))
+                       (miao:cancel token)
+                       (is (equal '(:error :cancelled)
+                                  (m:call (m:lookup :hook-check-token)
+                                          (list :intercept :phase :before-tool-call :cancel token
+                                                :name :tool-echo :arguments nil)))))))
+  (is (null *hook-told*)))
 
 ;;; --- resumed calls and late answers ---------------------------------------------------------
 

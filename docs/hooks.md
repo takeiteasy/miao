@@ -29,7 +29,8 @@ happens.
 | `:before-tool-call` | before a call runs | `:id`, `:name`, `:arguments` | rewrite the arguments, or deny |
 | `:after-tool-result` | after a call answers | `:id`, `:name`, `:result` | rewrite the result |
 
-Every request also carries `:phase`, `:agent` and, on a sub-agent, `:parent`.
+Every request also carries `:phase`, `:agent`, `:cancel` (the
+[cancel token](#not-blocking-the-agent)) and, on a sub-agent, `:parent`.
 A `:before-turn` rewrite changes the request only; the conversation, and so a
 [checkpoint](checkpoints.md), keeps what was said.[^order]
 
@@ -134,11 +135,25 @@ that waits does not hold up `:cancel` or `:steer`. A cancel, a deadline or an
 interrupting steer drops the answer that is still to come, and a call whose
 hook was still deciding does not run.
 
+Each call carries a [cancel token](tools.md#cancelling-a-call) as `:cancel`,
+cancelled once the agent stops waiting: the run is cancelled, restored or
+ends, an interrupting steer abandons the call, or the hook's `:timeout`
+passes. A hook that waits registers on it with `miao:on-cancel`, or polls
+`miao:cancelled-p`:
+
+```lisp
+(miao:define-hook :hook-ask (:phases (:before-tool-call) :timeout 600000)
+  (:intercept (phase request)
+    (let ((answered (bt:make-semaphore)))
+      (miao:on-cancel (getf request :cancel) (lambda () (bt:signal-semaphore answered)))
+      (wait-for-the-operator answered))))
+```
+
+A call whose token is already cancelled answers `(:error :cancelled)` without
+running the hook.
+
 ## Limitations
 
-- A hook is not told when its run is cancelled, so one waiting on a long
-  answer keeps waiting
-  ([#210](https://todo.sr.ht/~takeiteasy/miao/210)).
 - A [resumed call](calls.md#resuming-a-call) is run again from its logged
   arguments, which the hooks already rewrote once, and they see them again
   ([#211](https://todo.sr.ht/~takeiteasy/miao/211)).

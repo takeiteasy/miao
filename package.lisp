@@ -16,7 +16,7 @@
    #:define-protocol-handler #:completion-host #:backend-error
    #:normalize-content #:content-text #:text-block
    #:text-delta #:tool-call-delta #:done #:emit-event
-   #:make-cancel-token #:cancel #:cancelled-p
+   #:make-cancel-token #:cancel #:cancelled-p #:on-cancel
    ;; worker pools
    #:*pool-size* #:*sink-pool-size* #:*max-completion-depth* #:carry-completion-depth
    #:*pool-idle-seconds* #:pool-stats

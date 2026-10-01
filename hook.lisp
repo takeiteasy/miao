@@ -5,8 +5,9 @@
 ;;; (:describe) and (:intercept . plist). The agent loop runs the hooks its
 ;;; :HOOKS names, in order, off its own process. See docs/hooks.md.
 ;;;
-;;; An :INTERCEPT's plist holds :PHASE, :AGENT, :PARENT (a sub-agent's only)
-;;; and the phase's subject, which a hook may rewrite:
+;;; An :INTERCEPT's plist holds :PHASE, :AGENT, :PARENT (a sub-agent's only),
+;;; :CANCEL (a cancel token, cancelled once the agent stops waiting) and the
+;;; phase's subject, which a hook may rewrite:
 ;;;   :BEFORE-TURN       :MESSAGES the conversation
 ;;;   :BEFORE-TOOL-CALL  :ID, :NAME and :ARGUMENTS
 ;;;   :AFTER-TOOL-RESULT :ID, :NAME and :RESULT
@@ -35,11 +36,15 @@
         ((not (member on-error '(:deny :pass)))
          (format nil "a hook's :on-error is :deny or :pass, not ~s" on-error))))
 
-(defun %hook-answer (thunk)
+(defun %hook-answer (request thunk)
   "THUNK's value, or (:error detail) when it signals, so a hook that fails
-answers the loop and its service stays up."
-  (handler-case (funcall thunk)
-    (error (e) (fail (list :error (princ-to-string e))))))
+answers the loop and its service stays up. A call whose :CANCEL token is already
+cancelled answers :cancelled without running THUNK."
+  (let ((token (getf request :cancel)))
+    (if (and token (cancelled-p token))
+        (fail :cancelled)
+        (handler-case (funcall thunk)
+          (error (e) (fail (list :error (princ-to-string e))))))))
 
 (defmacro define-hook (name (&key summary phases (on-error :deny)
                                (timeout '+default-tool-timeout+) slots)
@@ -77,7 +82,7 @@ anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
                (:intercept (let* ((,request-var (rest message))
                                   (,phase-var (getf ,request-var :phase)))
                              (declare (ignorable ,phase-var ,request-var))
-                             (%hook-answer (lambda () ,@body))))
+                             (%hook-answer ,request-var (lambda () ,@body))))
                (:snapshot (snapshot service))
                (:restore (restore service (second message)))
                (t (bad-request "unknown message ~s" (first message))))))))))
@@ -103,7 +108,8 @@ anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
   (case (first message)
     (:describe (m:metadata service))
     (:intercept (let ((request (rest message)))
-                  (%hook-answer (lambda () (funcall (hook-fn service) (getf request :phase) request)))))
+                  (%hook-answer request
+                                (lambda () (funcall (hook-fn service) (getf request :phase) request)))))
     (t (bad-request "unknown message ~s" (first message)))))
 
 ;;; --- reading an answer ----------------------------------------------------

@@ -253,6 +253,7 @@ log or the id was used for other messages."
       (setf (%input-log-id service) nil))))
 
 (defun begin-run (service args input-log-id)
+  (drop-chains service :detached t)
   (setf (%input-log-id service) input-log-id
         (%messages service)
         (revappend (getf args :messages)
@@ -271,7 +272,6 @@ log or the id was used for other messages."
         (%detach-deferred service) nil
         (%call-tokens service) nil
         (%call-log-ids service) nil
-        (%chains service) nil
         ;; %STEER-QUEUE is deliberately not cleared here: a steer (or
         ;; a vault :restore) sent while the agent was idle waits in
         ;; the queue rather than being dropped, and folds in on the
@@ -370,6 +370,7 @@ STEP-AGENT keeps :MAX-TURNS in force, so the abandoned turn counts."
   (let ((partial (close-turn-stream
                   service (turn-interrupted-event (m:agent-ref service) (%turns service)))))
     (cancel-turn service)
+    (drop-chains service)
     (when (plusp (length partial))
       (push-message service (list :role :assistant :content partial))))
   (step-agent service))
@@ -379,6 +380,7 @@ STEP-AGENT keeps :MAX-TURNS in force, so the abandoned turn counts."
 running is cancelled and closed as :INTERRUPTED, the results already in are
 kept, and the next turn folds the steer in, as INTERRUPT-TURN does."
   (close-pending-calls service)
+  (drop-chains service)
   (incf (%step-ref service))
   (step-agent service))
 
@@ -400,6 +402,7 @@ another process holds or that is already consumed."
 
 (defmethod m:dispose ((service agent) reason)
   (release-steer-claims service)
+  (drop-chains service :detached t)
   (record-outstanding service :abandoned)
   (close-detached service :abandoned)
   (record-input-done service :abandoned)
@@ -1285,7 +1288,7 @@ one that reads implausibly, leaves the last ratio."
 (defstruct (hook-entry (:constructor make-hook-entry (name target phases on-error timeout)))
   name target phases on-error timeout)
 
-(defstruct chain id ref phase entries current subject extra k)
+(defstruct chain id ref phase entries current token subject extra k)
 
 (defun hook-spec-label (spec)
   "SPEC, one of an agent's :HOOKS, as the name it shows under."
@@ -1380,7 +1383,8 @@ drops."
 (defun chain-next (service chain)
   (let ((entry (pop (chain-entries chain))))
     (cond ((null entry) (chain-done service chain :ok (chain-subject chain)))
-          (t (setf (chain-current chain) entry)
+          (t (setf (chain-current chain) entry
+                   (chain-token chain) (make-cancel-token))
              (send-call service (list :hook (chain-ref chain) (chain-id chain))
                         #'%hook-call entry (hook-request service chain))
              nil))))
@@ -1390,7 +1394,8 @@ drops."
   (funcall (chain-k chain) status value))
 
 (defun hook-request (service chain)
-  (append (list :phase (chain-phase chain) :agent (m:service-name service))
+  (append (list :phase (chain-phase chain) :agent (m:service-name service)
+                :cancel (chain-token chain))
           (and (slot-boundp service 'parent-name) (list :parent (agent-parent-name service)))
           (chain-extra chain)
           (list (getf +hook-subject-keys+ (chain-phase chain)) (chain-subject chain))))
@@ -1410,11 +1415,22 @@ timeout), as %TOOL-CALL answers for a tool."
   "Hand RESULT, a hook's answer, to the chain ID, unless the step it was
 started under has passed."
   (let ((chain (cdr (assoc id (%chains service)))))
+    (when chain (cancel (chain-token chain)))
     (cond ((null chain) nil)
           ((not (or (eq ref :detached) (eql ref (%step-ref service))))
            (setf (%chains service) (remove id (%chains service) :key #'car))
            nil)
           (t (chain-answer service chain result)))))
+
+(defun drop-chains (service &key detached)
+  "Forget the chains in flight and tell the hook each is waiting on to stop. A
+DETACHED chain, that of a call that outlives its turn, is dropped only when
+DETACHED is true."
+  (dolist (cell (%chains service))
+    (let ((chain (cdr cell)))
+      (when (or detached (not (eq (chain-ref chain) :detached)))
+        (cancel (chain-token chain))
+        (setf (%chains service) (remove cell (%chains service)))))))
 
 (defun chain-answer (service chain result)
   (let ((entry (chain-current chain))
@@ -1605,8 +1621,8 @@ timeout."
         (%pending-order service) nil
         (%queued service) nil
         (%call-tokens service) nil
-        (%call-log-ids service) nil
-        (%chains service) nil)
+        (%call-log-ids service) nil)
+  (drop-chains service :detached t)
   (record-input-done service (if (tool-error-p result)
                                  :error
                                  (getf (second result) :stop-reason)))
@@ -1734,6 +1750,7 @@ ones included, for a caller to resume."
   (close-turn-stream service)
   (cancel-turn service)
   (cancel-pending-calls service)
+  (drop-chains service :detached t)
   (record-outstanding service :interrupted)
   (close-detached service :interrupted)
   (record-input-done service :interrupted)
@@ -1744,7 +1761,6 @@ ones included, for a caller to resume."
         (%pending-order service) nil
         (%call-tokens service) nil
         (%call-log-ids service) nil
-        (%chains service) nil
         (%input-log-id service) nil
         (%steer-queue service) nil
         (%turn-in-flight service) nil
