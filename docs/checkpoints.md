@@ -2,7 +2,8 @@
 
 A generation is a snapshot of every named service's own declared state and of
 how each was mounted, written as one s-expression file. `checkpoint` takes
-one; `rollback` puts it back, mounting again a service that has gone.
+one; `rollback` puts it back, mounting again a service that has gone. A
+delegated [sub-agent](agent.md#sub-agents) runs once and is left out.
 
 ```lisp
 (miao:checkpoint *ctx* :label "before edit")

@@ -345,9 +345,23 @@ supervisor, via `m:delegate` — with this agent's model, allow-list,
 `:max-parallel-tools`, `:vault`, `:call-log` and [`:hooks`](hooks.md), runs it to completion, and returns its final answer as the tool
 result. The child's `:ref`, echoed on its events, is a cons of an internal
 step counter and the call id. A child does not itself get `:sub-agents`, so
-delegation does not nest by default, and it is never registered under a name, so a steer
-recorded against it carries no `:agent` (see [the vault](vault.md)). Its
-events go to its parent's sinks, with `:agent nil` and `:parent` set.
+delegation does not nest by default.
+
+A child of a named parent is registered as `<parent>/<n>`, counting from 1
+(`:boss/1`, `:boss/2`), so it is reached as a mounted agent is:
+
+```lisp
+(miao:sub-agents :boss)                              ; => (:BOSS/1 :BOSS/2)
+(miao:describe-agent :boss/1)                        ; :parent :boss, :task "..."
+(m:cast (m:lookup :boss/1) '(:steer :content "use the v2 API" :interrupt t))
+(m:cast (m:lookup :boss/1) '(:cancel))               ; the parent's tool result is {"error":"cancelled"}
+```
+
+The name is free for reuse once the child exits. A child of an unnamed parent
+(one `run-agent` starts) stays unnamed. Its events go to its parent's sinks
+with `:agent` set to its name and `:parent` set, and a steer recorded against
+it carries its name (see [the vault](vault.md)). `agents` lists
+live children too, and a [checkpoint](checkpoints.md) leaves them out.
 
 Reaching the parent's `handle` from a delegated child needs
 [`~takeiteasy/meow#59`](https://todo.sr.ht/~takeiteasy/meow/59): meow's

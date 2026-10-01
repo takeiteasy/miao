@@ -31,10 +31,10 @@ the agent's next turn; nothing marks it consumed until then. It is
 [claimed](#claims) while it waits.
 
 A delegated sub-agent (agent.lisp's `agent-task`) inherits its parent's
-`:vault`, the same way it inherits the model and allow-list. It has no
-registered name, though (checkpoint.lisp's `%context-entries` skips it the
-same way), so a steer recorded against it carries `:agent nil` -- restoring
-one needs an explicit `:agent` at the tool.
+`:vault`, the same way it inherits the model and allow-list. A child of a named
+parent is registered as `<parent>/<n>`, so a steer recorded against it carries
+that name as `:agent` and can be restored to it. A child of an unnamed parent
+has none, and restoring one needs an explicit `:agent` at the tool.
 
 `:steer` also now folds in even when it was queued before `:run`: starting
 a run no longer clears the queue, only the turn/tool-call state that
@@ -138,7 +138,7 @@ recording a second one for the same steer. It is not consumed at the point
 of the call; only once the target agent actually folds it in. Concurrent
 restores of one id deliver it once, across processes too. `:agent`, a string, picks the target: the entry's own
 recorded agent by default, or an override -- required when the entry was
-recorded with no agent, as a delegated sub-agent's always is. Restoring or
+recorded with no agent, as a child of an unnamed parent's is. Restoring or
 discarding an id that is unknown, already consumed or claimed is a
 `(:bad-request ...)`. `:discard` checks and consumes under the log's lock,
 so concurrent discards of one id consume it once.

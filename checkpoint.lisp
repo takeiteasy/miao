@@ -36,21 +36,27 @@ through its prototype, so the method reads nothing but the class.")
 
 ;;; --- walking the mount tree ---------------------------------------------
 
+(defun %delegated-p (child)
+  "Whether CHILD, an M:CHILDREN entry, is an agent M:DELEGATE mounted, which
+runs once and is never mounted again."
+  (and (eq :temporary (getf child :restart))
+       (subtypep (getf child :class) 'agent)))
+
 (defun %context-entries (context-process &key specs parent)
   "Every named child under CONTEXT-PROCESS, recursively and parent first, as a
-flat list of (:name :class :process). An unregistered child -- a delegated
-sub-agent, whose name is nil (agent.lisp) -- is skipped, as is its own subtree.
+flat list of (:name :class :process). A delegated sub-agent (agent.lisp), named
+or not, is skipped, as is its own subtree.
 SPECS adds each child's :SPEC, how to mount it again (%ENTRY-SPEC), PARENT
 being the name of the context CONTEXT-PROCESS is."
   (loop for child in (m:children context-process)
         for name = (getf child :name)
         for class = (getf child :class)
         for process = (getf child :process)
-        when name
+        when (and name (not (%delegated-p child)))
           collect (append (list :name name :class (string-downcase (symbol-name class))
                                 :process process)
                           (and specs (%entry-spec context-process name class parent)))
-        when (and name (subtypep class 'm:context) process)
+        when (and name (not (%delegated-p child)) (subtypep class 'm:context) process)
           append (%context-entries process :specs specs :parent name)))
 
 ;;; --- how a service was mounted ---------------------------------------------

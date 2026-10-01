@@ -131,6 +131,19 @@
       (miao:rollback *ckpt-context* path)
       (is (eql 42 (thing))))))
 
+(test a-delegated-sub-agent-is-left-out-of-a-checkpoint
+  (with-checkpoints (dir)
+    (m:with-process (runner)
+      (m:delegate *ckpt-context* 'miao:agent :name :boss/1 :parent-name :boss)
+      (is (find :boss/1 (m:children *ckpt-context*) :key (lambda (c) (getf c :name))))
+      (let* ((path (miao:checkpoint *ckpt-context* :dir dir))
+             (generation (find path (miao:generations :dir dir)
+                               :key (lambda (g) (getf g :path))
+                               :test (lambda (a b) (equal (namestring a) b)))))
+        (is-true generation)
+        (is (not (member :boss/1 (getf generation :services))))
+        (is (member :tool-fs (getf generation :services)))))))
+
 (test a-service-with-no-snapshot-method-restores-cleanly
   ;; tool-fs takes the default NIL SNAPSHOT/RESTORE; the round trip must not
   ;; error just because there is nothing to carry.

@@ -140,13 +140,23 @@ string or pathname: record there instead.")
    (local-subscribers :initform nil :accessor %local-subscribers)
    ;; Unbound for a root agent, so a child's events are told apart by the key
    ;; being present even when its parent is unnamed.
-   (parent-name :initarg :parent-name :reader agent-parent-name))
+   (parent-name :initarg :parent-name :reader agent-parent-name)
+   (task :initarg :task :initform nil :reader agent-task
+         :documentation "A delegated child's task, for a listing of a run's children.")
+   (child-seq :initform 0 :accessor %child-seq))
   (:default-initargs :name nil))
 
 (defmethod m:metadata ((service agent))
-  (list :kind :agent
-        :name (m:service-name service)
-        :summary "A turn cycle over a bound model and its tools"
+  (list* :kind :agent
+         :name (m:service-name service)
+         :summary "A turn cycle over a bound model and its tools"
+         (append
+          (and (slot-boundp service 'parent-name)
+               (list :parent (agent-parent-name service) :task (agent-task service)))
+          (agent-settings service))))
+
+(defun agent-settings (service)
+  (list
         :model (agent-model service)
         :tools (agent-tools-spec service)
         :sub-agents (agent-sub-agents service)
@@ -164,8 +174,15 @@ string or pathname: record there instead.")
         :log-raw (agent-log-raw service)))
 
 (defun agents (&key (registry m:*registry*))
-  "Every registered agent name, sorted."
+  "Every registered agent name, sorted, a delegated child's included."
   (%registered-of-kind :agent :registry registry))
+
+(defun sub-agents (parent &key (registry m:*registry*))
+  "The names of the live delegated children of the agent named PARENT, sorted."
+  (sort (loop for name in (agents :registry registry)
+              when (and parent (eq parent (getf (nth-value 1 (m:lookup name :registry registry)) :parent)))
+                collect name)
+        #'string< :key #'symbol-name))
 
 (defun %agent-process (name &key (registry m:*registry*))
   (multiple-value-bind (process props) (m:lookup name :registry registry)
@@ -801,11 +818,15 @@ its parent from. The child inherits this agent's model and allow-list but
 not :SUB-AGENTS, so delegation does not nest by default; which models and
 tool sets a child may be given is ~takeiteasy/miao#22's policy, not this
 ticket's. The child's ref pairs the step ref with the call id, for the same
-reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child."
+reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child.
+It is registered as <parent>/<n>, so a steer or cancel reaches it by name; a
+child of an unnamed parent is not."
   (let* ((id (getf call :id))
          (task (getf (getf call :arguments) :task))
          (context (m:service-process (m:service-context service)))
          (child (m:delegate context 'agent :ref (cons (%step-ref service) id)
+                            :name (%child-name service)
+                            :task task
                             :model (agent-model service)
                             :tools (%allow-list service)
                             :parent-name (m:service-name service)
@@ -832,11 +853,20 @@ reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child."
     (arm-detach service call)
     nil))
 
+(defun %child-name (service)
+  "The next free <parent>/<n> under SERVICE's name, or nil when it has none. A
+restarted parent counts from 1 again, so a name a live child still holds is
+skipped."
+  (a:when-let ((parent (m:service-name service)))
+    (loop for name = (a:make-keyword (format nil "~a/~d" parent (incf (%child-seq service))))
+          unless (m:lookup name :registry (m:service-registry service))
+            return name)))
+
 (defun sub-agent-done (service ref result)
   (call-result service (car ref) (cdr ref)
-               (if (tool-error-p result)
-                   result
-                   (ok :answer (content-text (getf (second result) :content))))))
+               (cond ((tool-error-p result) result)
+                     ((eq :cancelled (getf (second result) :stop-reason)) (fail :cancelled))
+                     (t (ok :answer (content-text (getf (second result) :content)))))))
 
 (defun sub-agent-down (service ref reason)
   (call-result service (car ref) (cdr ref) (fail (list :sub-agent-down reason))))

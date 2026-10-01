@@ -25,7 +25,7 @@
    ;; hook convention
    #:hooks #:describe-hook #:define-hook #:hook-function #:hook-approval #:answer-approval
    ;; agent convention
-   #:agent #:agents #:describe-agent #:run-agent
+   #:agent #:agents #:sub-agents #:agent-task #:describe-agent #:run-agent
    #:fork-conversation #:fork-agent
    #:run-start-event #:steer-event #:turn-event #:tool-call-event #:tool-result-event #:run-done-event
    ;; checkpoints

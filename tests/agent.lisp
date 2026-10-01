@@ -983,6 +983,75 @@ test's."
     (let ((metadata (miao:describe-agent :agent-under-test)))
       (is (eq :agent (getf metadata :kind)))
       (is (eq :provider-test-keyed (getf metadata :model))))))
+;;; --- addressable sub-agents (~takeiteasy/miao#121) ----------------------
+
+(defun named-parent-with-slow-child (&key vault)
+  "A mounted :BOSS that delegates one task whose child is slow, so it is live
+for a while. Returns the process once the child is registered."
+  (let ((parent (m:mount *ctx* 'miao:agent :name :boss :model :provider-test-keyed
+                                           :sub-agents t :vault vault)))
+    (m:cast parent (list :run :messages '((:role :user :content "go"))))
+    (is-true (eventually (lambda () (miao:sub-agents :boss))))
+    parent))
+
+(defun slow-child-answer (&optional (seconds 1))
+  (let ((n 0))
+    (lambda (&rest request)
+      (declare (ignore request))
+      (case (incf n)
+        (1 (tool-call-reply "c1" "agent-task" "{\"task\":\"help\"}"))
+        (2 (sleep seconds) (final-reply "sub-answer"))
+        (t (final-reply "done"))))))
+
+(test a-sub-agent-is-registered-under-its-parents-name
+  (with-agent ((slow-child-answer 0.5))
+    (named-parent-with-slow-child)
+    (is (equal '(:boss/1) (miao:sub-agents :boss)))
+    (let ((metadata (miao:describe-agent :boss/1)))
+      (is (eq :boss (getf metadata :parent)))
+      (is (equal "help" (getf metadata :task))))
+    (is-true (eventually (lambda () (null (miao:sub-agents :boss))) 5))))
+
+(test a-sub-agent-name-skips-one-a-live-agent-holds
+  (with-agent ((slow-child-answer 0.5))
+    (m:mount *ctx* 'miao:agent :name :boss/1 :model :provider-test-keyed)
+    (named-parent-with-slow-child)
+    (is (equal '(:boss/2) (miao:sub-agents :boss)))))
+
+(test a-sub-agent-of-an-unnamed-parent-stays-unnamed
+  (with-agent ((slow-child-answer 0.5))
+    (m:with-process (runner)
+      (let ((parent (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+                                :sub-agents t)))
+        (m:cast parent (list :run :messages '((:role :user :content "go"))))
+        (is-true (other-agent-child *ctx* parent))
+        (is (null (miao:agents)))))))
+
+(test cancelling-a-sub-agent-by-name-answers-its-parent-cancelled
+  (with-agent ((slow-child-answer 2))
+    (named-parent-with-slow-child)
+    (m:cast (m:lookup :boss/1) '(:cancel))
+    (is-true (eventually
+              (lambda ()
+                (find "{\"error\":\"cancelled\"}"
+                      (mapcar #'cdr (message-texts
+                                     (list :ok (m:call (m:lookup :boss) '(:snapshot)))))
+                      :test #'search))
+              5))))
+
+(test a-steer-reaches-a-sub-agent-by-name-and-is-recorded-against-it
+  (let ((path (format nil "/tmp/miao-121-~d.log" (random (expt 2 32)))))
+    (unwind-protect
+         (with-agent ((slow-child-answer 1))
+           (named-parent-with-slow-child :vault path)
+           (m:cast (m:lookup :boss/1) '(:steer :content "change of plan" :interrupt t))
+           (is-true (eventually (lambda ()
+                                  (find :boss/1 (miao:vault-entries path)
+                                        :key (lambda (e) (getf e :agent))))
+                                5)))
+      (ignore-errors (delete-file path))
+      (ignore-errors (delete-file (format nil "~a.lock" path))))))
+
 ;;; --- the tool cap ------------------------------------------------------
 
 (defun tool-message-texts (result)
