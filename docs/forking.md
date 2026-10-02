@@ -40,9 +40,29 @@ and how many assistant turns it holds:
 
 ## A running agent
 
-Forking reads a [snapshot](checkpoints.md), so it works mid-run. A tool call
-that has not answered is in the fork closed as `{"error":"interrupted"}`, and
-the original's call carries on.
+An agent without a [journal](journal.md) is forked from a
+[snapshot](checkpoints.md), so it works mid-run. A tool call that has not
+answered is in the fork closed as `{"error":"interrupted"}`, and the original's
+call carries on.
+
+## From a journal
+
+An agent with a `:journal` is forked from what it wrote there, at the end of its
+last run, or of the run `:run` names (a key from `journal-runs`):
+
+```lisp
+(miao:fork-agent *ctx* :assistant :turn 1 :as :retry
+                 :run (first (miao:journal-runs path :agent :assistant)))
+```
+
+`fork-journal` needs no mounted source, so a conversation outlives its agent:
+
+```lisp
+(miao:fork-journal *ctx* "~/.miao/journal.log" :agent :assistant :turn 1 :as :revived)
+```
+
+The fork is mounted with the settings the run began with[^settings] and journals
+to the same file.
 
 ## Limitations
 
@@ -56,3 +76,8 @@ the original's call carries on.
     `:journal` are shared with the original: a fork's events reach the same
     sink, and its steering and tool calls are recorded in the same logs. Mount options are read from
     the original's mount, so a credential-holding option is copied too.
+
+[^settings]: The journal records the model, tools, limits and named hooks.
+    `:system`, `:sink`, `:sampling`, `:vault`, the deadline and turn timeout are
+    not recorded, so the fork has the defaults; a run that used a function hook
+    cannot be forked this way.

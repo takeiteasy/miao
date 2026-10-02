@@ -163,3 +163,50 @@ answers REPLIES, and call BODY with it and a recorder on its events."
               (is-true children)
               (is (eq :j (getf (first children) :parent)))
               (is (= 1 (length (miao:journal-runs path)))))))))))
+
+;;; --- forking from a journal -----------------------------------------------------------
+
+(test an-agent-with-a-journal-is-forked-from-it
+  (with-journaled-agent (agent recorder path (echo-then-done))
+    (run-j agent recorder "go")
+    (is (eq :f (miao:fork-agent *ctx* :j :turn 1 :as :f)))
+    (is (equal (miao:fork-conversation (snapshot-messages agent) :turn 1)
+               (snapshot-messages (m:lookup :f))))
+    (is (equal (snapshot-messages agent) (miao:journal-conversation path :agent :j)))))
+
+(test a-fork-can-be-taken-from-a-past-run
+  (with-journaled-agent (agent recorder path (list (streamed-reply "one") (streamed-reply "two")))
+    (run-j agent recorder "a")
+    (run-j agent recorder "b")
+    (let ((runs (miao:journal-runs path :agent :j)))
+      (miao:fork-agent *ctx* :j :as :past :run (first runs))
+      (miao:fork-agent *ctx* :j :as :last)
+      (is (equal "a" (getf (first (snapshot-messages (m:lookup :past))) :content)))
+      (is (equal "b" (getf (first (snapshot-messages (m:lookup :last))) :content))))))
+
+(test a-run-needs-the-journal-to-fork-from
+  (with-agent ((final-reply "ok") 'tool-echo)
+    (m:mount *ctx* 'miao:agent :name :plain :model :provider-test-keyed)
+    (signals error (miao:fork-agent *ctx* :plain :as :f :run "any"))))
+
+(test a-journal-forks-an-agent-that-is-no-longer-mounted
+  (with-journaled-agent (agent recorder path (echo-then-done) :max-turns 5)
+    (run-j agent recorder "go")
+    (let ((messages (snapshot-messages agent)))
+      (m:unmount *ctx* :j)
+      (is (eq :revived (miao:fork-journal *ctx* path :agent :j :as :revived)))
+      (is (equal messages (snapshot-messages (m:lookup :revived))))
+      (let ((described (m:call (m:lookup :revived) '(:describe))))
+        (is (eq :provider-test-keyed (getf described :model)))
+        (is (eql 5 (getf described :max-turns)))
+        (is (equal path (getf described :journal))))
+      (is (eq :cut (miao:fork-journal *ctx* path :agent :j :as :cut :turn 1)))
+      (is (= 3 (length (snapshot-messages (m:lookup :cut))))))))
+
+(test fork-journal-refuses-what-it-cannot-fork
+  (with-journaled-agent (agent recorder path (echo-then-done))
+    (run-j agent recorder "go")
+    (signals error (miao:fork-journal *ctx* path :agent :nobody :as :f :run "no-such-run"))
+    (signals error (miao:fork-journal *ctx* path :agent :j :as :j))
+    (signals error (miao:fork-journal *ctx* path :as :f))
+    (signals error (miao:fork-journal *ctx* path :agent :j))))

@@ -1954,13 +1954,24 @@ MESSAGES is not changed."
     (let ((prefix (subseq messages 0 cut)))
       (values prefix (count :assistant prefix :key (lambda (m) (getf m :role)))))))
 
-(defun fork-agent (context name &key at turn as)
+(defun %fork-source-conversation (spec entry run)
+  "The conversation of ENTRY, a mounted agent mounted as SPEC: from the journal it
+writes when it has one, else a snapshot of it."
+  (let ((path (%journal-path (getf (getf spec :initargs) :journal))))
+    (cond ((and path (probe-file path))
+           (journal-conversation path :agent (getf entry :name) :run run))
+          (run (error ":run needs the agent's :journal, which is off or has no log yet"))
+          (t (values (getf (m:call (getf entry :process) '(:snapshot)) :messages))))))
+
+(defun fork-agent (context name &key at turn as run)
   "Mount AS, a new agent beside the one registered as NAME under CONTEXT (or
 under a context beneath it), holding the prefix of NAME's conversation that
 FORK-CONVERSATION's :AT and :TURN pick, and return AS. It is mounted as NAME
-was, its :SINK and :VAULT included. NAME is only read, so it may be mid-run and
-carries on; a call it has not answered is in the fork closed as interrupted.
-Send the fork (:RUN :CONTINUE T) to go on from the cut."
+was, its :SINK, :VAULT and :JOURNAL included. A NAME with a :JOURNAL is read
+from it, at the end of the run keyed RUN (see JOURNAL-RUNS) or its last; any
+other from a snapshot, so NAME may be mid-run and carries on, a call it has not
+answered closed in the fork as interrupted. Send the fork (:RUN :CONTINUE T) to
+go on from the cut."
   (unless as (error ":as, the fork's name, is required"))
   (let* ((entries (%context-entries context :specs t))
          (entry (find name entries :key (lambda (e) (getf e :name))))
@@ -1974,12 +1985,44 @@ Send the fork (:RUN :CONTINUE T) to go on from the cut."
       (unless (subtypep (getf spec :class) 'agent)
         (error "~s is not an agent." name))
       (multiple-value-bind (prefix turns)
-          (fork-conversation (getf (m:call (getf entry :process) '(:snapshot)) :messages)
-                             :at at :turn turn)
+          (fork-conversation (%fork-source-conversation spec entry run) :at at :turn turn)
         (let ((fork (apply #'m:mount parent (getf spec :class)
                            :name as
                            (append (getf spec :initargs)
                                    (loop for key in '(:restart :shutdown :backoff :backoff-max)
                                          when (getf spec key) append (list key (getf spec key)))))))
+          (m:call fork (list :restore (list :messages prefix :turns turns)))
+          as)))))
+
+(defparameter +journal-fork-settings+
+  '(:model :tools :sub-agents :max-turns :tool-grace :max-detached :max-tool-result
+    :max-context :chars-per-token :turn-retries :retry-backoff :log-raw)
+  "The agent settings a journal records that a fork is mounted with.")
+
+(defun fork-journal (context path &key agent run at turn as)
+  "Mount AS, a new agent on CONTEXT, holding the prefix of AGENT's conversation
+in the journal at PATH that FORK-CONVERSATION's :AT and :TURN pick, and return
+AS. It is mounted with the settings AGENT's run RUN (default its last) began with
+and journals to PATH. The source need not be mounted, or alive. A setting the
+journal does not record, such as :SYSTEM beyond the conversation, :SINK or
+:SAMPLING, is the default; named :HOOKS are kept, and a function hook cannot be."
+  (unless (and as agent) (error ":agent and :as are required"))
+  (when (find as (%context-entries context) :key (lambda (e) (getf e :name)))
+    (error "~s is already mounted." as))
+  (multiple-value-bind (messages) (journal-conversation path :agent agent :run run)
+    (let* ((settings (getf (find-if (lambda (e) (and (eq (getf e :kind) :settings)
+                                                     (or (null run) (equal run (getf e :run)))))
+                                    (journal-entries path :agent agent)
+                                    :from-end t)
+                           :settings))
+           (hooks (getf settings :hooks)))
+      (unless settings (error "No settings for ~s in ~a." agent path))
+      (when (member :function hooks)
+        (error "~s ran with a function hook, which cannot be mounted again." agent))
+      (multiple-value-bind (prefix turns) (fork-conversation messages :at at :turn turn)
+        (let ((fork (apply #'m:mount context 'agent :name as :journal path
+                           :hooks hooks
+                           (loop for key in +journal-fork-settings+
+                                 when (member key settings) append (list key (getf settings key))))))
           (m:call fork (list :restore (list :messages prefix :turns turns)))
           as)))))
