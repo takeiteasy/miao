@@ -174,14 +174,16 @@ is killed.")
 (defun invoke-step (name args cancel left-ms service)
   "INVOKE-TOOL for one step, held to LEFT-MS: a :TIMEOUT the tool declares is
 clamped to it, and the wait on the tool ends with it, cancelling the tool's
-own token. A tool still running +PLAN-KILL-GRACE+ seconds after that is
+own token. A tool that is no longer registered, such as one restarting, answers
+:UNAVAILABLE. A tool still running +PLAN-KILL-GRACE+ seconds after that is
 killed if SERVICE's context would restart it. That token is cancelled with
 CANCEL."
   (let ((token (make-cancel-token)))
     (when cancel
       (on-cancel cancel (lambda () (cancel token))))
     (multiple-value-bind (process message timeout)
-        (%tool-call name (list* :cancel token (clamp-timeout name args left-ms)))
+        (handler-case (%tool-call name (list* :cancel token (clamp-timeout name args left-ms)))
+          (error () (values nil (fail :unavailable))))
       (if (null process)
           message
           (multiple-value-bind (reply status)
