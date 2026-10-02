@@ -45,7 +45,7 @@ A `sink` is a function, a symbol naming one, or a meow process.
 | Subscribing twice | once is enough; the second changes nothing |
 | Idle agent | the sink is kept and hears the next run from its `:run-start` |
 | Running agent | the sink is first sent the run so far, from its `:run-start`, then hears everything live; the answer says which turn |
-| Replay | a sub-agent's events are replayed too, and adjacent `:text-delta`s of one agent arrive merged into one |
+| Replay | a sub-agent's events are replayed too, and adjacent `:text-delta`s of one agent, or `:tool-call-delta`s of one call, arrive merged into one |
 | Unsubscribing | events already queued for the sink are still delivered; nothing after |
 | Snapshots | subscribers are not part of a [checkpoint](checkpoints.md) |
 
@@ -116,8 +116,9 @@ events, each once and in order. The replay covers the current run only.[^replay]
 
 ## Limitations
 
-- A run's events are all held until it ends, for a mid-run subscriber's replay
-  ([#202](https://todo.sr.ht/~takeiteasy/miao/202)).
+- A run's events other than streamed text and tool-call fragments are all held
+  until it ends, for a mid-run subscriber's replay
+  ([#220](https://todo.sr.ht/~takeiteasy/miao/220)).
 - A subscriber that attaches to an idle agent is not sent the conversation it
   holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
 - The client has no command that targets a sub-agent. One is reached by name
@@ -136,7 +137,7 @@ A `sink` is a function, a symbol naming one, or a meow process.
 | Subscribing twice | once is enough; the second changes nothing |
 | Idle agent | the sink is kept and hears the next run from its `:run-start` |
 | Running agent | the sink is first sent the run so far, from its `:run-start`, then hears everything live; the answer says which turn |
-| Replay | a sub-agent's events are replayed too, and adjacent `:text-delta`s of one agent arrive merged into one |
+| Replay | a sub-agent's events are replayed too, and adjacent `:text-delta`s of one agent, or `:tool-call-delta`s of one call, arrive merged into one |
 | Unsubscribing | events already queued for the sink are still delivered; nothing after |
 | Snapshots | subscribers are not part of a [checkpoint](checkpoints.md) |
 
@@ -207,8 +208,9 @@ events, each once and in order. The replay covers the current run only.[^replay]
 
 ## Limitations
 
-- A run's events are all held until it ends, for a mid-run subscriber's replay
-  ([#202](https://todo.sr.ht/~takeiteasy/miao/202)).
+- A run's events other than streamed text and tool-call fragments are all held
+  until it ends, for a mid-run subscriber's replay
+  ([#220](https://todo.sr.ht/~takeiteasy/miao/220)).
 - A subscriber that attaches to an idle agent is not sent the conversation it
   holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
 - The live list of agents and sub-agents
@@ -220,8 +222,9 @@ events, each once and in order. The replay covers the current run only.[^replay]
     default `:transient` restart, with no conversation.
 
 [^replay]: The run's events are recorded from `:run-start` while it lasts. A
-    turn's text is kept as it was streamed, merged, so a replayed `:text-delta`
-    may hold several of the original ones.
+    turn's text and each tool call's argument fragments are kept merged, so a
+    replayed `:text-delta` or `:tool-call-delta` may hold several of the
+    original ones.
 
 [^subscribers]: The subscribers of a named agent are kept beside the mount,
     keyed by its registry and name, so a restarted instance finds them. An agent

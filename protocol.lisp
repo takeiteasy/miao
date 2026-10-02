@@ -320,23 +320,38 @@ across deltas."
   ;; Newest first, kept only when RECORDING.
   history)
 
-;; TODO: every event but adjacent text stays in the history until the run ends;
-;; merge tool-call deltas or cap it (#202).
+(defun delta-field (event)
+  "The key of EVENT's streamed fragment when EVENT is a delta, else nil."
+  (case (getf event :type)
+    (:text-delta :text)
+    (:tool-call-delta :arguments)))
+
+(defun continues-p (last event field)
+  "Whether EVENT continues the delta LAST, FIELD being the key of its fragment."
+  (and (eq (getf event :type) (getf last :type))
+       (equal (getf event :ref) (getf last :ref))
+       (eq (and (member :parent event) t) (and (member :parent last) t))
+       (stringp (getf event field))
+       (stringp (getf last field))
+       (or (eq field :text)
+           (and (getf event :id)
+                (equal (getf event :id) (getf last :id))
+                (equal (getf event :name) (getf last :name))))))
+
+;; TODO: a run with many separate events or tool calls still stays in the
+;; history until it ends; cap it with a truncation marker in the replay if
+;; that grows too large (#220).
 (defun record-event (fanout event)
-  "Add EVENT to FANOUT's history, merging streamed text into the last entry
-when it continues it. The merged entry is a new plist: the one it replaces may
-still be queued at a sink. Called holding the lock."
-  (let ((last (first (fanout-history fanout))))
-    (if (and last
-             (eq :text-delta (getf event :type))
-             (eq :text-delta (getf last :type))
-             (equal (getf event :ref) (getf last :ref))
-             (eq (and (member :parent event) t) (and (member :parent last) t))
-             (stringp (getf event :text))
-             (stringp (getf last :text)))
+  "Add EVENT to FANOUT's history, merging a streamed text or tool-call
+fragment into the last entry when it continues it. The merged entry is a new
+plist: the one it replaces may still be queued at a sink. Called holding the
+lock."
+  (let* ((last (first (fanout-history fanout)))
+         (field (delta-field event)))
+    (if (and last field (continues-p last event field))
         (setf (first (fanout-history fanout))
-              (list* :text (concatenate 'string (getf last :text) (getf event :text))
-                     (a:remove-from-plist last :text)))
+              (list* field (concatenate 'string (getf last field) (getf event field))
+                     (a:remove-from-plist last field)))
         (push event (fanout-history fanout)))))
 
 (defun fanout-add (fanout target &key replay)

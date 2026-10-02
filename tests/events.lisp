@@ -176,6 +176,40 @@ restarting it after its last run. Returns the answer."
       (is (equal "c" (getf (third events) :text)) "a child's text does not merge with the root's"))
     (is (equal "a" (getf first-delta :text)) "the event a live sink holds is untouched")))
 
+(defun replayed-types-and-arguments (&rest events)
+  "Record EVENTS in a fanout and return the (type arguments) of what a late sink is replayed."
+  (let ((fanout (miao::make-fanout nil t))
+        (seen '()))
+    (dolist (event events)
+      (miao::emit-event fanout event))
+    (miao::fanout-add fanout (lambda (event) (push event seen)) :replay t)
+    (mapcar (lambda (event) (list (getf event :type) (getf event :arguments)))
+            (reverse seen))))
+
+(defun call-delta (id arguments &rest more)
+  (list* :type :tool-call-delta :ref nil :id id :name :tool-x :arguments arguments more))
+
+(test a-fanout-merges-the-fragments-of-one-tool-call
+  (is (equal '((:tool-call-delta "{\"a\":1}"))
+             (replayed-types-and-arguments (call-delta "c1" "{\"a\"")
+                                           (call-delta "c1" ":1")
+                                           (call-delta "c1" "}")))))
+
+(test a-fanout-keeps-tool-calls-and-interrupted-fragments-apart
+  (is (equal '((:tool-call-delta "ab") (:tool-call-delta "c"))
+             (replayed-types-and-arguments (call-delta "c1" "a")
+                                           (call-delta "c1" "b")
+                                           (call-delta "c2" "c"))))
+  (is (equal '((:tool-call-delta "a") (:text-delta nil) (:tool-call-delta "b"))
+             (replayed-types-and-arguments (call-delta "c1" "a")
+                                           (list :type :text-delta :ref nil :text "t")
+                                           (call-delta "c1" "b")))))
+
+(test a-fanout-does-not-merge-a-childs-tool-call-fragments-into-the-roots
+  (is (equal '((:tool-call-delta "a") (:tool-call-delta "b"))
+             (replayed-types-and-arguments (call-delta "c1" "a")
+                                           (call-delta "c1" "b" :parent nil)))))
+
 (test a-fanout-that-is-not-recording-replays-nothing
   (let ((fanout (miao::make-fanout))
         (seen '()))
