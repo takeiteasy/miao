@@ -55,7 +55,9 @@ so it cannot end the read.
 
 A reader in the same process, `journal-entries` and what is built on it, drains
 the queue first, so it reads what it wrote. `journal-drain path` waits for the
-queue itself. An agent drains when it stops and the process when it exits.[^crash]
+queue itself, for at most `:timeout` seconds if given, and answers whether it
+emptied. An agent drains when it stops and the process when it exits, waiting at
+most `*journal-exit-timeout*` seconds in all and warning of any log left.[^crash]
 
 A log's thread exits after `*journal-writer-idle*` (5) seconds with nothing to
 write, and the next entry starts it again. `journal-retire-writers` drains and
@@ -65,6 +67,7 @@ after `:timeout` seconds (5).
 | Variable | Default | Sets |
 |---|---|---|
 | `*journal-writer-max-bytes*` | 8 MiB | characters a queue holds before the agent waits to add more[^bound] |
+| `*journal-exit-timeout*` | 5 | seconds the process's exit waits in all for the queues to drain |
 | `*journal-write-retries*` | `(0.1 0.5 2)` | seconds before each retry of a batch the disk refuses |
 
 The writer compacts, so `*journal-compact-size*` and `*journal-max-age*` apply

@@ -229,6 +229,28 @@ answers REPLIES, and call BODY with it and a recorder on its events."
                   (is (= 1 (length (miao::%read-log path)))))
         (sb-posix:chmod (namestring path) #o644)))))
 
+(test a-drain-with-a-timeout-says-whether-the-queue-emptied
+  (with-vault-path (path)
+    (append-ticks path 1)
+    (is-true (miao:journal-drain path :timeout 1))
+    (miao::with-log-lock (path)
+      (append-ticks path 1)
+      (is (null (miao:journal-drain path :timeout 0.1))))
+    (is-true (miao:journal-drain path :timeout 1))))
+
+(test the-exit-drain-stops-waiting-on-a-writer-that-is-stuck
+  (with-vault-path (path)
+    (append-ticks path 1)
+    (miao:journal-drain path)
+    (with-writer-setting (miao::*journal-exit-timeout* 0.2)
+      (miao::with-log-lock (path)
+        (append-ticks path 1)
+        (let ((start (get-internal-real-time)))
+          (miao::journal-drain-all)
+          (is (< (- (get-internal-real-time) start) internal-time-units-per-second)))))
+    (miao:journal-drain path)
+    (is (= 2 (length (miao::%read-log path))))))
+
 (test retiring-the-writers-stops-waiting-on-one-that-is-stuck
   (with-vault-path (path)
     (append-ticks path 1)

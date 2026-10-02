@@ -56,6 +56,9 @@ default, anything else is used as given."
 being written is counted apart, so twice this can be held. A line that is longer
 is queued once the queue is empty.")
 
+(defvar *journal-exit-timeout* 5
+  "Seconds the process's exit waits in all for the writers to drain.")
+
 (defvar *journal-write-retries* '(0.1 0.5 2)
   "Seconds to wait before each retry of a batch the disk refuses.")
 
@@ -160,21 +163,39 @@ the queue is full."
                               :name "miao-journal-writer")))
       (bt:condition-broadcast (jw-wake writer)))))
 
-(defun journal-drain (path)
-  "Wait until every entry queued for PATH is on disk."
+(defun journal-drain (path &key timeout)
+  "Wait until every entry queued for PATH is on disk, or for TIMEOUT seconds if
+given. True once it is, nil if the time ran out first."
   (let* ((key (ignore-errors (%log-key path)))
          (writer (and key (bt:with-lock-held (*log-locks-lock*)
                             (gethash key *journal-writers*)))))
-    (when (and writer (not (eq (bt:current-thread) (jw-thread writer))))
-      (bt:with-lock-held ((jw-lock writer))
-        (loop while (or (jw-queue writer) (jw-busy writer))
-              do (bt:condition-wait (jw-wake writer) (jw-lock writer)))))))
+    (flet ((pending ()
+             (bt:with-lock-held ((jw-lock writer))
+               (or (jw-queue writer) (jw-busy writer)))))
+      (cond ((or (null writer) (eq (bt:current-thread) (jw-thread writer))) t)
+            (timeout
+             (let ((deadline (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
+               (loop while (pending)
+                     do (when (> (get-internal-real-time) deadline)
+                          (return-from journal-drain nil))
+                        (sleep 0.01))
+               t))
+            (t (bt:with-lock-held ((jw-lock writer))
+                 (loop while (or (jw-queue writer) (jw-busy writer))
+                       do (bt:condition-wait (jw-wake writer) (jw-lock writer))))
+               t)))))
 
 (defun journal-drain-all ()
-  (dolist (path (bt:with-lock-held (*log-locks-lock*)
-                  (loop for writer being the hash-values of *journal-writers*
-                        collect (jw-path writer))))
-    (journal-drain path)))
+  "Drain every log, for the process's exit, waiting at most *JOURNAL-EXIT-TIMEOUT*
+seconds in all. A log still queued then is left, with a warning."
+  (let ((deadline (+ (get-internal-real-time)
+                     (* *journal-exit-timeout* internal-time-units-per-second))))
+    (dolist (path (bt:with-lock-held (*log-locks-lock*)
+                    (loop for writer being the hash-values of *journal-writers*
+                          collect (jw-path writer))))
+      (unless (journal-drain path :timeout (max 0 (/ (- deadline (get-internal-real-time))
+                                                     internal-time-units-per-second)))
+        (format *error-output* "~&miao: journal entries left queued for ~a~%" path)))))
 
 (defun journal-retire-writers (&key (timeout 5))
   "Drain every log's writer and stop its thread, for SAVE-IMAGE, which needs the
