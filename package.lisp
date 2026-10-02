@@ -40,7 +40,7 @@
    #:*vault-max-age* #:*vault-compact-size*
    ;; journal
    #:journal-entries #:journal-runs #:journal-conversation #:journal-compact #:journal-drain #:journal-retire-writers
-   #:*journal* #:*journal-max-age* #:*journal-compact-size* #:*journal-max-content*
+   #:*journal* #:*journal-max-age* #:*journal-compact-size* #:*journal-max-content* #:*journal-writer-idle*
    ;; call log
    #:call-entries #:input-entries #:journal-compact #:*journal* #:*journal-max-age*
    #:*journal-compact-size* #:*journal-max-content*

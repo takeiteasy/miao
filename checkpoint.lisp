@@ -263,18 +263,21 @@ worker applies to a submitted form."
   "Run BODY holding PATH's in-process lock and its cross-process flock."
   `(call-with-log-lock ,path (lambda () ,@body)))
 
-(defun %append-log-entries-locked (path entries)
-  "Append ENTRIES, one open for all, for a caller already holding PATH's WITH-LOG-LOCK."
+(defun %append-log-locked (path entry)
+  "%APPEND-LOG's write, for a caller already holding PATH's WITH-LOG-LOCK."
   (let ((*package* (find-package "KEYWORD")) (*print-case* :downcase))
     (with-open-file (stream path :direction :output :if-exists :append
                                   :if-does-not-exist :create)
-      (dolist (entry entries)
-        (prin1 entry stream)
-        (terpri stream)))))
+      (prin1 entry stream)
+      (terpri stream))))
 
-(defun %append-log-locked (path entry)
-  "%APPEND-LOG's write, for a caller already holding PATH's WITH-LOG-LOCK."
-  (%append-log-entries-locked path (list entry)))
+(defun %append-log-lines-locked (path lines)
+  "Append LINES, entries already printed, one open for all, for a caller already
+holding PATH's WITH-LOG-LOCK."
+  (with-open-file (stream path :direction :output :if-exists :append
+                                :if-does-not-exist :create)
+    (dolist (line lines)
+      (write-line line stream))))
 
 (defun %append-log (path entry)
   "Append ENTRY, a plist, to PATH as one printed form per line. *PRINT-CASE*

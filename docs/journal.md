@@ -61,6 +61,9 @@ A log's thread exits after `*journal-writer-idle*` (5) seconds with nothing to
 write, and the next entry starts it again. `journal-retire-writers` drains and
 stops every thread, as `save-image` does.
 
+The writer compacts, so `*journal-compact-size*` and `*journal-max-age*` apply
+as set globally, not as bound around an agent.
+
 ## The `:reply` event
 
 `(:type :reply :ref r :turn n :message m)` is emitted when a turn's reply joins

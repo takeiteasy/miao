@@ -101,13 +101,14 @@ the thread has waited *JOURNAL-WRITER-IDLE* seconds for them, means it is retire
   "Append BATCH, less its :CHECK markers, to WRITER's log, then wake whoever drains.
 A batch that cannot be written is dropped, with a warning."
   (unwind-protect
-       (let ((entries (remove :check batch))
+       (let ((lines (remove :check batch))
              (path (jw-path writer)))
-         (when entries
-           (handler-case (with-log-lock (path) (%append-log-entries-locked path entries))
+         (when lines
+           (handler-case (with-log-lock (path) (%append-log-lines-locked path lines))
+             ;; TODO: a batch the disk refuses is dropped; retry or spill it (#217)
              (error (e)
                (format *error-output* "~&miao: ~d journal entries dropped, ~a: ~a~%"
-                       (length entries) path e)))))
+                       (length lines) path e)))))
     (bt:with-lock-held ((jw-lock writer))
       (setf (jw-busy writer) nil)
       (bt:condition-broadcast (jw-wake writer)))))
@@ -118,12 +119,21 @@ A batch that cannot be written is dropped, with a warning."
         do (%journal-write-batch writer batch)
            (%maybe-compact (jw-path writer) *journal-compact-size* #'journal-compact)))
 
-(defun %journal-enqueue (path entry)
-  "Queue ENTRY, a plist or :CHECK, which only asks the writer to see whether the
-log wants compacting, for PATH's writer."
+(defun %journal-line (entry)
+  "ENTRY, a plist, printed as a log line, or nil when it would not read back. The
+agent prints it, so the writer never reads data the agent goes on to change."
+  (handler-case (let ((line (let ((*print-readably* t) (*print-pretty* nil))
+                              (%print-initargs entry))))
+                  (%read-initargs line)
+                  line)
+    (error () nil)))
+
+(defun %journal-enqueue (path line)
+  "Queue LINE, an entry printed by %JOURNAL-LINE, or :CHECK, which only asks the
+writer to see whether the log wants compacting, for PATH's writer."
   (let ((writer (%journal-writer path)))
     (bt:with-lock-held ((jw-lock writer))
-      (push entry (jw-queue writer))
+      (push line (jw-queue writer))
       (unless (jw-thread writer)
         (setf (jw-thread writer)
               (bt:make-thread (lambda () (%journal-writer-loop writer))
@@ -168,10 +178,9 @@ would not read back is written as an :UNWRITABLE one, so it cannot end the read.
   (let* ((id (%vault-id))
          (entry (list* :kind kind :id id :at (%now-iso8601) :agent agent :run run
                        (append (and parent (list :parent parent)) fields))))
-    (%journal-enqueue path (if (%readable-p entry)
-                               entry
-                               (list :kind :unwritable :id id :at (getf entry :at) :agent agent
-                                     :run run :for kind)))
+    (%journal-enqueue path (or (%journal-line entry)
+                               (%journal-line (list :kind :unwritable :id id :at (getf entry :at)
+                                                    :agent agent :run run :for kind))))
     id))
 
 (defun journal-text (value cap)
@@ -282,7 +291,7 @@ their log ids in order."
 
 (defun journal-call-running (path ids)
   (dolist (id ids)
-    (%journal-enqueue path (list :kind :running :id id :at (%now-iso8601)))))
+    (%journal-enqueue path (%journal-line (list :kind :running :id id :at (%now-iso8601))))))
 
 (defun journal-call-done (path results)
   "Append a :DONE entry for each of RESULTS, lists of a log id, an outcome
@@ -410,7 +419,8 @@ that no call resumes already, and that CHECK accepts. CHECK is given the call's
 entry, see CALL-ENTRIES, and answers a reason to refuse it, or nil and a value
 to pass on. The checks and the appends share one lock hold, so two resumes of
 one call cannot both succeed. Answers the resumed, (old id, new id, entry, CHECK's
-value), and the refused, (id reason), each in the order of IDS."
+value), and the refused, (id reason), each in the order of IDS. CHECK runs
+holding the lock, so it must not read PATH."
   (journal-drain path)
   (with-log-lock (path)
     (let ((calls (%fold-calls (%read-log path)))
@@ -457,34 +467,48 @@ value), and the refused, (id reason), each in the order of IDS."
     (values (remove-if (lambda (entry) (gethash (getf entry :id) expired)) log)
             dropped)))
 
+(defun %conversation-segments (log)
+  "A table of each conversation entry of LOG, a :MESSAGES, :MESSAGE or :EVENT, to
+its agent, parent and segment: the stretch of one agent's entries that share a
+run key. Restores outside a run, which have none, so stay apart from the runs
+they separate."
+  (let ((streams (make-hash-table :test 'equal))
+        (segments (make-hash-table :test 'eq)))
+    (dolist (entry log segments)
+      (when (member (getf entry :kind) '(:messages :message :event))
+        (let* ((stream (list (getf entry :agent) (getf entry :parent)))
+               (state (gethash stream streams (cons :none 0))))
+          (unless (equal (car state) (getf entry :run))
+            (setf state (cons (getf entry :run) (1+ (cdr state)))))
+          (setf (gethash stream streams) state
+                (gethash entry segments) (append stream (list (cdr state)))))))))
+
 (defun %with-old-conversations-folded (log cutoff max-age)
-  "LOG with each run's conversation entries and events older than CUTOFF replaced
-by one :MESSAGES entry, at the place of the last of them: a :RESET only when the
-run's old entries held one, so a run that continued another adds to it still."
-  (let ((old (make-hash-table :test 'eq))
+  "LOG with each segment's conversation entries and events older than CUTOFF
+replaced by one :MESSAGES entry, at the place of the last of them: a :RESET only
+when they held one, so a run that continued another adds to it still."
+  (let ((segments (%conversation-segments log))
+        (old (make-hash-table :test 'eq))
         (groups (make-hash-table :test 'equal))
         (result '()))
-    (flet ((group-key (entry)
-             (list (getf entry :agent) (getf entry :parent) (getf entry :run))))
-      (dolist (entry log)
-        (when (and (member (getf entry :kind) '(:messages :message :event))
-                   (%expired-p entry cutoff max-age))
-          (setf (gethash entry old) t)
-          (push entry (gethash (group-key entry) groups))))
-      (dolist (entry log (nreverse result))
-        (let ((group (gethash (group-key entry) groups)))
-          (cond ((not (gethash entry old)) (push entry result))
-                ((and (eq entry (first group))
-                      (find-if (lambda (e) (member (getf e :kind) '(:messages :message))) group))
-                 (push (list* :kind :messages :id (getf entry :id) :at (getf entry :at)
-                              :agent (getf entry :agent) :run (getf entry :run)
-                              (append (and (getf entry :parent) (list :parent (getf entry :parent)))
-                                      (list :reset (and (find-if (lambda (e) (and (eq (getf e :kind) :messages)
-                                                                                  (getf e :reset)))
-                                                                 group)
-                                                        t)
-                                            :messages (%fold-conversation (reverse group)))))
-                       result))))))))
+    (dolist (entry log)
+      (when (and (gethash entry segments) (%expired-p entry cutoff max-age))
+        (setf (gethash entry old) t)
+        (push entry (gethash (gethash entry segments) groups))))
+    (dolist (entry log (nreverse result))
+      (let ((group (gethash (gethash entry segments) groups)))
+        (cond ((not (gethash entry old)) (push entry result))
+              ((and (eq entry (first group))
+                    (find-if (lambda (e) (member (getf e :kind) '(:messages :message))) group))
+               (push (list* :kind :messages :id (getf entry :id) :at (getf entry :at)
+                            :agent (getf entry :agent) :run (getf entry :run)
+                            (append (and (getf entry :parent) (list :parent (getf entry :parent)))
+                                    (list :reset (and (find-if (lambda (e) (and (eq (getf e :kind) :messages)
+                                                                                (getf e :reset)))
+                                                               group)
+                                                      t)
+                                          :messages (%fold-conversation (reverse group)))))
+                     result)))))))
 
 (defun journal-compact (path &key (max-age *journal-max-age*))
   "Rewrite PATH without the calls finished more than MAX-AGE seconds ago (0 drops

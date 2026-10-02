@@ -202,6 +202,25 @@ answers REPLIES, and call BODY with it and a recorder on its events."
       (is (equal before (mapcar (lambda (run) (miao:journal-conversation path :agent :j :run run))
                                 runs))))))
 
+(test compacting-keeps-the-conversations-built-on-restores-outside-a-run
+  (with-vault-path (path)
+    (flet ((restore (&rest messages)
+             (miao::journal-append path nil :j nil :messages :reset t :messages messages))
+           (say (run role text)
+             (miao::journal-append path run :j nil :message :message (list :role role :content text))))
+      (restore '(:role :user :content "x1") '(:role :assistant :content "y1"))
+      (say "r1" :user "a")
+      (say "r1" :assistant "ra")
+      (restore '(:role :user :content "x2") '(:role :assistant :content "y2"))
+      (say "r2" :user "b")
+      (say "r2" :assistant "rb"))
+    (let ((before (mapcar (lambda (run) (miao:journal-conversation path :agent :j :run run))
+                          '("r1" "r2"))))
+      (is (equal '("x1" "y1" "a" "ra") (mapcar (lambda (m) (getf m :content)) (first before))))
+      (miao:journal-compact path :max-age 0)
+      (is (equal before (mapcar (lambda (run) (miao:journal-conversation path :agent :j :run run))
+                                '("r1" "r2")))))))
+
 (test compacting-leaves-a-log-with-a-malformed-entry-alone
   (with-vault-path (path)
     (miao::journal-append path "r" :j nil :message :message '(:role :user :content "a"))
