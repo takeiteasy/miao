@@ -46,12 +46,10 @@ and stderr."
   (miao/cli::session-ids *home*))
 
 (defun saved-conversation (id)
-  "The roles and first line of the conversation saved as ID."
-  (let* ((generation (first (miao:generations :dir (miao/cli::session-directory *home* id))))
-         (state (getf (find :chat (getf (miao::%read-generation (getf generation :path)) :services)
-                            :key (lambda (entry) (getf entry :name)))
-                      :state)))
-    (mapcar (lambda (message) (getf message :role)) (getf state :messages))))
+  "The roles of the conversation the journal of session ID holds."
+  (mapcar (lambda (message) (getf message :role))
+          (miao:journal-conversation (miao/cli::session-journal (miao/cli::session-directory *home* id))
+                                     :agent :chat)))
 
 (test chat-answers-each-line-and-continues-the-conversation
   (with-protocol
@@ -173,11 +171,19 @@ and stderr."
       (is (= 1 (length (saved-chats))))
       (is (equal '(:system :user :assistant :user :assistant)
                  (saved-conversation (first (saved-chats)))))
-      (is (= 1 (length (miao:generations :dir (miao/cli::session-directory *home* (first (saved-chats)))))))
+      (let ((directory (miao/cli::session-directory *home* (first (saved-chats)))))
+        (is-true (probe-file (miao/cli::session-journal directory)))
+        (is (equal "test-echo:any" (getf (miao/cli::read-session-options directory) :model))))
       (multiple-value-bind (code out) (cli "chats")
         (is (= 0 code))
         (is (search (first (saved-chats)) out))
         (is (search "hello there" out))))))
+
+(test a-chat-that-ran-nothing-leaves-no-session-folder
+  (with-protocol
+    (with-home ()
+      (chat-session '() "--model" "test-echo:any")
+      (is (null (uiop:subdirectories (miao/cli::chats-directory *home*)))))))
 
 (test chats-lists-nothing-for-an-empty-home-and-takes-no-arguments
   (with-protocol
@@ -229,6 +235,7 @@ and stderr."
       (let* ((registry (make-instance 'm:registry))
              (m:*registry* registry)
              (context (m:start-service (make-instance 'm:context :name :fresh) :registry registry)))
+        (m:mount context 'protocol-echo)
         (unwind-protect
              (let ((out (make-string-output-stream)) (err (make-string-output-stream)))
                (is (null (m:lookup :chat)))

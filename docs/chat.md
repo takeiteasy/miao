@@ -2,7 +2,7 @@
 
 `miao chat` is a line-by-line chat with one [agent](agent.md). It streams the
 answer, shows tool calls and their results, and takes a line typed mid-run as
-a steer, and [saves each run](#saving-and-resuming) so a chat can be resumed.
+a steer, and [journals each run](#saving-and-resuming) so a chat can be resumed.
 It is the secondary system `miao/cli`, drawn from
 [client state](client-state.md).
 
@@ -54,8 +54,10 @@ An existing install needs `miao install` again to get `chat` and `chats` into it
 
 ## Saving and resuming
 
-Each run that ends is saved as a [generation](checkpoints.md), one folder per
-chat under `$MIAO_HOME/chats/`[^save]. A chat that runs nothing saves nothing.
+A chat is a folder under `$MIAO_HOME/chats/` holding the agent's
+[journal](journal.md) and the options it was started with.[^save] The journal is
+written as the chat goes, so a run cut short by Ctrl-D or a crash is kept. A chat
+that runs nothing leaves no folder.
 
 ```sh
 miao chats
@@ -64,19 +66,19 @@ miao chat --resume                        # the newest chat
 miao chat --resume 20260925-191231-123456-482
 ```
 
-`miao chats` prints one line per chat, newest first: its id, when it was last
-saved and its first line. `--resume` prints the saved conversation as it was
-drawn, then a prompt; the next line carries on from it. The model, tools and
-system prompt are the saved ones, and a resumed chat keeps saving into its own
-folder.
+`miao chats` prints one line per chat, newest first: its id, when its journal was
+last written and its first line. `--resume` prints the saved conversation as it
+was drawn, then a prompt; the next line carries on from it. The model, tools,
+`--max-turns` and system prompt are the saved ones, and a resumed chat keeps
+journaling into its own folder.
 
 | Exit | When |
 |---|---|
 | 2 | nothing saved, no chat with that id, or `--resume` with an option that describes a new agent |
-| 1 | the saved agent, provider or a tool could not be mounted again, e.g. its class is gone |
+| 1 | the saved options or journal could not be read, or the provider or a tool could not be mounted again |
 
 A provider's API key is never saved: it comes from the same environment
-variable as in a new chat ([credentials](checkpoints.md#credentials)).
+variable as in a new chat.
 
 ## Limitations
 
@@ -90,6 +92,7 @@ variable as in a new chat ([credentials](checkpoints.md#credentials)).
 - Saved chats are never deleted or pruned
   ([#208](https://todo.sr.ht/~takeiteasy/miao/208)).
 
-[^save]: Saved by a thread of its own, so a slow disk never holds up the
-    prompt, and once more as the chat ends, so a run cut short by Ctrl-D is kept.
-    Only the newest generation of a chat is kept.
+[^save]: `journal.log` and `options.sexp`. The options are `--model`, `--tools`,
+    `--max-turns` and the system prompt's text, so a deleted `--system-file`
+    does not stop a resume. A resume adds the conversation to the journal again,
+    which [compaction](journal.md#compacting) folds.

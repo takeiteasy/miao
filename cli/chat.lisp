@@ -17,8 +17,8 @@
 ;;; of a call (1 announced, 2 answered), or :FINISHED. START is the first index that
 ;;; is not.
 
-(defstruct (renderer (:constructor make-renderer (out &optional on-done)))
-  out on-done (progress (make-hash-table)) (start 0) (last-status :idle))
+(defstruct (renderer (:constructor make-renderer (out)))
+  out (progress (make-hash-table)) (start 0) (last-status :idle))
 
 (defun abbreviate (object)
   (let ((text (let ((*print-pretty* nil)) (prin1-to-string object))))
@@ -76,25 +76,13 @@ has just ended."
           (fresh-line out)
           (unless (eq :stop (ui:state-reason state))
             (format out "[run ended: ~(~a~)]~%" (ui:state-reason state)))
-          (write-string *prompt* out)
-          (a:when-let ((on-done (renderer-on-done renderer)))
-            (funcall on-done)))
+          (write-string *prompt* out))
         (setf (renderer-last-status renderer) status))
       (finish-output out))))
 
-;;; --- saving ---------------------------------------------------------------
-
-;;; A run's end only asks the saver for a save: checkpointing from the thread
-;;; that delivers events would ask the agent to snapshot itself while it waits
-;;; on that thread.
+;;; --- the conversation -----------------------------------------------------
 
 (defparameter *label-length* 60)
-
-(defstruct (saver (:constructor make-saver (context directory err)))
-  context directory err
-  (lock (bt:make-lock :name "miao chat saver"))
-  (wake (bt:make-condition-variable))
-  pending stopping thread)
 
 (defun conversation (&optional (agent :chat))
   (getf (m:call (m:lookup agent) '(:snapshot)) :messages))
@@ -107,41 +95,6 @@ has just ended."
           (format nil "~a..." (subseq line 0 *label-length*))
           line))))
 
-(defun save-chat (saver)
-  (handler-case
-      (let ((label (first-user-line (conversation))))
-        (when label
-          (miao:checkpoint (saver-context saver) :dir (saver-directory saver) :keep 1 :label label)))
-    (error (e)
-      (format (saver-err saver) "~&miao: could not save the chat: ~a~%" e))))
-
-(defun request-save (saver)
-  (bt:with-lock-held ((saver-lock saver))
-    (setf (saver-pending saver) t)
-    (bt:condition-notify (saver-wake saver))))
-
-(defun saver-loop (saver)
-  (loop
-    (let ((stop nil))
-      (bt:with-lock-held ((saver-lock saver))
-        (loop until (or (saver-pending saver) (saver-stopping saver))
-              do (bt:condition-wait (saver-wake saver) (saver-lock saver)))
-        (setf stop (saver-stopping saver)
-              (saver-pending saver) nil))
-      (when stop (return))
-      (save-chat saver))))
-
-(defun start-saver (saver)
-  (setf (saver-thread saver) (bt:make-thread (lambda () (saver-loop saver)) :name "miao chat saver")))
-
-(defun stop-saver (saver)
-  "Let a save under way finish, then save once more so a run cut short is kept."
-  (bt:with-lock-held ((saver-lock saver))
-    (setf (saver-stopping saver) t)
-    (bt:condition-notify (saver-wake saver)))
-  (bt:join-thread (saver-thread saver))
-  (save-chat saver))
-
 ;;; --- sessions -------------------------------------------------------------
 
 (defun session-id ()
@@ -150,14 +103,36 @@ has just ended."
 (defun chats-directory (home)
   (merge-pathnames "chats/" home))
 
-(defun session-ids (home)
-  "The saved sessions' ids, newest first."
-  (sort (mapcar (lambda (directory) (car (last (pathname-directory directory))))
-                (uiop:subdirectories (chats-directory home)))
-        #'string>))
-
 (defun session-directory (home id)
   (merge-pathnames (format nil "~a/" id) (chats-directory home)))
+
+(defun session-journal (directory)
+  (merge-pathnames "journal.log" directory))
+
+(defun session-ids (home)
+  "The saved sessions' ids, newest first: those that ran something."
+  (sort (loop for directory in (uiop:subdirectories (chats-directory home))
+              when (probe-file (session-journal directory))
+                collect (car (last (pathname-directory directory))))
+        #'string>))
+
+;;; A session is a folder holding the chat's journal and the options its agent
+;;; was mounted with, which a resume mounts it with again.
+
+(defun write-session-options (directory options system)
+  (ensure-directories-exist directory)
+  (with-open-file (out (merge-pathnames "options.sexp" directory)
+                       :direction :output :if-exists :supersede)
+    (let ((*package* (find-package "KEYWORD")))
+      (prin1 (list :model (getf options :model) :tools (getf options :tools)
+                   :max-turns (getf options :max-turns) :system system)
+             out))))
+
+(defun read-session-options (directory)
+  (let ((path (merge-pathnames "options.sexp" directory)))
+    (with-open-file (in path)
+      (let ((*read-eval* nil) (*package* (find-package "KEYWORD")))
+        (read in)))))
 
 (defun resolve-session (home resume)
   "The id RESUME, :LATEST or an id, names, or a usage error."
@@ -170,11 +145,12 @@ has just ended."
 ;;; --- listing --------------------------------------------------------------
 
 (defun list-chats (home out)
-  "One line per saved chat, newest first: id, when it was last saved, its first line."
+  "One line per saved chat, newest first: id, when it was last written, its first line."
   (dolist (id (session-ids home))
-    (let ((generation (first (miao:generations :dir (session-directory home id)))))
-      (when generation
-        (format out "~a  ~a  ~a~%" id (getf generation :created) (getf generation :label))))))
+    (let* ((path (session-journal (session-directory home id)))
+           (label (first-user-line (miao:journal-conversation path :agent :chat))))
+      (when label
+        (format out "~a  ~a  ~a~%" id (miao::%now-iso8601 (file-write-date path)) label)))))
 
 ;;; --- replaying ------------------------------------------------------------
 
@@ -217,35 +193,36 @@ agent answered."
   (if (functionp in) (funcall in) (read-line in nil)))
 
 (defun mount-chat (options context home)
-  "Mount the agent for a new chat, or, for --resume, bring the saved one back.
-Answers the session's id."
+  "Mount the agent for a new chat, or, for --resume, bring the saved one back from
+its journal. Answers the session's directory."
   (if (getf options :resume)
-      (let* ((id (resolve-session home (getf options :resume)))
-             (generation (first (miao:generations :dir (session-directory home id))))
-             (outcome (and generation (miao:rollback context (getf generation :path)))))
-        (unless (and outcome (member :chat (getf (second outcome) :restored)))
-          (error "could not resume ~a: ~a" id
-                 (or (second (assoc :chat (getf (second outcome) :unremounted))) "no saved conversation")))
-        id)
+      (let* ((directory (session-directory home (resolve-session home (getf options :resume))))
+             (saved (read-session-options directory))
+             (path (session-journal directory)))
+        (multiple-value-bind (provider-name tools) (prepare saved context)
+          (apply #'m:mount context 'miao:agent :name :chat :model provider-name
+                 :system (getf saved :system) :journal path (agent-options saved tools)))
+        (multiple-value-bind (messages turns) (miao:journal-conversation path :agent :chat)
+          (m:call (m:lookup :chat) (list :restore (list :messages messages :turns turns))))
+        directory)
       (multiple-value-bind (provider-name tools system) (prepare options context)
-        (apply #'m:mount context 'miao:agent :name :chat :model provider-name :system system
-               (agent-options options tools))
-        (session-id))))
+        (let ((directory (session-directory home (session-id))))
+          (write-session-options directory options system)
+          (apply #'m:mount context 'miao:agent :name :chat :model provider-name :system system
+                 :journal (session-journal directory) (agent-options options tools))
+          directory))))
 
 (defun chat (options context in out err home)
   "Chat with one agent until IN, a stream or a function answering a line or
 nil, ends, and return an exit code. Ctrl-C cancels a run, or leaves the chat
-when none is under way. Each run is saved under HOME, and options :resume
+when none is under way. Each run is journaled under HOME, and options :resume
 brings a saved chat back."
-  (let ((saver nil))
+  (let ((directory nil))
     (unwind-protect
-         (let* ((id (mount-chat options context home))
-                (renderer (make-renderer out))
+         (let* ((renderer (make-renderer out))
                 (client nil))
-           (setf saver (make-saver context (session-directory home id) err))
-           (setf (renderer-on-done renderer) (lambda () (request-save saver)))
+           (setf directory (mount-chat options context home))
            (replay (conversation) out)
-           (start-saver saver)
            (setf client (ui:attach :chat :on-change (lambda (state) (render renderer state))))
            (bt:with-lock-held (*output-lock*)
              (write-string *prompt* out)
@@ -263,7 +240,7 @@ brings a saved chat back."
                    (cond ((null line) (return-from session 0))
                          ((string= "" (string-trim '(#\Space #\Tab) line)))
                          (t (submit client line))))))))
-      (when (and saver (saver-thread saver))
-        (stop-saver saver))
       (when (m:lookup :chat)
-        (m:unmount context :chat)))))
+        (m:unmount context :chat))
+      (when (and directory (not (probe-file (session-journal directory))))
+        (uiop:delete-directory-tree directory :validate t :if-does-not-exist :ignore)))))
