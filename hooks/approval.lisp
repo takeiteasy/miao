@@ -8,7 +8,8 @@
 ;;; The hook asks through its request's :EMIT, as an :APPROVAL-REQUEST event,
 ;;; and is answered with (:ANSWER approval decision), which ANSWER-APPROVAL
 ;;; sends. The approval ends in an :APPROVAL-DONE event: answered, or withdrawn
-;;; when the agent stopped waiting (the hook's cancel token).
+;;; when the agent stopped waiting (the hook's cancel token). What :ALWAYS
+;;; approved is dropped on the run's :RUN-DONE notice.
 
 (m:defservice hook-approval ()
   ((tools :initarg :tools :initform nil :reader approval-tools)
@@ -16,10 +17,9 @@
    (seq :initform 0 :accessor %approval-seq)
    ;; (approval . plist) of each question still open, newest first.
    (pending :initform nil :accessor %approvals)
-   ;; run id -> the tool names approved for the rest of that run.
-   ;; TODO: nothing tells the hook a run ended, so an entry stays for the hook's
-   ;; life; prune on a run-end notice, or key a weak table by the run handle (#212).
-   (always :initform (make-hash-table) :reader %approved-always))
+   ;; run handle -> the tool names approved for the rest of that run. Weak, so a
+   ;; run that never sends its :RUN-DONE still lets go of its entry.
+   (always :initform (make-hash-table :test 'eq :weakness :key) :reader %approved-always))
   (:name :hook-approval))
 
 (defmethod m:metadata ((service hook-approval))
@@ -44,7 +44,8 @@ none given, a tool of :OPERATOR trust."
     (let* ((id (incf (%approval-seq service)))
            (self (m:self))
            (approval (list :approval id :cell cell :emit (getf request :emit)
-                           :run (getf request :run) :id (getf request :id)
+                           :run (getf request :run) :handle (getf request :handle)
+                           :id (getf request :id)
                            :name (getf request :name) :arguments (getf request :arguments)
                            :agent (getf request :agent))))
       (push (cons id approval) (%approvals service))
@@ -60,7 +61,7 @@ before the hook answers, so the event is ahead of the call's own."
   (let ((approval (cdr (assoc id (%approvals service)))))
     (setf (%approvals service) (remove id (%approvals service) :key #'car))
     (when (eq decision :always)
-      (pushnew (getf approval :name) (gethash (getf approval :run) (%approved-always service))))
+      (pushnew (getf approval :name) (gethash (getf approval :handle) (%approved-always service))))
     (approval-emit approval :approval-done :answer decision)
     (m:reply (getf approval :cell)
              (if (eq decision :deny) '(:deny "denied by the operator") :pass))))
@@ -77,7 +78,7 @@ before the hook answers, so the event is ahead of the call's own."
      (let* ((request (rest message))
             (name (getf request :name)))
        (if (and (approval-gated-p service name)
-                (not (member name (gethash (getf request :run) (%approved-always service)))))
+                (not (member name (gethash (getf request :handle) (%approved-always service)))))
            (ask-approval service request)
            :pass)))
     (:answer
@@ -90,8 +91,10 @@ before the hook answers, so the event is ahead of the call's own."
                 :ok))))
     (:withdraw (withdraw-approval service (second message))
      nil)
+    (:run-done (remhash (getf (rest message) :handle) (%approved-always service))
+     nil)
     (:pending (loop for (nil . approval) in (reverse (%approvals service))
-                    collect (a:remove-from-plist approval :cell :emit)))
+                    collect (a:remove-from-plist approval :cell :emit :handle)))
     (:snapshot (snapshot service))
     (:restore (restore service (second message)))
     (t (bad-request "unknown message ~s" (first message)))))

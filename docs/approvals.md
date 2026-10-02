@@ -31,7 +31,7 @@ a `bad-request` error when no such approval is waiting.
 |---|---|
 | `:allow` | the call runs |
 | `:deny` | the model gets `(:error (:denied :hook-approval "denied by the operator"))` |
-| `:always` | as `:allow`, and later calls to that tool in the same run, its sub-agents' included, run unasked |
+| `:always` | as `:allow`, and later calls to that tool in the same run, its sub-agents' included, run unasked. It lasts until the run ends |
 
 Approvals are answered in any order. `(m:call (m:lookup :hook-approval) '(:pending))`
 lists the open ones: `:approval`, `:id`, `:name`, `:arguments`, `:agent`, `:run`.
@@ -55,8 +55,6 @@ The `:approval-done` of an answer comes before the call's `:tool-call`.
 
 ## Limitations
 
-- The `:always` table is kept for the hook's life
-  ([#212](https://todo.sr.ht/~takeiteasy/miao/212)).
 - No front end asks yet: the [chat](chat.md) does not prompt
   ([#213](https://todo.sr.ht/~takeiteasy/miao/213)) and
   [client state](client-state.md) does not fold approvals

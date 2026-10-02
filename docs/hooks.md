@@ -30,7 +30,7 @@ happens.
 | `:after-tool-result` | after a call answers | `:id`, `:name`, `:result` | rewrite the result |
 
 Every request also carries `:phase`, `:agent`, `:cancel` (the
-[cancel token](#not-blocking-the-agent)), `:run`, `:emit` (see
+[cancel token](#not-blocking-the-agent)), `:run`, `:handle`, `:emit` (see
 [emitting events](#emitting-events)) and, on a sub-agent, `:parent`. A
 `:before-tool-call` request for a [resumed call](#resumed-calls) also has
 `:resumed t`.
@@ -127,7 +127,8 @@ A hook that only rewrites has nothing to add there. Declare it `:on-resume
 ## Emitting events
 
 `:run` is an id for the root run, unique in the image and the same for its
-sub-agents' hooks. `:emit` is a function of one plist event, which joins the
+sub-agents' hooks. `:handle` is the run's own object, the same everywhere
+`:run` is. `:emit` is a function of one plist event, which joins the
 run's events tagged with `:hook`, `:agent`, `:ref` and `:parent`. It needs a
 keyword `:type` the loop does not use itself, and drops anything after the
 root's `:run-done`. [Operator approval](approvals.md) is built on both:
@@ -135,6 +136,26 @@ root's `:run-done`. [Operator approval](approvals.md) is built on both:
 ```lisp
 (funcall (getf request :emit) '(:type :progress :note "scanning"))
 ```
+
+## Keeping state for a run
+
+A named hook is told when a root run ends, whatever its phases: a cast
+`(:run-done . plist)` with `:run`, `:handle`, `:agent` and `:reason` (the stop
+reason, or the error the run ended in), sent after the agent has stopped
+waiting on its hooks and before the root's `:run-done` event. One notice covers
+the root and its sub-agents. A function hook is not sent it.
+
+`define-hook` takes the handler as a second clause; its value is ignored and a
+condition it signals is dropped:
+
+```lisp
+(miao:define-hook :hook-count (:phases (:before-tool-call))
+  (:intercept (phase request) (incf (gethash (getf request :handle) *calls* 0)) :pass)
+  (:run-done (request) (remhash (getf request :handle) *calls*)))
+```
+
+Keying a table on `:handle` weakly[^weak] lets go of a run that never sends the
+notice, such as an agent that crashed.
 
 ## What is recorded
 
@@ -186,3 +207,5 @@ running the hook.
     [`:context-trimmed`](agent.md#events) therefore point into the hooked
     view, and match the conversation only when the hooks rewrite messages in
     place.
+
+[^weak]: `(make-hash-table :test 'eq :weakness :key)`. [Operator approval](approvals.md) keeps its `:always` entries this way and drops them on the notice.

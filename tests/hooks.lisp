@@ -51,8 +51,21 @@
 (miao:define-hook :hook-blocker (:phases (:before-tool-call) :timeout 5000)
   (:intercept (phase request) (sleep 3) :pass))
 
+(defvar *hook-ended* nil "The :RUN-DONE notices HOOK-ENDS got, newest first.")
+
+(miao:define-hook :hook-ends (:phases (:before-tool-call))
+  (:intercept (phase request)
+    (push (list :intercept (getf request :handle) (getf request :run)) *hook-seen*)
+    :pass)
+  (:run-done (request)
+    (push request *hook-ended*)))
+
+(miao:define-hook :hook-ends-boom ()
+  (:intercept (phase request) :pass)
+  (:run-done (request) (error "cleanup broke")))
+
 (defparameter +test-hooks+
-  '(hook-deny-echo hook-deny-all hook-upcase hook-redact hook-inject hook-record hook-boom
+  '(hook-ends hook-ends-boom hook-deny-echo hook-deny-all hook-upcase hook-redact hook-inject hook-record hook-boom
     hook-boom-turn hook-boom-open hook-garbage hook-slow hook-blocker hook-wait
     hook-wait-short hook-check-token))
 
@@ -572,3 +585,52 @@ once its first tool call is waiting on a hook."
   (is (eq :failed (miao::interpret-hook-answer :after-tool-result '(:deny "x"))))
   (is (eq :failed (miao::interpret-hook-answer :before-turn nil)))
   (is (eq :failed (miao::interpret-hook-answer :after-tool-result '(:rewrite 5)))))
+
+;;; --- told a run ended (~takeiteasy/miao#212) ---------------------------------------------------------
+
+(defun sub-agent-answer ()
+  (let ((n 0))
+    (lambda (&rest request)
+      (declare (ignore request))
+      (case (incf n)
+        (1 (tool-call-reply "c1" "agent-task" "{\"task\":\"help\"}"))
+        (2 (tool-call-reply "c2" "tool-echo" "{\"text\":\"hi\"}"))
+        (t (final-reply "done"))))))
+
+(test a-hook-is-told-once-when-the-root-run-ends-sub-agents-included
+  (setf *hook-seen* nil *hook-ended* nil)
+  (call-with-agent (sub-agent-answer) (list* 'tool-echo +test-hooks+)
+                   (lambda (*ctx*)
+                     (agent-turn :messages '((:role :user :content "go"))
+                                 :tools '(:tool-echo) :sub-agents t :hooks '(:hook-ends))
+                     (is-true (eventually (lambda () *hook-ended*) 3))
+                     (sleep 0.1)
+                     (is (= 1 (length *hook-ended*)))
+                     (let ((notice (first *hook-ended*))
+                           (seen (remove :intercept *hook-seen* :key #'first :test-not #'eq)))
+                       (is (eq :stop (getf notice :reason)))
+                       (is (integerp (getf notice :run)))
+                       (is-true seen)
+                       (is-true (every (lambda (call) (eq (getf notice :handle) (second call))) seen))
+                       (is-true (every (lambda (call) (eql (getf notice :run) (third call))) seen))))))
+
+(test a-hook-with-no-run-done-clause-and-one-that-fails-in-it-leave-the-run-alone
+  (setf *hook-ended* nil)
+  (let ((result (hooked-run '(:hook-record :hook-ends-boom :hook-ends))))
+    (is (eq :stop (getf (second result) :stop-reason)))
+    (is-true (eventually (lambda () *hook-ended*) 3))))
+
+(test a-function-hook-is-not-sent-the-notice
+  (is (eq :stop (getf (second (hooked-run (list (lambda (phase request)
+                                                  (declare (ignore phase request))
+                                                  :pass))))
+                      :stop-reason))))
+
+(test define-hook-refuses-a-clause-after-intercept-that-is-not-run-done
+  (signals error (macroexpand-1 '(miao:define-hook :hook-bad ()
+                                  (:intercept (phase request) :pass)
+                                  (:other (request) nil))))
+  (signals error (macroexpand-1 '(miao:define-hook :hook-bad ()
+                                  (:intercept (phase request) :pass)
+                                  (:run-done (request) nil)
+                                  (:run-done (request) nil)))))

@@ -129,6 +129,28 @@ and a recorder on its events."
     (is-true (eventually (lambda () (= 2 (length (events-of recorder :run-done)))) 5))
     (is (= 2 (length (events-of recorder :approval-request))))))
 
+(defun approved-always-count ()
+  (hash-table-count (miao::%approved-always (m:service-of (m:lookup :hook-approval)))))
+
+(test an-always-entry-is-dropped-when-its-run-ends
+  (with-approval-agent (agent recorder (list (op-call "c1") (done-reply)))
+    (run-gated agent)
+    (wait-for-pending 1)
+    (answer :always)
+    (wait-for-run-done recorder)
+    (is-true (eventually (lambda () (zerop (approved-always-count))) 3))))
+
+(declaim (notinline add-orphan-approval))
+(defun add-orphan-approval (table)
+  (setf (gethash (miao::make-run-handle nil) table) '(:tool-op)))
+
+(test an-always-entry-does-not-keep-its-run-handle-alive
+  (with-approval-agent (agent recorder nil)
+    (let ((table (miao::%approved-always (m:service-of (m:lookup :hook-approval)))))
+      (add-orphan-approval table)
+      (is (= 1 (hash-table-count table)))
+      (is-true (eventually (lambda () (sb-ext:gc :full t) (zerop (hash-table-count table))) 3)))))
+
 (test an-explicit-tools-option-replaces-the-trust-rule
   (with-approval-agent (agent recorder (list (echo-call "c1") (op-call "c2") (done-reply))
                         :hook-options '(:tools (:tool-echo)))

@@ -210,6 +210,7 @@ under that context, would be gone for good."
 (defun clamp-timeout (name args left-ms)
   "ARGS with :TIMEOUT held to LEFT-MS, when NAME declares one and ARGS' is
 absent or a number. Anything else is left for coercion to refuse."
+  ;; TODO: TOOL-METADATA here looks in the global registry, not the plan's (#215).
   (let ((own (getf args :timeout +default-tool-timeout+)))
     (if (and (find :timeout (tool-schema (tool-metadata name)) :key #'param-name)
              (realp own))

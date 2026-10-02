@@ -1437,6 +1437,7 @@ drops."
   (append (list :phase (chain-phase chain) :agent (m:service-name service)
                 :cancel (chain-token chain)
                 :run (run-handle-id (%run-handle service))
+                :handle (%run-handle service)
                 :emit (hook-emitter service (hook-entry-name (chain-current chain))))
           (and (slot-boundp service 'parent-name) (list :parent (agent-parent-name service)))
           (chain-extra chain)
@@ -1537,6 +1538,20 @@ after that is dropped."
   (a:when-let ((handle (and (not (slot-boundp service 'parent-name)) (%run-handle service))))
     (bt:with-lock-held ((run-handle-lock handle))
       (setf (run-handle-live handle) nil))))
+
+(defun notify-hooks-run-done (service reason)
+  "Tell each named hook of the root run that it ended, as a cast: a hook keeps
+state for a run, and drops it here. A sub-agent's hooks are its parent's and
+share its handle, so the root's notice covers the tree."
+  (a:when-let ((handle (and (not (slot-boundp service 'parent-name)) (%run-handle service))))
+    (dolist (target (remove-duplicates
+                     (loop for entry in (%hooks service)
+                           for target = (hook-entry-target entry)
+                           when (and (keywordp target) (not (functionp target)))
+                             collect target)))
+      (a:when-let ((process (m:lookup target :registry (m:service-registry service))))
+        (m:cast process (list :run-done :run (run-handle-id handle) :handle handle
+                                        :agent (m:service-name service) :reason reason))))))
 
 (defun hook-emitter (service hook)
   "The :EMIT function of HOOK's calls from SERVICE: it delivers a plist event,
@@ -1714,12 +1729,12 @@ timeout."
   ;; Invalidates any turn already in flight, so its late TURN-REPLY is
   ;; dropped rather than reopening a run that has already finished.
   (incf (%step-ref service))
-  (close-run-handle service)
-  (emit service
-              (run-done-event (m:agent-ref service)
-                              (if (tool-error-p result)
-                                  (tool-error result)
-                                  (getf (second result) :stop-reason))))
+  (let ((reason (if (tool-error-p result)
+                    (tool-error result)
+                    (getf (second result) :stop-reason))))
+    (notify-hooks-run-done service reason)
+    (close-run-handle service)
+    (emit service (run-done-event (m:agent-ref service) reason)))
   (retire-emitters service)
   (if (m:agent-parent service)
       (values :done result)
@@ -1837,6 +1852,8 @@ ones included, for a caller to resume."
   (cancel-turn service)
   (cancel-pending-calls service)
   (drop-chains service :detached t)
+  (when (%running-p service)
+    (notify-hooks-run-done service :restored))
   (record-outstanding service :interrupted)
   (close-detached service :interrupted)
   (record-input-done service :interrupted)

@@ -6,12 +6,16 @@
 ;;; :HOOKS names, in order, off its own process. See docs/hooks.md.
 ;;;
 ;;; An :INTERCEPT's plist holds :PHASE, :AGENT, :PARENT (a sub-agent's only),
+;;; :RUN and :HANDLE (the root run's id and handle, shared by its sub-agents),
 ;;; :CANCEL (a cancel token, cancelled once the agent stops waiting) and the
 ;;; phase's subject, which a hook may rewrite:
 ;;;   :BEFORE-TURN       :MESSAGES the conversation
 ;;;   :BEFORE-TOOL-CALL  :ID, :NAME and :ARGUMENTS
 ;;;   :AFTER-TOOL-RESULT :ID, :NAME and :RESULT
 ;;; and answers :PASS, (:REWRITE value) or, before a tool call only, (:DENY reason).
+;;;
+;;; A named hook is also cast (:RUN-DONE . plist) when a root run ends, with
+;;; :RUN, :HANDLE, :AGENT and :REASON, so it can drop what it kept for the run.
 
 (defparameter +hook-phases+ '(:before-turn :before-tool-call :after-tool-result))
 
@@ -60,18 +64,28 @@ without it. ON-RESUME is :RUN, or :SKIP to leave the hook out of the chain of a
 resumed call, which only decides: a rewrite is dropped. TIMEOUT is the milliseconds the agent waits on one answer; the
 run's :DEADLINE still bounds it. SLOTS is passed through to DEFSERVICE.
 
-INTERCEPT is exactly one (:INTERCEPT (phase request) . body) clause. PHASE is
-the phase and REQUEST the whole :INTERCEPT plist; SERVICE is bound
-anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
-(:DENY reason). A condition it signals is answered as an error."
+INTERCEPT is one (:INTERCEPT (phase request) . body) clause, and may be followed
+by a (:RUN-DONE (request) . body) clause, run when a root run ends with REQUEST
+the notice's plist (:RUN, :HANDLE, :AGENT, :REASON); its value is ignored and a
+condition it signals is dropped. In the first, PHASE is the phase and REQUEST the
+whole :INTERCEPT plist; SERVICE is bound anaphorically, as in DEFINE-TOOL. The
+body answers :PASS, (:REWRITE value) or (:DENY reason). A condition it signals is
+answered as an error."
   (let ((phases (or phases +hook-phases+)))
     (let ((problem (%check-hook-options phases on-error on-resume)))
       (when problem (error "~a" problem)))
     (destructuring-bind (head (phase-var request-var) &body body) (first intercept)
       (unless (eq head :intercept)
-        (error "DEFINE-HOOK's body must be one (:intercept (phase request) . body) clause, got ~s."
+        (error "DEFINE-HOOK's body must start with an (:intercept (phase request) . body) clause, got ~s."
                head))
-      (let ((class (%tool-class-name name)))
+      (let ((class (%tool-class-name name))
+            (run-done (second intercept)))
+        (when (or (cddr intercept)
+                  (and run-done (not (and (eq (first run-done) :run-done)
+                                          (consp (second run-done))
+                                          (null (cdr (second run-done)))))))
+          (error "DEFINE-HOOK's body is an :intercept clause, then at most one (:run-done (request) . body) clause, got ~s."
+                 (rest intercept)))
         `(progn
            (m:defservice ,class () ,slots
              (:name ,name))
@@ -87,6 +101,12 @@ anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
                                   (,phase-var (getf ,request-var :phase)))
                              (declare (ignorable ,phase-var ,request-var))
                              (%hook-answer ,request-var (lambda () ,@body))))
+               (:run-done ,(if run-done
+                               `(let ((,(first (second run-done)) (rest message)))
+                                  (declare (ignorable ,(first (second run-done))))
+                                  (ignore-errors ,@(cddr run-done))
+                                  nil)
+                               nil))
                (:snapshot (snapshot service))
                (:restore (restore service (second message)))
                (t (bad-request "unknown message ~s" (first message))))))))))
@@ -116,6 +136,7 @@ anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
     (:intercept (let ((request (rest message)))
                   (%hook-answer request
                                 (lambda () (funcall (hook-fn service) (getf request :phase) request)))))
+    (:run-done nil)
     (t (bad-request "unknown message ~s" (first message)))))
 
 ;;; --- reading an answer ----------------------------------------------------
