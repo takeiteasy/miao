@@ -40,16 +40,138 @@ default, anything else is used as given."
              (setf *journal* (merge-pathnames ".miao/journal.log" (user-homedir-pathname)))))
         (t spec)))
 
+;;; --- the writer -------------------------------------------------------------
+
+;;; The conversation, events and :RUNNING lines are queued to a thread for each
+;;; log, which writes them in batches, so the agent does not wait on the disk.
+;;; What must be on disk before something happens, a :CALL before its tool runs
+;;; or a :DONE, is written once the queue has drained, which keeps the log in
+;;; order. A reader in this process drains first, so it reads what it wrote.
+;;;
+;;; TODO: the queue is unbounded, so a stalled disk grows it; bound it and make
+;;; the agent wait when it is full (#217).
+
+(defvar *journal-writer-idle* 5
+  "Seconds a log's writer thread waits for an entry before it exits.")
+
+(defstruct (journal-writer (:conc-name jw-))
+  path
+  (lock (bt:make-lock :name "miao-journal-writer"))
+  (wake (bt:make-condition-variable))
+  (queue '())
+  (busy nil)
+  (retiring nil)
+  (thread nil))
+
+(defvar *journal-writers* (make-hash-table :test 'equal)
+  "Canonical log namestring -> its writer. Guarded by *LOG-LOCKS-LOCK*.")
+
+(defvar *journal-writers-by-spelling* (make-hash-table :test 'equal)
+  "A path as spelled -> its writer, so an append asks the file system nothing once
+a log has been used. Guarded by *LOG-LOCKS-LOCK*.")
+
+(defun %journal-writer (path)
+  "PATH's writer: the one every spelling of the log shares, made on first use."
+  (let ((spelling (namestring (merge-pathnames path))))
+    (or (bt:with-lock-held (*log-locks-lock*)
+          (gethash spelling *journal-writers-by-spelling*))
+        (progn
+          (ensure-directories-exist path)
+          (let ((key (%log-key path)))
+            (bt:with-lock-held (*log-locks-lock*)
+              (setf (gethash spelling *journal-writers-by-spelling*)
+                    (or (gethash key *journal-writers*)
+                        (setf (gethash key *journal-writers*)
+                              (make-journal-writer :path key))))))))))
+
+(defun %journal-take-batch (writer)
+  "The entries queued at WRITER, oldest first, once there are some. Nil, after
+the thread has waited *JOURNAL-WRITER-IDLE* seconds for them, means it is retired."
+  (bt:with-lock-held ((jw-lock writer))
+    (when (and (null (jw-queue writer)) (not (jw-retiring writer)))
+      (bt:condition-wait (jw-wake writer) (jw-lock writer) :timeout *journal-writer-idle*))
+    (cond ((jw-queue writer)
+           (setf (jw-busy writer) t)
+           (prog1 (reverse (jw-queue writer))
+             (setf (jw-queue writer) nil)))
+          (t (setf (jw-thread writer) nil)
+             nil))))
+
+(defun %journal-write-batch (writer batch)
+  "Append BATCH, less its :CHECK markers, to WRITER's log, then wake whoever drains.
+A batch that cannot be written is dropped, with a warning."
+  (unwind-protect
+       (let ((entries (remove :check batch))
+             (path (jw-path writer)))
+         (when entries
+           (handler-case (with-log-lock (path) (%append-log-entries-locked path entries))
+             (error (e)
+               (format *error-output* "~&miao: ~d journal entries dropped, ~a: ~a~%"
+                       (length entries) path e)))))
+    (bt:with-lock-held ((jw-lock writer))
+      (setf (jw-busy writer) nil)
+      (bt:condition-broadcast (jw-wake writer)))))
+
+(defun %journal-writer-loop (writer)
+  (loop for batch = (%journal-take-batch writer)
+        while batch
+        do (%journal-write-batch writer batch)
+           (%maybe-compact (jw-path writer) *journal-compact-size* #'journal-compact)))
+
+(defun %journal-enqueue (path entry)
+  "Queue ENTRY, a plist or :CHECK, which only asks the writer to see whether the
+log wants compacting, for PATH's writer."
+  (let ((writer (%journal-writer path)))
+    (bt:with-lock-held ((jw-lock writer))
+      (push entry (jw-queue writer))
+      (unless (jw-thread writer)
+        (setf (jw-thread writer)
+              (bt:make-thread (lambda () (%journal-writer-loop writer))
+                              :name "miao-journal-writer")))
+      (bt:condition-broadcast (jw-wake writer)))))
+
+(defun journal-drain (path)
+  "Wait until every entry queued for PATH is on disk."
+  (let* ((key (ignore-errors (%log-key path)))
+         (writer (and key (bt:with-lock-held (*log-locks-lock*)
+                            (gethash key *journal-writers*)))))
+    (when (and writer (not (eq (bt:current-thread) (jw-thread writer))))
+      (bt:with-lock-held ((jw-lock writer))
+        (loop while (or (jw-queue writer) (jw-busy writer))
+              do (bt:condition-wait (jw-wake writer) (jw-lock writer)))))))
+
+(defun journal-drain-all ()
+  (dolist (path (bt:with-lock-held (*log-locks-lock*)
+                  (loop for writer being the hash-values of *journal-writers*
+                        collect (jw-path writer))))
+    (journal-drain path)))
+
+(defun journal-retire-writers ()
+  "Drain every log's writer and stop its thread, for SAVE-IMAGE, which needs the
+main thread alone. A later entry starts the writer again."
+  (let ((writers (bt:with-lock-held (*log-locks-lock*)
+                   (loop for writer being the hash-values of *journal-writers* collect writer))))
+    (dolist (writer writers)
+      (let ((thread (bt:with-lock-held ((jw-lock writer))
+                      (setf (jw-retiring writer) t)
+                      (bt:condition-broadcast (jw-wake writer))
+                      (jw-thread writer))))
+        (when thread (bt:join-thread thread))
+        (bt:with-lock-held ((jw-lock writer))
+          (setf (jw-retiring writer) nil))))))
+
+(pushnew 'journal-drain-all sb-ext:*exit-hooks*)
+
 (defun journal-append (path run agent parent kind &rest fields)
-  "Append an entry of KIND with FIELDS to PATH and return its id. An entry that
+  "Queue an entry of KIND with FIELDS for PATH and return its id. An entry that
 would not read back is written as an :UNWRITABLE one, so it cannot end the read."
   (let* ((id (%vault-id))
          (entry (list* :kind kind :id id :at (%now-iso8601) :agent agent :run run
                        (append (and parent (list :parent parent)) fields))))
-    (%append-log path (if (%readable-p entry)
-                          entry
-                          (list :kind :unwritable :id id :at (getf entry :at) :agent agent
-                                :run run :for kind)))
+    (%journal-enqueue path (if (%readable-p entry)
+                               entry
+                               (list :kind :unwritable :id id :at (getf entry :at) :agent agent
+                                     :run run :for kind)))
     id))
 
 (defun journal-text (value cap)
@@ -68,6 +190,7 @@ would not read back is written as an :UNWRITABLE one, so it cannot end the read.
 
 (defun journal-entries (path &key agent run)
   "The entries of PATH, oldest first, of AGENT and of the run keyed RUN when given."
+  (journal-drain path)
   (remove-if-not (lambda (entry)
                    (and (or (null agent) (eq agent (getf entry :agent)))
                         (or (null run) (equal run (getf entry :run)))))
@@ -137,6 +260,7 @@ without its tool replies is closed as an abandoned one is."
   "Append a :CALL entry for each of CALLS, plists of :ID, :NAME and :ARGUMENTS
 and, where a hook rewrote them, :RAW-ARGUMENTS, under one lock hold, and return
 their log ids in order."
+  (journal-drain path)
   (let ((owner (%vault-owner))
         (base (%vault-id)))
     (with-log-lock (path)
@@ -157,10 +281,8 @@ their log ids in order."
                    collect id)))))
 
 (defun journal-call-running (path ids)
-  (when ids
-    (with-log-lock (path)
-      (dolist (id ids)
-        (%append-log-locked path (list :kind :running :id id :at (%now-iso8601)))))))
+  (dolist (id ids)
+    (%journal-enqueue path (list :kind :running :id id :at (%now-iso8601)))))
 
 (defun journal-call-done (path results)
   "Append a :DONE entry for each of RESULTS, lists of a log id, an outcome
@@ -168,13 +290,14 @@ their log ids in order."
 hook rewrote the result, the raw text kept, under one lock hold. A call already
 done keeps its first outcome."
   (when results
+    (journal-drain path)
     (with-log-lock (path)
       (dolist (result results)
         (destructuring-bind (id outcome content &optional raw) result
           (%append-log-locked path (list* :kind :done :id id :at (%now-iso8601)
                                           :outcome outcome :content content
                                           (and raw (list :raw-content raw)))))))
-    (%maybe-compact path *journal-compact-size* #'journal-compact)))
+    (%journal-enqueue path :check)))
 
 (defun %done-by-id (log)
   (let ((table (make-hash-table :test 'equal)))
@@ -198,6 +321,7 @@ one under INPUT-ID already nothing is appended: the answer is its id,
 :DUPLICATE, its status (its :DONE outcome, :LOST when its owner is gone, else
 :RUNNING) and its digest. The check and the append share one lock hold. With
 RECORD false a new input is not appended and the answer is nil."
+  (journal-drain path)
   (with-log-lock (path)
     (let* ((log (%read-log path))
            (prior (find-if (lambda (e) (and (eq (getf e :kind) :input)
@@ -221,6 +345,7 @@ RECORD false a new input is not appended and the answer is nil."
 :agent :input-id :digest :status :done-at). :STATUS is the :OUTCOME of its
 :DONE entry (a stop reason, :ERROR, :INTERRUPTED or :ABANDONED), :RUNNING, or
 :LOST when the process running it is gone and nothing finished it."
+  (journal-drain path)
   (let* ((log (%read-log path))
          (done (%done-by-id log)))
     (loop for entry in log
@@ -263,6 +388,7 @@ is :ACCEPTED, :RUNNING, the :OUTCOME of its :DONE entry, or :LOST when the
 process that accepted it is gone and nothing finished it. :CUT is true when
 :ARGUMENTS were cut to fit the log. :RESUMES is the id of the call this one runs
 again, :RESUMED-BY the id of the call that runs this one again."
+  (journal-drain path)
   (%fold-calls (%read-log path)))
 
 (defun %resume-refusal (entry check)
@@ -285,6 +411,7 @@ entry, see CALL-ENTRIES, and answers a reason to refuse it, or nil and a value
 to pass on. The checks and the appends share one lock hold, so two resumes of
 one call cannot both succeed. Answers the resumed, (old id, new id, entry, CHECK's
 value), and the refused, (id reason), each in the order of IDS."
+  (journal-drain path)
   (with-log-lock (path)
     (let ((calls (%fold-calls (%read-log path)))
           (base (%vault-id))
@@ -365,6 +492,7 @@ every finished one), their inputs and their :RUNNING and :DONE lines, and with
 each run's conversation entries older than that folded into one :MESSAGES entry,
 the events dropped. Calls not finished are kept. Returns the calls dropped
 and kept, or nil, leaving the file untouched, when the log has a malformed entry."
+  (journal-drain path)
   (with-log-lock (path)
     (multiple-value-bind (log clean) (%read-log path)
       (when clean

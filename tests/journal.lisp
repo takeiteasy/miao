@@ -128,6 +128,53 @@ answers REPLIES, and call BODY with it and a recorder on its events."
     (miao::journal-append path "r" :j nil :message :message '(:role :user :content "after"))
     (is (equal '(:unwritable :message) (mapcar (lambda (e) (getf e :kind)) (miao:journal-entries path))))))
 
+;;; --- the writer -------------------------------------------------------------------
+
+(test a-reader-sees-every-entry-queued-before-it-in-order
+  (with-vault-path (path)
+    (dotimes (i 200)
+      (miao::journal-append path "r" :j nil :message :message (list :role :user :content i)))
+    (is (equal (loop for i below 200 collect i)
+               (mapcar (lambda (e) (getf (getf e :message) :content))
+                       (miao:journal-entries path))))))
+
+(test a-call-is-written-after-the-entries-queued-before-it
+  (with-vault-path (path)
+    (miao::journal-append path "r" :j nil :message :message '(:role :user :content "go"))
+    (miao::journal-call-accept path :j 1 (list (list :id "c1" :name :tool-echo :arguments nil)))
+    (miao::journal-append path "r" :j nil :message :message '(:role :user :content "next"))
+    (miao:journal-drain path)
+    (is (equal '(:message :call :message) (mapcar (lambda (e) (getf e :kind)) (miao::%read-log path))))))
+
+(test draining-puts-every-queued-entry-on-disk
+  (with-vault-path (path)
+    (dotimes (i 50)
+      (miao::journal-append path "r" :j nil :event :type :tick))
+    (miao:journal-drain path)
+    (is (= 50 (length (miao::%read-log path))))))
+
+(test retiring-the-writers-flushes-them-and-stops-their-threads
+  (with-vault-path (path)
+    (dotimes (i 20)
+      (miao::journal-append path "r" :j nil :event :type :tick))
+    (miao:journal-retire-writers)
+    (is (null (miao::jw-thread (miao::%journal-writer path))))
+    (is (= 20 (length (miao::%read-log path))))
+    (miao::journal-append path "r" :j nil :event :type :tick)
+    (is (= 21 (length (miao:journal-entries path))))))
+
+(test an-idle-writer-retires-and-a-later-entry-starts-another
+  (with-vault-path (path)
+    (let ((idle miao::*journal-writer-idle*))
+      (setf miao::*journal-writer-idle* 0.05)
+      (unwind-protect
+           (progn (miao::journal-append path "r" :j nil :message :message '(:role :user :content "a"))
+                  (sleep 0.3)
+                  (is (null (miao::jw-thread (miao::%journal-writer path))))
+                  (miao::journal-append path "r" :j nil :message :message '(:role :user :content "b"))
+                  (is (= 2 (length (miao:journal-entries path)))))
+        (setf miao::*journal-writer-idle* idle)))))
+
 ;;; --- compacting --------------------------------------------------------------------
 
 (test compacting-folds-old-entries-and-keeps-the-conversation
@@ -158,6 +205,7 @@ answers REPLIES, and call BODY with it and a recorder on its events."
 (test compacting-leaves-a-log-with-a-malformed-entry-alone
   (with-vault-path (path)
     (miao::journal-append path "r" :j nil :message :message '(:role :user :content "a"))
+    (miao:journal-drain path)
     (with-open-file (out path :direction :output :if-exists :append) (write-string "(:kind" out))
     (is (null (miao:journal-compact path :max-age 0)))))
 

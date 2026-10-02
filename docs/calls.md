@@ -79,8 +79,9 @@ appended under the same lock as the [vault](vault.md#the-log).
 `*journal-max-age*`, 7 days; `0` drops every finished one) with their lines, and
 [folds the old conversation entries](journal.md#compacting). Calls not finished
 are kept. A log with a malformed entry is left as it is and `journal-compact`
-answers nil. A call's finish also compacts once the file passes
-`*journal-compact-size*` (1 MiB) and has doubled since the last attempt.
+answers nil. The journal's [writer](journal.md#writing) also compacts once the
+file passes `*journal-compact-size*` (1 MiB) and has doubled since the last
+attempt.
 
 ## Resuming a call
 
@@ -156,8 +157,6 @@ uses), read once at mount time.
   ([#186](https://todo.sr.ht/~takeiteasy/miao/186)).
 - A call with large arguments cannot be resumed
   ([#187](https://todo.sr.ht/~takeiteasy/miao/187)).
-- Writes are synchronous on the agent's process
-  ([#181](https://todo.sr.ht/~takeiteasy/miao/181)).
 
 [^liveness]: The dispatching process is judged as a vault
     [claim](vault.md#claims) is: alive while this image, another host, or a

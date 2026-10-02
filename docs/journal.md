@@ -46,6 +46,21 @@ own events are not journaled either.
 An entry that would not read back is written as `(:kind :unwritable :for kind)`,
 so it cannot end the read.
 
+## Writing
+
+| Entries | Written |
+|---|---|
+| `:settings`, `:messages`, `:message`, `:event`, `:running` | queued, and written in batches by a thread for each log |
+| `:call`, `:input`, `:done` | at once, after the queue drains |
+
+A reader in the same process, `journal-entries` and what is built on it, drains
+the queue first, so it reads what it wrote. `journal-drain path` waits for the
+queue itself. An agent drains when it stops and the process when it exits.[^crash]
+
+A log's thread exits after `*journal-writer-idle*` (5) seconds with nothing to
+write, and the next entry starts it again. `journal-retire-writers` drains and
+stops every thread, as `save-image` does.
+
 ## The `:reply` event
 
 `(:type :reply :ref r :turn n :message m)` is emitted when a turn's reply joins
@@ -68,15 +83,18 @@ closed with `:interrupted` replies, as an abandoned turn is.
 `journal-compact path &key max-age` folds each run's conversation entries older
 than `max-age` seconds (default `*journal-max-age*`, seven days) into one
 `:messages` entry, drops the old events and drops [finished
-calls](calls.md#api) that old. It runs when a run starts or a call finishes and
-the log has passed `*journal-compact-size*` (1 MiB). Every run keeps its key and
+calls](calls.md#api) that old. The [writer](#writing) runs it after a batch, or
+a call finishing, once the log has passed `*journal-compact-size*` (1 MiB). Every run keeps its key and
 its conversation reads back the same.
 
 ## Limitations
 
-- Each entry is a synchronous write on the agent's process
-  ([#181](https://todo.sr.ht/~takeiteasy/miao/181)).
+- The writer's queue has no bound
+  ([#217](https://todo.sr.ht/~takeiteasy/miao/217)).
 - Compaction rewrites the whole log under its lock, so other processes wait
   ([#216](https://todo.sr.ht/~takeiteasy/miao/216)).
 
+[^crash]: A crash loses the entries still queued, never a call record: a `:call`
+    is on disk before its tool runs and a `:done` before the call counts as
+    finished. A batch the disk refuses is dropped, with a warning on stderr.
 [^cut]: The same rule [call records](calls.md) apply to a call's arguments and result.

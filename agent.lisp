@@ -430,6 +430,8 @@ another process holds or that is already consumed."
   (record-outstanding service :abandoned)
   (close-detached service :abandoned)
   (record-input-done service :abandoned)
+  (a:when-let ((path (journal-of service)))
+    (journal-drain path))
   (retire-emitters service)
   (stop-hook-services service)
   (when (or (eq reason :shutdown) (not (m:will-restart-p service reason)))
@@ -1108,10 +1110,6 @@ or an :INTERRUPTED error where none has arrived."
 
 ;;; --- the journal (~takeiteasy/miao#119) -------------------------------------
 
-;;; TODO: synchronous file writes under an flock, on the agent's own process, one
-;;; for each message and event; a batched writer thread if a slow disk shows up
-;;; as latency (#181).
-
 (defun journal-of (service)
   (%journal-path (agent-journal service)))
 
@@ -1132,17 +1130,13 @@ or an :INTERRUPTED error where none has arrived."
 
 (defun journal-run-start (service args continuing)
   "Journal what a run begins from: the agent's settings and its conversation, which
-a run that does not continue one replaces. Compacts a log grown past its size."
-  (a:when-let ((path (journal-of service)))
+a run that does not continue one replaces."
+  (when (journal-of service)
     (record-journal service :settings :settings (agent-settings service))
     (record-journal service :messages :reset (not continuing)
-                    :messages (if continuing (getf args :messages) (reverse (%messages service))))
-    (%maybe-compact path *journal-compact-size* #'journal-compact)))
+                    :messages (if continuing (getf args :messages) (reverse (%messages service))))))
 
-;;; --- the call log (~takeiteasy/miao#73) -------------------------------------
-
-;;; TODO: synchronous file writes under an flock, on the agent's own process;
-;;; a batched writer thread if a slow disk shows up as latency (#181).
+;;; --- the call records (~takeiteasy/miao#73) ---------------------------------
 
 (defun journal-call-id (service id)
   (cdr (assoc id (%journal-call-ids service) :test #'equal)))

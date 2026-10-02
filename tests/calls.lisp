@@ -89,12 +89,17 @@
       (write-line "(:kind :call :id \"e\" :name #.(error \"evaluated\"))" out))
     (is (eql 1 (length (miao:call-entries path))))))
 
-(test an-append-compacts-once-the-log-passes-its-size
+(test a-finished-call-compacts-the-log-once-it-passes-its-size
   (with-vault-path (path)
-    (let ((miao:*journal-compact-size* 1)
-          (miao:*journal-max-age* 0))
-      (miao::journal-call-done path (list (list (accept-one path) :ok "x")))
-      (is (null (miao:call-entries path))))))
+    (let ((size miao:*journal-compact-size*)
+          (age miao:*journal-max-age*))
+      (setf miao:*journal-compact-size* 1
+            miao:*journal-max-age* 0)
+      (unwind-protect
+           (progn (miao::journal-call-done path (list (list (accept-one path) :ok "x")))
+                  (is-true (eventually (lambda () (null (miao:call-entries path))) 5)))
+        (setf miao:*journal-compact-size* size
+              miao:*journal-max-age* age)))))
 
 ;;; --- the agent's own use of the log -----------------------------------------
 

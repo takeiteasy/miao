@@ -143,6 +143,7 @@ because of a stray thread."
            ;; Pooled threads sit outside every context, so M:SUSPEND
            ;; leaves them be.
            (retire-idle-workers :timeout timeout)
+           (journal-retire-writers)
            (%await-lone-thread (+ (get-internal-real-time) (* timeout internal-time-units-per-second)))
            (let ((pid (sb-posix:fork)))
              (if (zerop pid)
