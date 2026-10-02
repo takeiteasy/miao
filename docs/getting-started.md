@@ -90,6 +90,10 @@ From the shell, `tests/test.sh` runs it and exits non-zero on failure:
 tests/test.sh
 ```
 
+The script runs Roswell's SBCL when `ros` is installed, the runtime the
+[launcher](launcher.md) runs cores in, and the `sbcl` on `PATH` otherwise.
+`MIAO_TEST_LISP=sbcl` or `MIAO_TEST_LISP=ros` chooses.[^runtime]
+
 Tests that make real network requests are skipped unless `MIAO_LIVE_HTTP` is
 set, and the live protocol tests unless `MIAO_OLLAMA_URL` (the `/v1` route) or
 `MIAO_OLLAMA_NATIVE_URL` (native `/api/chat`) is:
@@ -102,3 +106,7 @@ MIAO_OLLAMA_NATIVE_URL=http://127.0.0.1:11434 tests/test.sh
 
 `MIAO_OLLAMA_MODEL` names the model, and defaults to `llama3.2`. A backend that
 does not have that model skips the live tests rather than failing them.
+
+[^runtime]: A saved core only loads in the SBCL build that saved it, so the
+    image tests save and load cores in the runtime the suite runs under. CI
+    has no Roswell and runs `sbcl`.
