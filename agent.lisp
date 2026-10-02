@@ -316,11 +316,13 @@ log or the id was used for other messages."
             (t (journal-run-start service args continuing)
                (emit service (run-start-event (m:agent-ref service) (getf args :messages)
                                               (and (getf args :continue) t)))
-               (dispatch-resumed-calls service resumed)
-               (arm-deadline service)
+               ;; The step is cast before the resumed calls are sent, so a result
+               ;; that comes back at once folds into a later turn, not the first.
                (if (or (getf args :messages) (null ids))
                    (cast-step service)
                    (setf (%awaiting-detached service) t))
+               (dispatch-resumed-calls service resumed)
+               (arm-deadline service)
                (or answer :ok))))))
 
 (defun resolve-tools (service)
