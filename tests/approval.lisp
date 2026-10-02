@@ -140,9 +140,12 @@ and a recorder on its events."
     (wait-for-run-done recorder)
     (is-true (eventually (lambda () (zerop (approved-always-count))) 3))))
 
-(declaim (notinline add-orphan-approval))
+;; The handle is made on a thread that ends: a stale slot on the test thread's
+;; stack, which the conservative GC scans, would keep it alive.
 (defun add-orphan-approval (table)
-  (setf (gethash (miao::make-run-handle nil) table) '(:tool-op)))
+  (bt:join-thread
+   (bt:make-thread (lambda ()
+                     (setf (gethash (miao::make-run-handle nil) table) '(:tool-op))))))
 
 (test an-always-entry-does-not-keep-its-run-handle-alive
   (with-approval-agent (agent recorder nil)
