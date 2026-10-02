@@ -148,6 +148,28 @@ travels in a TOOL-IMAGE reply.")
               (getf (find :tool-image children :key (lambda (c) (getf c :name))) :state)))
       (is (every (lambda (c) (eq :ready (getf c :status))) children)))))
 
+(m:defservice stalled-child () ())
+
+(defmethod m:handle ((child stalled-child) message)
+  (declare (ignore child message))
+  (sleep 2.5))
+
+(test services-children-asks-every-status-at-once
+  (with-tools
+    (dolist (name '(:stalled-a :stalled-b))
+      (m:mount *context* 'stalled-child :name name)
+      (m:cast (m:lookup name) :stall))
+    (sleep 0.1)
+    (let* ((began (get-internal-real-time))
+           (children (result-value (tool :tool-services :op :children) :children))
+           (elapsed (/ (- (get-internal-real-time) began) internal-time-units-per-second)))
+      (dolist (name '(:stalled-a :stalled-b))
+        (let ((child (find name children :key (lambda (c) (getf c :name)))))
+          (is (getf child :alive))
+          (is (null (getf child :status)))))
+      (is (eq :ready (getf (find :tool-fs children :key (lambda (c) (getf c :name))) :status)))
+      (is (< elapsed 1.8) "two stalled children waited at once, took ~as" elapsed))))
+
 (test services-describe-an-unregistered-name-is-a-bad-request
   (with-tools
     (is (equal :bad-request

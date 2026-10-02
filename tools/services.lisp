@@ -57,7 +57,12 @@
           (error (e) (fail (list :error (princ-to-string e))))))))
 
 (defun children-tree (service context-process recursive)
-  (mapcar (lambda (child) (child-entry service child recursive)) (m:children context-process)))
+  "The entries for CONTEXT-PROCESS's children, every status asked at once."
+  (let* ((asked '())
+         (tree (child-entries context-process recursive
+                              (lambda (entry process) (push (cons entry process) asked)))))
+    (record-statuses service asked)
+    tree))
 
 (defconstant +status-timeout+ 1
   "Seconds to wait for a service to report its status.")
@@ -70,20 +75,41 @@ SERVICE is this tool, which cannot call itself."
         (m:service-status service)
         (values (m:service-status process :timeout +status-timeout+)))))
 
-(defun child-entry (service child recursive)
-  (let ((entry (list :name (getf child :name)
-                     :class (string-downcase (symbol-name (getf child :class)))
-                     :restart (getf child :restart)
-                     :state (getf child :state)
-                     ;; TODO: one call per child, so a busy tool costs up to
-                     ;; +STATUS-TIMEOUT+ each; fan out with m:call-async if
-                     ;; :children latency matters (#149).
-                     :status (process-status service (getf child :process))
-                     :restart-in (getf child :restart-in)
-                     :alive (and (getf child :process) (m:process-alive-p (getf child :process)) t))))
-    (if (and recursive (subtypep (getf child :class) 'm:context) (getf child :process))
-        (append entry (list :children (children-tree service (getf child :process) recursive)))
-        entry)))
+(defun child-entries (context-process recursive ask)
+  (mapcar (lambda (child) (child-entry child recursive ask)) (m:children context-process)))
+
+(defun child-entry (child recursive ask)
+  "CHILD's entry, its :STATUS nil until the one ASK was given it is answered.
+ASK is called with each live child's entry and process."
+  (let* ((process (getf child :process))
+         (alive (and process (m:process-alive-p process) t))
+         (nested (and recursive process (subtypep (getf child :class) 'm:context)))
+         (entry (list* :name (getf child :name)
+                       :class (string-downcase (symbol-name (getf child :class)))
+                       :restart (getf child :restart)
+                       :state (getf child :state)
+                       :status nil
+                       :restart-in (getf child :restart-in)
+                       :alive alive
+                       (when nested
+                         (list :children (child-entries process recursive ask))))))
+    (when alive
+      (funcall ask entry process))
+    entry))
+
+(defun record-statuses (service asked)
+  "Set the :STATUS of each (entry . process) in ASKED. SERVICE is this tool,
+which cannot call itself."
+  (let ((statuses (m:service-statuses
+                   (mapcar (lambda (pair)
+                             (if (eq (cdr pair) (m:service-process service))
+                                 service
+                                 (cdr pair)))
+                           asked)
+                   :timeout +status-timeout+)))
+    (loop for pair in asked
+          for (status) in statuses
+          do (setf (getf (car pair) :status) status))))
 
 (defun op-service-describe (service name)
   (let ((registry (m:service-registry service)))

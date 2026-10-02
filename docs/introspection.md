@@ -91,7 +91,8 @@ same source `describe-tool` reads, key-free by construction.
 `:state` is `m:children`'s restart bookkeeping (`:running` or
 `:restarting`). `:status` is the service's own lifecycle status, `:waiting`
 (a dependency is missing) or `:ready`. It is nil when the child is
-restarting, has stopped or does not answer within a second.[^status] A tool mounted outside a
+restarting, has stopped or does not answer within a second. Every child is
+asked at once, so the whole answer takes about a second at most.[^status] A tool mounted outside a
 context — `:children` needs one to walk — answers `(:error "not mounted
 under a context")`.
 
@@ -106,15 +107,8 @@ and `:fboundp` as flags and nothing more. `tool-services` never reads a
 slot at all; everything it answers already travels through `metadata` or
 `m:children`.
 
-## Limitations
-
-- `:children` asks each child for its status one after another, so busy
-  children add up to a second each
-  ([#149](https://todo.sr.ht/~takeiteasy/miao/149)).
-
-[^status]: Asked over a call with `m:service-status`; `:starting`, `:stopping`
-    and `:stopped` are never visible from another process. See
-    [Limitations](#limitations).
+[^status]: Asked with `m:service-statuses`; `:starting`, `:stopping` and
+    `:stopped` are never visible from another process.
 
 [^form]: `:form` is the definition's own code, so a literal written into it
     (a string, say) travels with it. A variable's value never does.
