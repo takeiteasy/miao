@@ -163,6 +163,85 @@ answers REPLIES, and call BODY with it and a recorder on its events."
     (miao::journal-append path "r" :j nil :event :type :tick)
     (is (= 21 (length (miao:journal-entries path))))))
 
+(defmacro with-writer-setting ((variable value) &body body)
+  "Set VARIABLE globally to VALUE for BODY, which the writer's thread needs to see."
+  (let ((old (gensym)))
+    `(let ((,old ,variable))
+       (setf ,variable ,value)
+       (unwind-protect (progn ,@body)
+         (setf ,variable ,old)))))
+
+(defun append-ticks (path count)
+  (dotimes (i count)
+    (miao::journal-append path "r" :j nil :message :message
+                          (list :role :user :content (format nil "entry ~3,'0d of padding text" i)))))
+
+(test a-full-queue-makes-the-agent-wait-and-every-entry-is-kept-in-order
+  (with-vault-path (path)
+    (with-writer-setting (miao::*journal-writer-max-bytes* 400)
+      (let ((count 0)
+            (thread nil))
+        (miao::with-log-lock (path)
+          (setf thread (bt:make-thread
+                        (lambda ()
+                          (dotimes (i 30)
+                            (miao::journal-append
+                             path "r" :j nil :message :message
+                             (list :role :user :content (format nil "entry ~3,'0d of padding text" i)))
+                            (setf count (1+ i))))))
+          (sleep 0.3)
+          (is (< count 30) "the agent waits while the disk is stalled"))
+        (bt:join-thread thread)
+        (miao:journal-drain path)
+        (is (equal (loop for i below 30 collect (format nil "entry ~3,'0d of padding text" i))
+                   (mapcar (lambda (e) (getf (getf e :message) :content))
+                           (miao::%read-log path))))))))
+
+(test a-line-longer-than-the-bound-is-still-queued
+  (with-vault-path (path)
+    (with-writer-setting (miao::*journal-writer-max-bytes* 10)
+      (append-ticks path 3)
+      (miao:journal-drain path)
+      (is (= 3 (length (miao::%read-log path)))))))
+
+(test a-batch-the-disk-refuses-is-retried-before-it-is-dropped
+  (with-vault-path (path)
+    (append-ticks path 1)
+    (miao:journal-drain path)
+    (with-writer-setting (miao::*journal-write-retries* '(0.2 0.2 0.2 0.2 0.2))
+      (sb-posix:chmod (namestring path) #o444)
+      (unwind-protect
+           (progn (append-ticks path 1)
+                  (sleep 0.3))
+        (sb-posix:chmod (namestring path) #o644))
+      (miao:journal-drain path)
+      (is (= 2 (length (miao::%read-log path)))))))
+
+(test a-batch-the-disk-keeps-refusing-is-dropped-after-its-retries
+  (with-vault-path (path)
+    (append-ticks path 1)
+    (miao:journal-drain path)
+    (with-writer-setting (miao::*journal-write-retries* '(0.05 0.05))
+      (sb-posix:chmod (namestring path) #o444)
+      (unwind-protect
+           (progn (append-ticks path 1)
+                  (miao:journal-drain path)
+                  (is (= 1 (length (miao::%read-log path)))))
+        (sb-posix:chmod (namestring path) #o644)))))
+
+(test retiring-the-writers-stops-waiting-on-one-that-is-stuck
+  (with-vault-path (path)
+    (append-ticks path 1)
+    (miao:journal-drain path)
+    (miao::with-log-lock (path)
+      (append-ticks path 1)
+      (sleep 0.1)
+      (let ((start (get-internal-real-time)))
+        (miao:journal-retire-writers :timeout 0.2)
+        (is (< (- (get-internal-real-time) start) internal-time-units-per-second))))
+    (miao:journal-drain path)
+    (is (= 2 (length (miao::%read-log path))))))
+
 (test an-idle-writer-retires-and-a-later-entry-starts-another
   (with-vault-path (path)
     (let ((idle miao::*journal-writer-idle*))

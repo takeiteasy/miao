@@ -47,18 +47,24 @@ default, anything else is used as given."
 ;;; What must be on disk before something happens, a :CALL before its tool runs
 ;;; or a :DONE, is written once the queue has drained, which keeps the log in
 ;;; order. A reader in this process drains first, so it reads what it wrote.
-;;;
-;;; TODO: the queue is unbounded, so a stalled disk grows it; bound it and make
-;;; the agent wait when it is full (#217).
 
 (defvar *journal-writer-idle* 5
   "Seconds a log's writer thread waits for an entry before it exits.")
+
+(defvar *journal-writer-max-bytes* (* 8 1024 1024)
+  "Characters a log's queue holds before the agent waits to add more. The batch
+being written is counted apart, so twice this can be held. A line that is longer
+is queued once the queue is empty.")
+
+(defvar *journal-write-retries* '(0.1 0.5 2)
+  "Seconds to wait before each retry of a batch the disk refuses.")
 
 (defstruct (journal-writer (:conc-name jw-))
   path
   (lock (bt:make-lock :name "miao-journal-writer"))
   (wake (bt:make-condition-variable))
   (queue '())
+  (bytes 0)
   (busy nil)
   (retiring nil)
   (thread nil))
@@ -93,22 +99,29 @@ the thread has waited *JOURNAL-WRITER-IDLE* seconds for them, means it is retire
     (cond ((jw-queue writer)
            (setf (jw-busy writer) t)
            (prog1 (reverse (jw-queue writer))
-             (setf (jw-queue writer) nil)))
+             (setf (jw-queue writer) nil
+                   (jw-bytes writer) 0)
+             (bt:condition-broadcast (jw-wake writer))))
           (t (setf (jw-thread writer) nil)
              nil))))
 
 (defun %journal-write-batch (writer batch)
   "Append BATCH, less its :CHECK markers, to WRITER's log, then wake whoever drains.
-A batch that cannot be written is dropped, with a warning."
+A batch the disk refuses is retried after each of *JOURNAL-WRITE-RETRIES*, then
+dropped, with a warning."
   (unwind-protect
        (let ((lines (remove :check batch))
-             (path (jw-path writer)))
+             (path (jw-path writer))
+             (delays *journal-write-retries*))
          (when lines
-           (handler-case (with-log-lock (path) (%append-log-lines-locked path lines))
-             ;; TODO: a batch the disk refuses is dropped; retry or spill it (#217)
-             (error (e)
-               (format *error-output* "~&miao: ~d journal entries dropped, ~a: ~a~%"
-                       (length lines) path e)))))
+           (loop
+             (handler-case (progn (with-log-lock (path) (%append-log-lines-locked path lines))
+                                  (return))
+               (error (e)
+                 (cond (delays (sleep (pop delays)))
+                       (t (format *error-output* "~&miao: ~d journal entries dropped, ~a: ~a~%"
+                                  (length lines) path e)
+                          (return))))))))
     (bt:with-lock-held ((jw-lock writer))
       (setf (jw-busy writer) nil)
       (bt:condition-broadcast (jw-wake writer)))))
@@ -130,10 +143,17 @@ agent prints it, so the writer never reads data the agent goes on to change."
 
 (defun %journal-enqueue (path line)
   "Queue LINE, an entry printed by %JOURNAL-LINE, or :CHECK, which only asks the
-writer to see whether the log wants compacting, for PATH's writer."
-  (let ((writer (%journal-writer path)))
+writer to see whether the log wants compacting, for PATH's writer. Waits while
+the queue is full."
+  (let ((writer (%journal-writer path))
+        (size (if (stringp line) (length line) 0)))
     (bt:with-lock-held ((jw-lock writer))
+      (when (plusp size)
+        (loop while (and (jw-queue writer)
+                         (> (+ (jw-bytes writer) size) *journal-writer-max-bytes*))
+              do (bt:condition-wait (jw-wake writer) (jw-lock writer))))
       (push line (jw-queue writer))
+      (incf (jw-bytes writer) size)
       (unless (jw-thread writer)
         (setf (jw-thread writer)
               (bt:make-thread (lambda () (%journal-writer-loop writer))
@@ -156,17 +176,25 @@ writer to see whether the log wants compacting, for PATH's writer."
                         collect (jw-path writer))))
     (journal-drain path)))
 
-(defun journal-retire-writers ()
+(defun journal-retire-writers (&key (timeout 5))
   "Drain every log's writer and stop its thread, for SAVE-IMAGE, which needs the
-main thread alone. A later entry starts the writer again."
+main thread alone, waiting at most TIMEOUT seconds. A writer that is still
+writing then is left running. A later entry starts the writer again."
   (let ((writers (bt:with-lock-held (*log-locks-lock*)
-                   (loop for writer being the hash-values of *journal-writers* collect writer))))
+                   (loop for writer being the hash-values of *journal-writers* collect writer)))
+        (deadline (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
     (dolist (writer writers)
-      (let ((thread (bt:with-lock-held ((jw-lock writer))
-                      (setf (jw-retiring writer) t)
-                      (bt:condition-broadcast (jw-wake writer))
-                      (jw-thread writer))))
-        (when thread (bt:join-thread thread))
+      (bt:with-lock-held ((jw-lock writer))
+        (setf (jw-retiring writer) t)
+        (bt:condition-broadcast (jw-wake writer))))
+    (unwind-protect
+         (loop until (or (every (lambda (writer)
+                                  (bt:with-lock-held ((jw-lock writer))
+                                    (null (jw-thread writer))))
+                                writers)
+                         (> (get-internal-real-time) deadline))
+               do (sleep 0.01))
+      (dolist (writer writers)
         (bt:with-lock-held ((jw-lock writer))
           (setf (jw-retiring writer) nil))))))
 

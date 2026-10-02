@@ -59,7 +59,13 @@ queue itself. An agent drains when it stops and the process when it exits.[^cras
 
 A log's thread exits after `*journal-writer-idle*` (5) seconds with nothing to
 write, and the next entry starts it again. `journal-retire-writers` drains and
-stops every thread, as `save-image` does.
+stops every thread, as `save-image` does, and gives up on one still writing
+after `:timeout` seconds (5).
+
+| Variable | Default | Sets |
+|---|---|---|
+| `*journal-writer-max-bytes*` | 8 MiB | characters a queue holds before the agent waits to add more[^bound] |
+| `*journal-write-retries*` | `(0.1 0.5 2)` | seconds before each retry of a batch the disk refuses |
 
 The writer compacts, so `*journal-compact-size*` and `*journal-max-age*` apply
 as set globally, not as bound around an agent.
@@ -92,12 +98,12 @@ its conversation reads back the same.
 
 ## Limitations
 
-- The writer's queue has no bound
-  ([#217](https://todo.sr.ht/~takeiteasy/miao/217)).
 - Compaction rewrites the whole log under its lock, so other processes wait
   ([#216](https://todo.sr.ht/~takeiteasy/miao/216)).
 
 [^crash]: A crash loses the entries still queued, never a call record: a `:call`
     is on disk before its tool runs and a `:done` before the call counts as
-    finished. A batch the disk refuses is dropped, with a warning on stderr.
+    finished. A batch the disk still refuses after its retries is dropped, with a warning on stderr.
+[^bound]: The batch being written is counted apart, so twice this can be held. A
+    line longer than the bound is queued once the queue is empty.
 [^cut]: The same rule [call records](calls.md) apply to a call's arguments and result.
