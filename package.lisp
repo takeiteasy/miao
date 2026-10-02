@@ -38,6 +38,9 @@
    #:vault-record #:vault-consume #:vault-consume-pending
    #:vault-claim-pending #:vault-release #:vault-release-all #:vault-entries #:vault-compact #:*vault-log*
    #:*vault-max-age* #:*vault-compact-size*
+   ;; journal
+   #:journal-entries #:journal-runs #:journal-conversation #:journal-compact
+   #:*journal* #:*journal-max-age* #:*journal-compact-size* #:*journal-max-content*
    ;; call log
    #:call-entries #:input-entries #:call-log-compact #:*call-log* #:*call-log-max-age*
    #:*call-log-compact-size* #:*call-log-max-content*

@@ -91,6 +91,10 @@ to COMPLETE, e.g. :TEMPERATURE.")
           :documentation "NIL (the default): steering is in-memory only. T:
 record to the default vault log (~takeiteasy/miao#14). A string or
 pathname: record there instead.")
+   (journal :initarg :journal :initform nil :reader agent-journal
+            :documentation "NIL (the default): runs are not journaled. T:
+journal to the default log (~takeiteasy/miao#119). A string or pathname: journal
+there instead. A sub-agent inherits it.")
    (call-log :initarg :call-log :initform nil :reader agent-call-log
              :documentation "NIL (the default): dispatched tool calls are not
 recorded. T: record each to the default call log (~takeiteasy/miao#73). A
@@ -169,6 +173,7 @@ string or pathname: record there instead.")
         :turn-retries (agent-turn-retries service)
         :retry-backoff (agent-retry-backoff service)
         :vault (agent-vault service)
+        :journal (agent-journal service)
         :call-log (agent-call-log service)
         :hooks (mapcar #'hook-spec-label (agent-hooks-spec service))
         :log-raw (agent-log-raw service)))
@@ -273,53 +278,55 @@ log or the id was used for other messages."
       (setf (%input-log-id service) nil))))
 
 (defun begin-run (service args input-log-id)
-  (drop-chains service :detached t)
-  (setf (%input-log-id service) input-log-id
-        (%messages service)
-        (revappend (getf args :messages)
-                   (if (and (getf args :continue) (%messages service))
-                       (%messages service)
-                       (and (agent-system service)
-                            (not (eq :system (getf (first (getf args :messages)) :role)))
-                            (list (list :role :system :content (agent-system service))))))
-        (%turns service) 0
-        (%run-id service) (1+ (%run-id service))
-        (%pending service) nil
-        (%pending-order service) nil
-        (%queued service) nil
-        (%detached service) nil
-        (%awaiting-detached service) nil
-        (%detach-deferred service) nil
-        (%call-tokens service) nil
-        (%call-log-ids service) nil
-        ;; %STEER-QUEUE is deliberately not cleared here: a steer (or
-        ;; a vault :restore) sent while the agent was idle waits in
-        ;; the queue rather than being dropped, and folds in on the
-        ;; first turn below, after the seed messages.
-        (%allow-list service) (resolve-tools service)
-        (%running-p service) t)
-  (unless (%fanout service)
-    (open-fanout service))
-  (unless (slot-boundp service 'parent-name)
-    (setf (%run-handle service) (make-run-handle (%fanout service))))
-  (let* ((ids (getf args :resume))
-         (answer nil)
-         (resumed nil))
-    (when ids
-      (multiple-value-setq (answer resumed) (resume-calls service ids (getf args :force))))
-    (cond ((and ids (not (getf args :messages)) (null resumed))
-           (setf (%running-p service) nil)
-           (record-input-done service :error)
-           (retire-emitters service)
-           answer)
-          (t (emit service (run-start-event (m:agent-ref service) (getf args :messages)
-                                            (and (getf args :continue) t)))
-             (dispatch-resumed-calls service resumed)
-             (arm-deadline service)
-             (if (or (getf args :messages) (null ids))
-                 (cast-step service)
-                 (setf (%awaiting-detached service) t))
-             (or answer :ok)))))
+  (let ((continuing (and (getf args :continue) (%messages service) t)))
+    (drop-chains service :detached t)
+    (setf (%input-log-id service) input-log-id
+          (%messages service)
+          (revappend (getf args :messages)
+                     (if continuing
+                         (%messages service)
+                         (and (agent-system service)
+                              (not (eq :system (getf (first (getf args :messages)) :role)))
+                              (list (list :role :system :content (agent-system service))))))
+          (%turns service) 0
+          (%run-id service) (1+ (%run-id service))
+          (%pending service) nil
+          (%pending-order service) nil
+          (%queued service) nil
+          (%detached service) nil
+          (%awaiting-detached service) nil
+          (%detach-deferred service) nil
+          (%call-tokens service) nil
+          (%call-log-ids service) nil
+          ;; %STEER-QUEUE is deliberately not cleared here: a steer (or
+          ;; a vault :restore) sent while the agent was idle waits in
+          ;; the queue rather than being dropped, and folds in on the
+          ;; first turn below, after the seed messages.
+          (%allow-list service) (resolve-tools service)
+          (%running-p service) t)
+    (unless (%fanout service)
+      (open-fanout service))
+    (unless (slot-boundp service 'parent-name)
+      (setf (%run-handle service) (make-run-handle (%fanout service))))
+    (let* ((ids (getf args :resume))
+           (answer nil)
+           (resumed nil))
+      (when ids
+        (multiple-value-setq (answer resumed) (resume-calls service ids (getf args :force))))
+      (cond ((and ids (not (getf args :messages)) (null resumed))
+             (setf (%running-p service) nil)
+             (record-input-done service :error)
+             (retire-emitters service)
+             answer)
+            (t (journal-run-start service args continuing)
+               (emit service (run-start-event (m:agent-ref service) (getf args :messages)
+                                              (and (getf args :continue) t)))
+               (dispatch-resumed-calls service resumed)
+               (arm-deadline service)
+               (if (or (getf args :messages) (null ids))
+                   (cast-step service)
+                   (setf (%awaiting-detached service) t))
+               (or answer :ok))))))
 
 (defun resolve-tools (service)
   "The allow-list for this run: an explicit list, or every discovered tool
@@ -605,6 +612,7 @@ tools, and get back its final answer."
        (let ((reply (second result)))
          (calibrate service reply)
          (push-message service reply)
+         (emit service (reply-event ref (%turns service) reply))
          (let ((calls (getf reply :tool-calls)))
            (cond
              (calls (dispatch-calls service calls))
@@ -844,6 +852,7 @@ child of an unnamed parent is not."
                             :deadline (agent-deadline service)
                             :sink (%fanout service)
                             :vault (agent-vault service)
+                            :journal (agent-journal service)
                             :call-log (agent-call-log service)
                             :hooks (%hooks service)
                             :run-handle (%run-handle service)
@@ -1103,6 +1112,39 @@ or an :INTERRUPTED error where none has arrived."
         (%call-tokens service) nil
         (%call-log-ids service) nil))
 
+;;; --- the journal (~takeiteasy/miao#119) -------------------------------------
+
+;;; TODO: synchronous file writes under an flock, on the agent's own process, one
+;;; for each message and event; a batched writer thread if a slow disk shows up
+;;; as latency (#181).
+
+(defun journal-of (service)
+  (%journal-path (agent-journal service)))
+
+(defun record-journal (service kind &rest fields)
+  (a:when-let ((path (journal-of service)))
+    (apply #'journal-append path
+           (a:when-let ((handle (%run-handle service))) (run-handle-key handle))
+           (m:service-name service)
+           (and (slot-boundp service 'parent-name) (agent-parent-name service))
+           kind fields)))
+
+(defun journal-event (service event)
+  "Journal EVENT, an event as emitted, unless it is a streamed delta."
+  (unless (member (getf event :type) +journal-skipped-events+)
+    (apply #'record-journal service :event
+           (journal-event-fields (a:remove-from-plist event :agent :parent)
+                                 (or (agent-max-tool-result service) *journal-max-content*)))))
+
+(defun journal-run-start (service args continuing)
+  "Journal what a run begins from: the agent's settings and its conversation, which
+a run that does not continue one replaces. Compacts a log grown past its size."
+  (a:when-let ((path (journal-of service)))
+    (record-journal service :settings :settings (agent-settings service))
+    (record-journal service :messages :reset (not continuing)
+                    :messages (if continuing (getf args :messages) (reverse (%messages service))))
+    (%maybe-compact path *journal-compact-size* #'journal-compact)))
+
 ;;; --- the call log (~takeiteasy/miao#73) -------------------------------------
 
 ;;; TODO: synchronous file writes under an flock, on the agent's own process;
@@ -1306,6 +1348,7 @@ one that reads implausibly, leaves the last ratio."
   (reverse (%messages service)))
 
 (defun push-message (service message)
+  (record-journal service :message :message message)
   (push message (%messages service)))
 
 ;;; --- interceptor hooks (~takeiteasy/miao#117) -----------------------------
@@ -1524,11 +1567,12 @@ or failed closed."
 
 (defstruct (run-handle (:constructor make-run-handle (fanout)))
   (id (bt:with-lock-held (*run-seq-lock*) (incf *run-seq*)))
+  (key (%vault-id))
   fanout (live t) (lock (bt:make-lock)))
 
 (defparameter +loop-event-types+
   '(:run-start :steer :turn :turn-retry :turn-interrupted :text-delta :tool-call-delta
-    :done :tool-call :tool-detached :tool-resumed :tool-result :hook :context-trimmed
+    :done :reply :tool-call :tool-detached :tool-resumed :tool-result :hook :context-trimmed
     :run-done)
   "The events the loop emits itself, which a hook may not forge.")
 
@@ -1584,13 +1628,15 @@ which is nil while no run is under way."
   (%fanout service))
 
 (defun emit (service event)
-  "Deliver EVENT, tagged with SERVICE's name and, for a child, its parent's."
-  (when (%fanout service)
-    (emit-event (%fanout service)
-                (append event
-                        (list :agent (m:service-name service))
-                        (and (slot-boundp service 'parent-name)
-                             (list :parent (agent-parent-name service)))))))
+  "Deliver EVENT, tagged with SERVICE's name and, for a child, its parent's, and
+journal it."
+  (let ((event (append event
+                       (list :agent (m:service-name service))
+                       (and (slot-boundp service 'parent-name)
+                            (list :parent (agent-parent-name service))))))
+    (journal-event service event)
+    (when (%fanout service)
+      (emit-event (%fanout service) event))))
 
 (defvar *subscribers-lock* (bt:make-lock))
 (defvar *subscribers* (make-hash-table :test 'eq :weakness :key)
@@ -1786,6 +1832,8 @@ timeout."
 (defun tool-result-event (ref id result)
   (list :type :tool-result :ref ref :id id :result result))
 
+(defun reply-event (ref n message) (list :type :reply :ref ref :turn n :message message))
+
 (defun run-done-event (ref reason) (list :type :run-done :ref ref :reason reason))
 
 ;;; --- a blocking entry point --------------------------------------------
@@ -1868,6 +1916,7 @@ ones included, for a caller to resume."
         (%steer-queue service) nil
         (%turn-in-flight service) nil
         (%running-p service) nil)
+  (record-journal service :messages :reset t :messages (getf state :messages))
   ;; As FINISH-RUN does: the turn and tool calls just cancelled still reply
   ;; to this agent's process, so their late replies are made unmatchable --
   ;; each checks the step ref it was issued against.

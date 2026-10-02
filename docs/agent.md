@@ -66,6 +66,7 @@ when its run ends, so use `run-agent` for a one-shot run.[^conversation]
 | `:sink` | nil | a stream sink, as `complete` takes; the first [subscriber](ui.md#subscribing) |
 | `:sampling` | nil | a plist passed through to `complete`, e.g. `:temperature` |
 | `:vault` | nil | record steering to the [vault](vault.md): nil is off, `t` the default log, a path to record there instead |
+| `:journal` | nil | record each run to the [journal](journal.md): nil is off, `t` the default log, a path to record there instead |
 | `:call-log` | nil | record each dispatched tool call to the [call log](calls.md): nil is off, `t` the default log, a path to record there instead |
 
 ## The allow-list and trust
@@ -292,6 +293,7 @@ as lost.
 (:type :turn        :ref r :turn n)
 (:type :turn-interrupted :ref r :turn n)
 (:type :turn-retry  :ref r :turn n :attempt 1 :reason (:backend-error 503 "..."))
+(:type :reply       :ref r :turn n :message m)
 (:type :tool-call   :ref r :id "c1" :name :tool-shell :arguments (:cmd "ls"))
 (:type :tool-detached :ref r :id "c1" :name :tool-shell)
 (:type :tool-resumed :ref r :id "c1" :name :tool-shell)
@@ -302,6 +304,9 @@ as lost.
 (:type :context-trimmed :ref r :turn n :omitted (1 2 3) :truncated ((4 :from 900 :to 50))
        :size 240 :budget 250 :ratio 3.9 :over-budget nil)
 ```
+
+A `:reply` event carries a turn's whole reply, after the turn's streamed events
+and before its calls; it is also what the [journal](journal.md) keeps of a turn.
 
 A `:hook` event says a [hook](hooks.md#what-is-recorded) rewrote, denied or
 failed; it comes before the `:tool-call` it concerns, which is emitted once the

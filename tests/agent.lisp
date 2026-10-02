@@ -406,7 +406,7 @@ sink's events, oldest first."
                        (last (getf (second result) :messages) 3))))
     (let ((body (getf (second requests) :body)))
       (is (< (search "partial " body) (search "change of plan" body))))
-    (is (equal '(:run-start :turn :text-delta :turn-interrupted :steer :turn :text-delta :done :run-done)
+    (is (equal '(:run-start :turn :text-delta :turn-interrupted :steer :turn :text-delta :done :reply :run-done)
                (event-types events)))
     (is (eql 1 (getf (find :turn-interrupted events :key (lambda (e) (getf e :type)))
                      :turn)))
@@ -808,7 +808,7 @@ RUN-ARGS and return the run's result."
       ;; :TEXT-DELTA/:DONE are the protocol's own, passed straight through
       ;; because :STREAM is handed down in the request; :TURN and :RUN-DONE
       ;; are the loop's.
-      (is (equal '(:run-start :turn :text-delta :text-delta :done :run-done)
+      (is (equal '(:run-start :turn :text-delta :text-delta :done :reply :run-done)
                  (event-types (recorded-events recorder)))))))
 
 ;;; A failed turn ends the sink's turn with a failed :DONE, ahead of the loop's
@@ -910,7 +910,7 @@ RUN-ARGS and return the run's result."
                (setf (car release) t)
                (m:cast child (list :run :continue t))
                (is-true (nth-value 1 (m:receive :timeout 5)))
-               (is (equal '(:run-start :turn :text-delta :run-start :turn :text-delta :done :run-done)
+               (is (equal '(:run-start :turn :text-delta :run-start :turn :text-delta :done :reply :run-done)
                           (event-types (recorded-events recorder))))))
         (setf (car release) t)))))
 

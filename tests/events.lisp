@@ -40,7 +40,7 @@ restarting it after its last run. Returns the answer."
            (result (agent-turn :messages messages :sink (recorder-sink recorder)))
            (events (recorded-events recorder)))
       (is (eq :ok (first result)))
-      (is (equal '(:run-start :turn :text-delta :done :run-done) (types-of events)))
+      (is (equal '(:run-start :turn :text-delta :done :reply :run-done) (types-of events)))
       (is (equal messages (getf (first events) :messages)))
       (is (null (getf (first events) :continue)))
       (dolist (event events)
@@ -94,8 +94,8 @@ restarting it after its last run. Returns the answer."
       (run-assistant one 2)
       (await-run-dones two 2)
       (dolist (recorder (list one two))
-        (is (equal '(:run-start :turn :text-delta :done :run-done
-                     :run-start :turn :text-delta :done :run-done)
+        (is (equal '(:run-start :turn :text-delta :done :reply :run-done
+                     :run-start :turn :text-delta :done :reply :run-done)
                    (types-of (recorded-events recorder))))
         (is (not (recorder-overlapped recorder)))))))
 
@@ -113,8 +113,8 @@ restarting it after its last run. Returns the answer."
       (is (eq :ok (send-to-assistant (list :unsubscribe sink-two))))
       (run-assistant one 2)
       (is (= 1 (run-dones two)))
-      (is (= 10 (length (recorded-events one))))
-      (is (= 5 (length (recorded-events two)))))))
+      (is (= 12 (length (recorded-events one))))
+      (is (= 6 (length (recorded-events two)))))))
 
 (test the-mount-sink-cannot-be-unsubscribed-and-bad-sinks-are-refused
   (with-agent ((streamed-reply "ok"))
@@ -127,7 +127,7 @@ restarting it after its last run. Returns the answer."
       (is (miao:tool-error-p (send-to-assistant '(:subscribe nil))))
       (send-to-assistant (list :subscribe sink))
       (run-assistant recorder 1)
-      (is (= 5 (length (recorded-events recorder))) "the mount sink is not told twice"))))
+      (is (= 6 (length (recorded-events recorder))) "the mount sink is not told twice"))))
 
 (defun merged-text (events)
   (apply #'concatenate 'string
@@ -267,8 +267,8 @@ restarting it after its last run. Returns the answer."
         (is (eq :ok (first result)))
         (let ((children (remove-if-not (lambda (e) (member :parent e)) events))
               (roots (remove-if (lambda (e) (member :parent e)) events)))
-          (is (equal '(:run-start :turn :text-delta :done :run-done) (types-of children)))
-          (is (equal '(:run-start :turn :tool-call-delta :done :tool-call :tool-result :turn :text-delta :done :run-done)
+          (is (equal '(:run-start :turn :text-delta :done :reply :run-done) (types-of children)))
+          (is (equal '(:run-start :turn :tool-call-delta :done :reply :tool-call :tool-result :turn :text-delta :done :reply :run-done)
                      (types-of roots)))
           (is (eq :run-done (getf (car (last events)) :type)))
           (is (not (member :parent (car (last events))))

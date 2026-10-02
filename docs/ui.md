@@ -77,6 +77,7 @@ A front end tells a sub-agent's events from the root's by whether the
 | `:text-delta` | `:text` | streamed text |
 | `:tool-call-delta` | `:id`, `:name`, `:arguments` | a fragment of a call, arguments split across deltas |
 | `:done` | `:reason` | a turn ends, with its finish reason or `(:error r)` |
+| `:reply` | `:turn`, `:message` | a turn's whole reply joined the conversation, after its `:done` and before its calls |
 | `:tool-call` | `:id`, `:name`, `:arguments` | a call is dispatched, with the arguments after any [hooks](hooks.md#what-is-recorded); with before-tool-call hooks, once they have answered |
 | `:tool-detached` | `:id`, `:name` | a call [runs on](agent.md#detached-tool-calls) without holding the turn |
 | `:tool-resumed` | `:id`, `:name` | a logged call is [run again](calls.md#resuming-a-call) |
@@ -167,6 +168,7 @@ A front end tells a sub-agent's events from the root's by whether the
 | `:text-delta` | `:text` | streamed text |
 | `:tool-call-delta` | `:id`, `:name`, `:arguments` | a fragment of a call, arguments split across deltas |
 | `:done` | `:reason` | a turn ends, with its finish reason or `(:error r)` |
+| `:reply` | `:turn`, `:message` | a turn's whole reply joined the conversation, after its `:done` and before its calls |
 | `:tool-call` | `:id`, `:name`, `:arguments` | a call is dispatched, with the arguments after any [hooks](hooks.md#what-is-recorded); with before-tool-call hooks, once they have answered |
 | `:tool-detached` | `:id`, `:name` | a call [runs on](agent.md#detached-tool-calls) without holding the turn |
 | `:tool-resumed` | `:id`, `:name` | a logged call is [run again](calls.md#resuming-a-call) |

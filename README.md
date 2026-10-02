@@ -34,6 +34,7 @@ Runs on SBCL.
 - [Chat](docs/chat.md)
 - [Self-modification](docs/self.md)
 - [The vault](docs/vault.md)
+- [The run journal](docs/journal.md)
 - [The call log](docs/calls.md)
 - [Interceptor hooks](docs/hooks.md)
 - [Operator approval](docs/approvals.md)
