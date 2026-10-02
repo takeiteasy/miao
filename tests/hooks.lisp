@@ -400,6 +400,47 @@ once its first tool call is waiting on a hook."
           (is (search "no calls" (request-body 2)))
           (is (not (search "again\":true" (request-body 2)))))))))
 
+(defvar *resumed-text* nil)
+(defvar *suffix-saw* nil)
+
+(m:defservice tool-again-echo () () (:name :tool-again-echo))
+
+(defmethod m:metadata ((service tool-again-echo))
+  (list :kind :tool :name :tool-again-echo :trust :agent :resumable t
+        :summary "Echo TEXT back, safe to run twice"
+        :params '((:text string :required t :doc "text to echo"))))
+
+(miao::define-tool-handler tool-again-echo (service args)
+  (setf *resumed-text* (getf args :text))
+  (miao::ok :text *resumed-text*))
+
+(miao:define-hook :hook-suffix (:phases (:before-tool-call))
+  (:intercept (phase request)
+    (push (getf request :resumed) *suffix-saw*)
+    (list :rewrite (list :text (concatenate 'string (getf (getf request :arguments) :text) "!")))))
+
+(test a-resumed-call-runs-with-the-logged-arguments-and-the-hooks-only-decide
+  (dolist (log-raw '(nil t))
+    (with-vault-path (path)
+      (seed-call path "x-0" :name :tool-again-echo :arguments "{\"text\":\"hi!\"}" :call-id "c9")
+      (setf *resumed-text* nil
+            *suffix-saw* nil)
+      (with-agent ((scripted (final-reply "moving on") (final-reply "got it"))
+                   'tool-again-echo 'hook-suffix)
+        (m:with-process (runner)
+          (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+                                    :tools '(:tool-again-echo) :call-log path
+                                    :hooks '(:hook-suffix) :log-raw log-raw))
+                 (answer (call-child child (list :run :continue t :resume '("x-0")
+                                                      :messages '((:role :user :content "go"))))))
+            (is (equal '("x-0") (mapcar #'car (getf (second answer) :resumed))))
+            (is-true (nth-value 1 (m:receive :timeout 8)))
+            (is (equal "hi!" *resumed-text*))
+            (is (equal '(t) *suffix-saw*))
+            (let ((resumed (find "x-0" (miao:call-entries path)
+                                 :key (lambda (e) (getf e :resumes)) :test #'equal)))
+              (is (equal "{\"text\":\"hi!\"}" (getf resumed :arguments))))))))))
+
 (test an-answer-that-comes-after-an-interrupt-is-dropped
   (call-with-agent (echo-answer) (list* 'tool-echo +test-hooks+)
                    (lambda (*ctx*)

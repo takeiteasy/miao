@@ -31,7 +31,9 @@ happens.
 
 Every request also carries `:phase`, `:agent`, `:cancel` (the
 [cancel token](#not-blocking-the-agent)), `:run`, `:emit` (see
-[emitting events](#emitting-events)) and, on a sub-agent, `:parent`.
+[emitting events](#emitting-events)) and, on a sub-agent, `:parent`. A
+`:before-tool-call` request for a [resumed call](#resumed-calls) also has
+`:resumed t`.
 A `:before-turn` rewrite changes the request only; the conversation, and so a
 [checkpoint](checkpoints.md), keeps what was said.[^order]
 
@@ -109,6 +111,14 @@ hook is not escaped by delegating. The reserved `agent-task` call is itself a
 tool call: it passes through `:before-tool-call`, and the child's own calls do
 too.
 
+## Resumed calls
+
+A [resumed call](calls.md#resuming-a-call) goes through the resuming agent's
+`:before-tool-call` hooks again, with `:resumed t`. Its logged arguments are
+what the hooks left the first time, so the hooks decide only: a `:deny` or
+failure answers the call, and a `:rewrite` is dropped. The tool runs with the
+logged arguments.
+
 ## Emitting events
 
 `:run` is an id for the root run, unique in the image and the same for its
@@ -164,12 +174,6 @@ passes. A hook that waits registers on it with `miao:on-cancel`, or polls
 
 A call whose token is already cancelled answers `(:error :cancelled)` without
 running the hook.
-
-## Limitations
-
-- A [resumed call](calls.md#resuming-a-call) is run again from its logged
-  arguments, which the hooks already rewrote once, and they see them again
-  ([#211](https://todo.sr.ht/~takeiteasy/miao/211)).
 
 [^order]: The hooks see the whole conversation, and the result is then fitted
     to `:max-context`, so injected text counts against the budget and the

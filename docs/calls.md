@@ -101,6 +101,9 @@ tool and arguments are sent again as a new call.
         '(:run :continue t :resume ("...") :messages ((:role :user :content "go on"))))
 ```
 
+The resuming agent's [`:before-tool-call` hooks](hooks.md#resumed-calls) decide
+whether it runs, but do not rewrite its logged arguments again.
+
 The agent [runs it detached](agent.md#detached-tool-calls): `:tool-resumed` is
 emitted, and the result lands as a `:user` message,
 `[tool call c1 (tool-x) finished: {...}]`, ahead of a later turn. With no
