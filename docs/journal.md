@@ -65,18 +65,18 @@ closed with `:interrupted` replies, as an abandoned turn is.
 
 ## Compacting
 
-`journal-compact path &key max-age` folds each agent's conversation entries
-older than `max-age` seconds (default `*journal-max-age*`, seven days) into one
-`:reset :messages` entry, drops the old events and drops [finished
+`journal-compact path &key max-age` folds each run's conversation entries older
+than `max-age` seconds (default `*journal-max-age*`, seven days) into one
+`:messages` entry, drops the old events and drops [finished
 calls](calls.md#api) that old. It runs when a run starts or a call finishes and
-the log has passed `*journal-compact-size*` (1 MiB). The conversation reads back
-the same; the keys of the runs it folds do not.
+the log has passed `*journal-compact-size*` (1 MiB). Every run keeps its key and
+its conversation reads back the same.
 
 ## Limitations
 
 - Each entry is a synchronous write on the agent's process
   ([#181](https://todo.sr.ht/~takeiteasy/miao/181)).
-- Compaction rewrites the whole log under its lock
+- Compaction rewrites the whole log under its lock, so other processes wait
   ([#216](https://todo.sr.ht/~takeiteasy/miao/216)).
 
 [^cut]: The same rule [call records](calls.md) apply to a call's arguments and result.

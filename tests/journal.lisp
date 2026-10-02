@@ -141,6 +141,20 @@ answers REPLIES, and call BODY with it and a recorder on its events."
       (is (null (remove :event (miao:journal-entries path)
                         :key (lambda (e) (getf e :kind)) :test-not #'eq))))))
 
+(test compacting-keeps-each-runs-key-and-conversation
+  (with-journaled-agent (agent recorder path (list (streamed-reply "one") (streamed-reply "two")
+                                                   (streamed-reply "three")))
+    (run-j agent recorder "a")
+    (run-j agent recorder "b" :continue t)
+    (run-j agent recorder "c")
+    (let* ((runs (miao:journal-runs path :agent :j))
+           (before (mapcar (lambda (run) (miao:journal-conversation path :agent :j :run run)) runs)))
+      (is (= 3 (length runs)))
+      (miao:journal-compact path :max-age 0)
+      (is (equal runs (miao:journal-runs path :agent :j)))
+      (is (equal before (mapcar (lambda (run) (miao:journal-conversation path :agent :j :run run))
+                                runs))))))
+
 (test compacting-leaves-a-log-with-a-malformed-entry-alone
   (with-vault-path (path)
     (miao::journal-append path "r" :j nil :message :message '(:role :user :content "a"))

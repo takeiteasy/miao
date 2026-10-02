@@ -308,9 +308,8 @@ value), and the refused, (id reason), each in the order of IDS."
 
 ;;; --- compacting ------------------------------------------------------------
 
-;;; TODO: the whole log is read and rewritten under its lock, and an agent's old
-;;; conversation is folded as one :MESSAGES entry, so a run's key is lost from it;
-;;; a segmented log if it grows large (#216).
+;;; TODO: the whole log is read and rewritten under its lock, so other processes
+;;; wait on it; a segmented log if that is measured to stall them (#216).
 
 (defun %expired-p (entry cutoff max-age)
   (let ((at (getf entry :at)))
@@ -332,35 +331,39 @@ value), and the refused, (id reason), each in the order of IDS."
             dropped)))
 
 (defun %with-old-conversations-folded (log cutoff max-age)
-  "LOG with each agent's conversation entries and events older than CUTOFF
-replaced by one :RESET :MESSAGES entry, at the place of its first."
+  "LOG with each run's conversation entries and events older than CUTOFF replaced
+by one :MESSAGES entry, at the place of the last of them: a :RESET only when the
+run's old entries held one, so a run that continued another adds to it still."
   (let ((old (make-hash-table :test 'eq))
         (groups (make-hash-table :test 'equal))
-        (placed (make-hash-table :test 'equal))
         (result '()))
-    (dolist (entry log)
-      (when (and (member (getf entry :kind) '(:messages :message :event))
-                 (%expired-p entry cutoff max-age))
-        (setf (gethash entry old) t)
-        (push entry (gethash (cons (getf entry :agent) (getf entry :parent)) groups))))
-    (dolist (entry log (nreverse result))
-      (let ((key (cons (getf entry :agent) (getf entry :parent))))
-        (cond ((not (gethash entry old)) (push entry result))
-              ((not (gethash key placed))
-               (setf (gethash key placed) t)
-               (let* ((group (reverse (gethash key groups)))
-                      (last (car (last group))))
-                 (push (list* :kind :messages :id (getf last :id) :at (getf last :at)
-                              :agent (getf last :agent) :run (getf last :run)
-                              (append (and (getf last :parent) (list :parent (getf last :parent)))
-                                      (list :reset t :messages (%fold-conversation group))))
+    (flet ((group-key (entry)
+             (list (getf entry :agent) (getf entry :parent) (getf entry :run))))
+      (dolist (entry log)
+        (when (and (member (getf entry :kind) '(:messages :message :event))
+                   (%expired-p entry cutoff max-age))
+          (setf (gethash entry old) t)
+          (push entry (gethash (group-key entry) groups))))
+      (dolist (entry log (nreverse result))
+        (let ((group (gethash (group-key entry) groups)))
+          (cond ((not (gethash entry old)) (push entry result))
+                ((and (eq entry (first group))
+                      (find-if (lambda (e) (member (getf e :kind) '(:messages :message))) group))
+                 (push (list* :kind :messages :id (getf entry :id) :at (getf entry :at)
+                              :agent (getf entry :agent) :run (getf entry :run)
+                              (append (and (getf entry :parent) (list :parent (getf entry :parent)))
+                                      (list :reset (and (find-if (lambda (e) (and (eq (getf e :kind) :messages)
+                                                                                  (getf e :reset)))
+                                                                 group)
+                                                        t)
+                                            :messages (%fold-conversation (reverse group)))))
                        result))))))))
 
 (defun journal-compact (path &key (max-age *journal-max-age*))
   "Rewrite PATH without the calls finished more than MAX-AGE seconds ago (0 drops
 every finished one), their inputs and their :RUNNING and :DONE lines, and with
-each agent's conversation entries older than that folded into one :RESET :MESSAGES
-entry, the events dropped. Calls not finished are kept. Returns the calls dropped
+each run's conversation entries older than that folded into one :MESSAGES entry,
+the events dropped. Calls not finished are kept. Returns the calls dropped
 and kept, or nil, leaving the file untouched, when the log has a malformed entry."
   (with-log-lock (path)
     (multiple-value-bind (log clean) (%read-log path)
