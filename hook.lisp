@@ -29,12 +29,14 @@
     (unless process (error "No hook registered under ~s." name))
     (m:call process '(:describe))))
 
-(defun %check-hook-options (phases on-error)
-  "A problem string for PHASES or ON-ERROR, or nil."
+(defun %check-hook-options (phases on-error &optional (on-resume :run))
+  "A problem string for PHASES, ON-ERROR or ON-RESUME, or nil."
   (cond ((not (and (a:proper-list-p phases) (subsetp phases +hook-phases+)))
          (format nil "a hook's :phases are some of ~s, not ~s" +hook-phases+ phases))
         ((not (member on-error '(:deny :pass)))
-         (format nil "a hook's :on-error is :deny or :pass, not ~s" on-error))))
+         (format nil "a hook's :on-error is :deny or :pass, not ~s" on-error))
+        ((not (member on-resume '(:run :skip)))
+         (format nil "a hook's :on-resume is :run or :skip, not ~s" on-resume))))
 
 (defun %hook-answer (request thunk)
   "THUNK's value, or (:error detail) when it signals, so a hook that fails
@@ -46,7 +48,7 @@ cancelled answers :cancelled without running THUNK."
         (handler-case (funcall thunk)
           (error (e) (fail (list :error (princ-to-string e))))))))
 
-(defmacro define-hook (name (&key summary phases (on-error :deny)
+(defmacro define-hook (name (&key summary phases (on-error :deny) (on-resume :run)
                                (timeout '+default-tool-timeout+) slots)
                        &body intercept)
   "Define the hook NAME, a keyword: a service class, its METADATA and its
@@ -54,7 +56,8 @@ cancelled answers :cancelled without running THUNK."
 
 PHASES defaults to every phase. ON-ERROR is how the agent treats a hook that
 signals, times out or answers badly: :DENY fails closed, :PASS carries on
-without it. TIMEOUT is the milliseconds the agent waits on one answer; the
+without it. ON-RESUME is :RUN, or :SKIP to leave the hook out of the chain of a
+resumed call, which only decides: a rewrite is dropped. TIMEOUT is the milliseconds the agent waits on one answer; the
 run's :DEADLINE still bounds it. SLOTS is passed through to DEFSERVICE.
 
 INTERCEPT is exactly one (:INTERCEPT (phase request) . body) clause. PHASE is
@@ -62,7 +65,7 @@ the phase and REQUEST the whole :INTERCEPT plist; SERVICE is bound
 anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
 (:DENY reason). A condition it signals is answered as an error."
   (let ((phases (or phases +hook-phases+)))
-    (let ((problem (%check-hook-options phases on-error)))
+    (let ((problem (%check-hook-options phases on-error on-resume)))
       (when problem (error "~a" problem)))
     (destructuring-bind (head (phase-var request-var) &body body) (first intercept)
       (unless (eq head :intercept)
@@ -75,7 +78,8 @@ anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
            (register-definition ,name :hook ',class)
            (defmethod m:metadata ((service ,class))
              (list :kind :hook :name ,name :summary ,summary :phases ',phases
-                   :on-error ,on-error :timeout ,timeout))
+                   :on-error ,on-error :on-resume ,on-resume
+                   :timeout ,timeout))
            (defmethod m:handle ((service ,class) message)
              (case (first message)
                (:describe (m:metadata service))
@@ -97,12 +101,14 @@ anaphorically, as in DEFINE-TOOL. The body answers :PASS, (:REWRITE value) or
    (label :initarg :label :initform :function :reader hook-label)
    (phases :initarg :phases :initform +hook-phases+ :reader hook-phases)
    (on-error :initarg :on-error :initform :deny :reader hook-on-error)
+   (on-resume :initarg :on-resume :initform :run :reader hook-on-resume)
    (timeout :initarg :timeout :initform +default-tool-timeout+ :reader hook-timeout))
   (:default-initargs :name nil))
 
 (defmethod m:metadata ((service hook-function))
   (list :kind :hook :name (hook-label service) :phases (hook-phases service)
-        :on-error (hook-on-error service) :timeout (hook-timeout service)))
+        :on-error (hook-on-error service) :on-resume (hook-on-resume service)
+        :timeout (hook-timeout service)))
 
 (defmethod m:handle ((service hook-function) message)
   (case (first message)

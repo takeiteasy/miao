@@ -441,6 +441,42 @@ once its first tool call is waiting on a hook."
                                  :key (lambda (e) (getf e :resumes)) :test #'equal)))
               (is (equal "{\"text\":\"hi!\"}" (getf resumed :arguments))))))))))
 
+(miao:define-hook :hook-suffix-skipped (:phases (:before-tool-call) :on-resume :skip)
+  (:intercept (phase request)
+    (push :ran *suffix-saw*)
+    :pass))
+
+(defun resume-through (hooks)
+  "Resume a logged call through HOOKS and wait for its result to land."
+  (with-vault-path (path)
+    (seed-call path "x-0" :name :tool-again-echo :arguments "{\"text\":\"hi!\"}" :call-id "c9")
+    (setf *resumed-text* nil
+          *suffix-saw* nil)
+    (with-agent ((scripted (final-reply "moving on") (final-reply "got it"))
+                 'tool-again-echo 'hook-suffix 'hook-suffix-skipped 'hook-deny-all)
+      (m:with-process (runner)
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+                                 :tools '(:tool-again-echo) :call-log path :hooks hooks)))
+          (call-child child (list :run :continue t :resume '("x-0")
+                                       :messages '((:role :user :content "go"))))
+          (is-true (nth-value 1 (m:receive :timeout 8))))))))
+
+(test an-on-resume-skip-hook-is-left-out-of-a-resumed-calls-chain
+  (resume-through '(:hook-suffix-skipped))
+  (is (null *suffix-saw*))
+  (is (equal "hi!" *resumed-text*)))
+
+(test an-on-resume-skip-can-be-set-on-the-hooks-entry
+  (resume-through '((:hook-suffix :on-resume :skip)))
+  (is (null *suffix-saw*)))
+
+(test a-skipped-hook-does-not-skip-the-hooks-that-deny
+  (resume-through '(:hook-suffix-skipped :hook-deny-all))
+  (is (null *resumed-text*)))
+
+(test a-bad-on-resume-refuses-the-run
+  (is (eq :error (first (hooked-run '((:hook-record :on-resume :never)))))))
+
 (test an-answer-that-comes-after-an-interrupt-is-dropped
   (call-with-agent (echo-answer) (list* 'tool-echo +test-hooks+)
                    (lambda (*ctx*)

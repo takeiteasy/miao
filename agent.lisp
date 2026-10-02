@@ -1321,8 +1321,8 @@ one that reads implausibly, leaves the last ratio."
 ;;; metadata is read then, so a hook that dies mid-run still fails by the
 ;;; policy it declared.
 
-(defstruct (hook-entry (:constructor make-hook-entry (name target phases on-error timeout)))
-  name target phases on-error timeout)
+(defstruct (hook-entry (:constructor make-hook-entry (name target phases on-error on-resume timeout)))
+  name target phases on-error on-resume timeout)
 
 (defstruct chain id ref phase entries current token subject extra k)
 
@@ -1364,18 +1364,19 @@ the run: a named hook that is not registered, or a bad option."
               (values nil problem)
               (let ((phases (getf options :phases (getf props :phases +hook-phases+)))
                     (on-error (getf options :on-error (getf props :on-error :deny)))
+                    (on-resume (getf options :on-resume (getf props :on-resume :run)))
                     (timeout (getf options :timeout (getf props :timeout +default-tool-timeout+)))
                     (label (if named target (getf options :name :function))))
-                (a:if-let ((bad (%check-hook-options phases on-error)))
+                (a:if-let ((bad (%check-hook-options phases on-error on-resume)))
                   (values nil (bad-request "~a" bad))
                   (make-hook-entry label
                                    (if named
                                        target
                                        (hook-function-process service spec label phases
-                                                              on-error timeout))
-                                   phases on-error timeout))))))))
+                                                              on-error on-resume timeout))
+                                   phases on-error on-resume timeout))))))))
 
-(defun hook-function-process (service spec label phases on-error timeout)
+(defun hook-function-process (service spec label phases on-error on-resume timeout)
   "The service running SPEC's function, mounted when first needed and kept for
 the agent's life."
   (let ((cell (assoc spec (%hook-services service) :test #'eq)))
@@ -1383,7 +1384,8 @@ the agent's life."
         (cdr cell)
         (let ((process (m:mount (m:service-process (m:service-context service))
                                 'hook-function :fn (first spec) :label label :phases phases
-                                :on-error on-error :timeout timeout :restart :temporary)))
+                                :on-error on-error :on-resume on-resume
+                                :timeout timeout :restart :temporary)))
           (setf (%hook-services service)
                 (acons spec process (remove cell (%hook-services service))))
           process))))
@@ -1406,7 +1408,9 @@ runs at once when no hook applies, and otherwise from HOOK-REPLY.
 A chain is dropped when the step it started under passes, unless it is
 DETACHED: that of a call that outlives its turn, which only the end of the run
 drops."
-  (let ((entries (phase-hooks service phase)))
+  (let ((entries (remove-if (lambda (entry)
+                              (and (getf extra :resumed) (eq (hook-entry-on-resume entry) :skip)))
+                            (phase-hooks service phase))))
     (if (null entries)
         (funcall k :ok subject)
         (let ((chain (make-chain :id (incf (%chain-seq service))

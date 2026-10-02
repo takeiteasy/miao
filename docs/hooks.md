@@ -82,6 +82,7 @@ clause, as [`define-tool`](tools.md) does:
 |---|---|---|
 | `:phases` | all three | the phases it runs in |
 | `:on-error` | `:deny` | [what a failure means](#failure) |
+| `:on-resume` | `:run` | `:skip` leaves the hook out of a [resumed call's](#resumed-calls) chain |
 | `:timeout` | 30000 | milliseconds the agent waits for one answer; the run's `:deadline` still bounds it |
 | `:summary` | none | a line for introspection |
 | `:slots` | none | passed to `defservice`, for state the hook keeps |
@@ -118,6 +119,10 @@ A [resumed call](calls.md#resuming-a-call) goes through the resuming agent's
 what the hooks left the first time, so the hooks decide only: a `:deny` or
 failure answers the call, and a `:rewrite` is dropped. The tool runs with the
 logged arguments.
+
+A hook that only rewrites has nothing to add there. Declare it `:on-resume
+:skip`, or set it on the `:hooks` entry as `(:hook-inject-header :on-resume
+:skip)`; a hook that denies keeps the default.
 
 ## Emitting events
 
