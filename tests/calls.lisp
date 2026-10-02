@@ -2,7 +2,7 @@
 (in-suite :miao)
 
 ;;; The call log (~takeiteasy/miao#73): the log's own accept/running/done/fold
-;;; API, and AGENT's use of it through :CALL-LOG.
+;;; API, and AGENT's use of it through :JOURNAL.
 
 (defun call-statuses (path)
   (mapcar (lambda (e) (getf e :status)) (miao:call-entries path)))
@@ -11,7 +11,7 @@
   (first (miao:call-entries path)))
 
 (defun accept-one (path &key (name :tool-echo))
-  (first (miao::call-log-accept path :assistant 1 (list (list :id "c1" :name name
+  (first (miao::journal-call-accept path :assistant 1 (list (list :id "c1" :name name
                                                               :arguments '(:text "hi"))))))
 
 ;;; --- the log API ---------------------------------------------------------
@@ -20,9 +20,9 @@
   (with-vault-path (path)
     (let ((id (accept-one path)))
       (is (equal '(:accepted) (call-statuses path)))
-      (miao::call-log-running path (list id))
+      (miao::journal-call-running path (list id))
       (is (equal '(:running) (call-statuses path)))
-      (miao::call-log-done path (list (list id :ok "{\"text\":\"hi\"}")))
+      (miao::journal-call-done path (list (list id :ok "{\"text\":\"hi\"}")))
       (let ((call (one-call path)))
         (is (eq :ok (getf call :status)))
         (is (equal "{\"text\":\"hi\"}" (getf call :content)))
@@ -35,7 +35,7 @@
 
 (test a-batch-gets-a-log-id-per-call-whatever-the-provider-ids
   (with-vault-path (path)
-    (let ((ids (miao::call-log-accept
+    (let ((ids (miao::journal-call-accept
                 path nil 1 (list (list :id "c1" :name :tool-echo :arguments nil)
                                  (list :id "c1" :name :tool-echo :arguments nil)))))
       (is (eql 2 (length (remove-duplicates ids :test #'equal)))))))
@@ -43,8 +43,8 @@
 (test a-call-keeps-its-first-outcome
   (with-vault-path (path)
     (let ((id (accept-one path)))
-      (miao::call-log-done path (list (list id :ok "a")))
-      (miao::call-log-done path (list (list id :abandoned nil)))
+      (miao::journal-call-done path (list (list id :ok "a")))
+      (miao::journal-call-done path (list (list id :abandoned nil)))
       (is (equal '(:ok) (call-statuses path))))))
 
 (test a-call-whose-owner-is-gone-reads-as-lost
@@ -55,32 +55,32 @@
                    :by (list :pid 999999 :host (machine-instance) :start 1 :token "other"))
              out))
     (is (equal '(:lost) (call-statuses path)))
-    (miao::call-log-done path (list (list "x-0" :abandoned nil)))
+    (miao::journal-call-done path (list (list "x-0" :abandoned nil)))
     (is (equal '(:abandoned) (call-statuses path)))))
 
 (test compaction-drops-finished-calls-and-keeps-the-rest
   (with-vault-path (path)
     (let ((done (accept-one path))
           (open (accept-one path)))
-      (miao::call-log-done path (list (list done :ok "x")))
-      (multiple-value-bind (dropped kept) (miao:call-log-compact path :max-age 0)
+      (miao::journal-call-done path (list (list done :ok "x")))
+      (multiple-value-bind (dropped kept) (miao:journal-compact path :max-age 0)
         (is (eql 1 dropped))
         (is (eql 1 kept)))
       (is (equal (list open) (mapcar (lambda (e) (getf e :id)) (miao:call-entries path)))))))
 
 (test compaction-keeps-recently-finished-calls
   (with-vault-path (path)
-    (miao::call-log-done path (list (list (accept-one path) :ok "x")))
-    (is (eql 0 (miao:call-log-compact path)))
+    (miao::journal-call-done path (list (list (accept-one path) :ok "x")))
+    (is (eql 0 (miao:journal-compact path)))
     (is (equal '(:ok) (call-statuses path)))))
 
 (test a-malformed-call-log-line-is-skipped-and-blocks-compaction
   (with-vault-path (path)
-    (miao::call-log-done path (list (list (accept-one path) :ok "x")))
+    (miao::journal-call-done path (list (list (accept-one path) :ok "x")))
     (with-open-file (out path :direction :output :if-exists :append)
       (write-line "(:kind :call :id" out))
     (is (equal '(:ok) (call-statuses path)))
-    (is (null (miao:call-log-compact path :max-age 0)))))
+    (is (null (miao:journal-compact path :max-age 0)))))
 
 (test call-log-reading-never-evaluates
   (with-vault-path (path)
@@ -91,9 +91,9 @@
 
 (test an-append-compacts-once-the-log-passes-its-size
   (with-vault-path (path)
-    (let ((miao:*call-log-compact-size* 1)
-          (miao:*call-log-max-age* 0))
-      (miao::call-log-done path (list (list (accept-one path) :ok "x")))
+    (let ((miao:*journal-compact-size* 1)
+          (miao:*journal-max-age* 0))
+      (miao::journal-call-done path (list (list (accept-one path) :ok "x")))
       (is (null (miao:call-entries path))))))
 
 ;;; --- the agent's own use of the log -----------------------------------------
@@ -104,7 +104,7 @@
      (with-agent (,answer ,@tools)
        (m:with-process (runner)
          (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
-                                  :call-log ,path ,@agent-args)))
+                                  :journal ,path ,@agent-args)))
            ,@body)))))
 
 (defun run-child (child)
@@ -262,5 +262,5 @@
   (with-vault-path (path)
     (with-agent ((final-reply "x"))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :call-log path)))
-          (is (equal path (getf (m:call child '(:describe)) :call-log))))))))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :journal path)))
+          (is (equal path (getf (m:call child '(:describe)) :journal))))))))

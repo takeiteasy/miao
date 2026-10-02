@@ -6,7 +6,7 @@ status and does not run or queue again.
 
 ```lisp
 (m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama
-                           :call-log t :vault t)
+                           :journal t :vault t)
 
 (m:call (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))
                                      :input-id "req-7f3a"))
@@ -20,7 +20,7 @@ status and does not run or queue again.
 
 | Message | Recorded in | Needs | A redelivery answers |
 |---|---|---|---|
-| `(:run :messages m :input-id k)` | the [call log](calls.md#the-log), as an `:input` entry | `:call-log` | `(:ok (:duplicate status))` |
+| `(:run :messages m :input-id k)` | the [call log](calls.md#the-log), as an `:input` entry | `:journal` | `(:ok (:duplicate status))` |
 | `(:steer :content c :input-id k)` | the [vault](vault.md#the-log), on the `:steer` line | `:vault` | `(:ok (:duplicate status))` |
 
 `:input-id` is a string of the caller's choosing, unique across the callers
@@ -47,7 +47,7 @@ bad-request, so a redelivery during the run reads `:running`. A new keyed
 
 ## `run-agent`
 
-`run-agent` takes `:input-id` too, and needs `:call-log`. A redelivery returns
+`run-agent` takes `:input-id` too, and needs `:journal`. A redelivery returns
 `(:ok (:duplicate status))` and starts nothing.
 
 ## `:input-id` and `:vault-id`
@@ -60,7 +60,7 @@ steer; it skips the check.
 
 - A duplicate is answered only to `m:call`; a `m:cast` caller sees no reply.
 - An id is remembered until compaction drops it: 7 days after the input
-  finished ([`*call-log-max-age*`](calls.md#api),
+  finished ([`*journal-max-age*`](calls.md#api),
   [`*vault-max-age*`](vault.md#compaction)). A later redelivery is new
   ([#182](https://todo.sr.ht/~takeiteasy/miao/182)).
 - A `:lost` input is reported, not re-run

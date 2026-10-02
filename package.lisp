@@ -42,8 +42,8 @@
    #:journal-entries #:journal-runs #:journal-conversation #:journal-compact
    #:*journal* #:*journal-max-age* #:*journal-compact-size* #:*journal-max-content*
    ;; call log
-   #:call-entries #:input-entries #:call-log-compact #:*call-log* #:*call-log-max-age*
-   #:*call-log-compact-size* #:*call-log-max-content*
+   #:call-entries #:input-entries #:journal-compact #:*journal* #:*journal-max-age*
+   #:*journal-compact-size* #:*journal-max-content*
    ;; parameter schemas
    #:validate-schema #:coerce-args
    #:schema->json-schema #:json-schema->schema

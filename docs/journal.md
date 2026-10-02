@@ -34,6 +34,7 @@ key of the root run.
 | `:messages` | a run starts, or a [restore](checkpoints.md) | `:messages`; `:reset t` replaces the conversation, otherwise they are added to it |
 | `:message` | a message joins the conversation | `:message`, as it is |
 | `:event` | the loop [emits an event](agent.md#events) | the event's `:type` and keys |
+| `:call`, `:running`, `:done`, `:input` | a tool call or a keyed run is dispatched, starts, ends | [call records](calls.md) |
 
 `:messages` and `:message` are exact. An `:event`'s `:arguments`, `:result`,
 `:messages`, `:content` and `:message` are text cut to `:max-tool-result`, or
@@ -66,7 +67,8 @@ closed with `:interrupted` replies, as an abandoned turn is.
 
 `journal-compact path &key max-age` folds each agent's conversation entries
 older than `max-age` seconds (default `*journal-max-age*`, seven days) into one
-`:reset :messages` entry and drops the old events. It runs when a run starts and
+`:reset :messages` entry, drops the old events and drops [finished
+calls](calls.md#api) that old. It runs when a run starts or a call finishes and
 the log has passed `*journal-compact-size*` (1 MiB). The conversation reads back
 the same; the keys of the runs it folds do not.
 
@@ -77,4 +79,4 @@ the same; the keys of the runs it folds do not.
 - Compaction rewrites the whole log under its lock
   ([#216](https://todo.sr.ht/~takeiteasy/miao/216)).
 
-[^cut]: The same rule the [call log](calls.md) applies to a call's arguments and result.
+[^cut]: The same rule [call records](calls.md) apply to a call's arguments and result.

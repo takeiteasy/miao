@@ -31,11 +31,11 @@
 
 (test a-keyed-input-is-fresh-then-a-duplicate
   (with-vault-path (path)
-    (multiple-value-bind (id duplicate) (miao::call-log-input path :assistant "k" "d1")
+    (multiple-value-bind (id duplicate) (miao::journal-input path :assistant "k" "d1")
       (is (stringp id))
       (is (null duplicate))
       (multiple-value-bind (again duplicate status digest)
-          (miao::call-log-input path :assistant "k" "d1")
+          (miao::journal-input path :assistant "k" "d1")
         (is (equal id again))
         (is (eq :duplicate duplicate))
         (is (eq :running status))
@@ -44,10 +44,10 @@
 
 (test a-finished-input-reports-its-outcome
   (with-vault-path (path)
-    (let ((id (miao::call-log-input path :assistant "k" "d1")))
-      (miao::call-log-done path (list (list id :stop nil)))
+    (let ((id (miao::journal-input path :assistant "k" "d1")))
+      (miao::journal-call-done path (list (list id :stop nil)))
       (is (equal '(:stop) (input-statuses path)))
-      (is (eq :stop (nth-value 2 (miao::call-log-input path :assistant "k" "d1")))))))
+      (is (eq :stop (nth-value 2 (miao::journal-input path :assistant "k" "d1")))))))
 
 (test an-input-whose-owner-is-gone-reads-as-lost
   (with-vault-path (path)
@@ -56,24 +56,24 @@
                    :input-id "k" :digest "d1"
                    :by (list :pid 999999 :host (machine-instance) :start 1 :token "other"))
              out))
-    (is (eq :lost (nth-value 2 (miao::call-log-input path :assistant "k" "d1"))))))
+    (is (eq :lost (nth-value 2 (miao::journal-input path :assistant "k" "d1"))))))
 
 (test an-unrecorded-input-appends-nothing
   (with-vault-path (path)
-    (is (null (miao::call-log-input path :assistant "k" "d1" :record nil)))
+    (is (null (miao::journal-input path :assistant "k" "d1" :record nil)))
     (is (null (miao:input-entries path)))))
 
 (test call-entries-leaves-inputs-out
   (with-vault-path (path)
-    (miao::call-log-input path :assistant "k" "d1")
+    (miao::journal-input path :assistant "k" "d1")
     (is (null (miao:call-entries path)))))
 
 (test compaction-drops-a-finished-input-and-keeps-an-open-one
   (with-vault-path (path)
-    (let ((done (miao::call-log-input path :assistant "a" "d"))
-          (open (miao::call-log-input path :assistant "b" "d")))
-      (miao::call-log-done path (list (list done :stop nil)))
-      (miao:call-log-compact path :max-age 0)
+    (let ((done (miao::journal-input path :assistant "a" "d"))
+          (open (miao::journal-input path :assistant "b" "d")))
+      (miao::journal-call-done path (list (list done :stop nil)))
+      (miao:journal-compact path :max-age 0)
       (is (equal (list open) (mapcar (lambda (e) (getf e :id)) (miao:input-entries path)))))))
 
 (test concurrent-inputs-of-one-id-are-accepted-once
@@ -83,7 +83,7 @@
            (threads (loop repeat 8
                           collect (bt:make-thread
                                    (lambda ()
-                                     (unless (nth-value 1 (miao::call-log-input
+                                     (unless (nth-value 1 (miao::journal-input
                                                            path :assistant "k" "d"))
                                        (bt:with-lock-held (rlock) (incf fresh))))))))
       (mapc #'bt:join-thread threads)
@@ -110,7 +110,7 @@
   (let ((n 0))
     (with-vault-path (path)
       (with-agent ((lambda (&rest request) (declare (ignore request)) (incf n) (final-reply "done")))
-        (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :call-log path)
+        (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :journal path)
         (is (eq :ok (keyed-run-named :assistant "k")))
         (is-true (wait-for-input-status path :stop))
         (is (equal '(:ok (:duplicate :stop)) (keyed-run-named :assistant "k")))
@@ -134,7 +134,7 @@
 (test a-run-keyed-with-other-messages-is-a-bad-request
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :call-log path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :journal path)
       (keyed-run-named :assistant "k")
       (is-true (wait-for-input-status path :stop))
       (is (eq :bad-request
@@ -178,7 +178,7 @@
     (with-vault-path (path)
       (with-agent ((lambda (&rest request) (declare (ignore request)) (incf n) (final-reply "done")))
         (flet ((go-run ()
-                 (miao:run-agent *ctx* :model :provider-test-keyed :call-log path
+                 (miao:run-agent *ctx* :model :provider-test-keyed :journal path
                                        :input-id "k"
                                        :messages '((:role :user :content "go")))))
           (is (eq :ok (first (go-run))))

@@ -53,6 +53,6 @@ the original's call carries on.
   ([#178](https://todo.sr.ht/~takeiteasy/miao/178)).
 
 [^mount]: Same class, options and restart policy, so `:sink`, `:vault` and
-    `:call-log` are shared with the original: a fork's events reach the same
+    `:journal` are shared with the original: a fork's events reach the same
     sink, and its steering and tool calls are recorded in the same logs. Mount options are read from
     the original's mount, so a credential-holding option is copied too.

@@ -1,6 +1,6 @@
 (in-package #:miao)
 
-;;; The call log tool (~takeiteasy/miao#179): list and compact the log calls.lisp
+;;; The call log tool (~takeiteasy/miao#179): list and compact the call records the journal
 ;;; keeps, and resume (~takeiteasy/miao#77) the calls in it that a crash or restore
 ;;; cut short by sending :RESUME to the agent that dispatched them.
 ;;;
@@ -12,7 +12,7 @@
      :summary "List and compact the tool call log, and resume calls it holds as lost"
      :slots ((path :initarg :path :initform nil :reader calls-tool-path
                    :documentation "Log path this mount reads and writes. NIL
-(the default) uses the same default an agent's :CALL-LOG T does."))
+(the default) uses the same default an agent's :JOURNAL T does."))
      :params ((:op (member :list :resume :compact) :required t
                :doc "operation to perform")
               (:ids (array-of string) :required-when (:op :resume)
@@ -26,9 +26,9 @@ by default the one that dispatched them")
                :default :all :doc "filter for :list")
               (:limit (integer 1 1000) :default 50 :doc "calls to answer, for :list")
               (:max-age (integer 0) :doc "seconds a finished call is kept, for
-:compact; 0 drops every finished call (default *call-log-max-age*)")))
+:compact; 0 drops every finished call (default *journal-max-age*)")))
   (:invoke (op ids agent force status limit max-age)
-    (let ((path (%call-log-path (or (calls-tool-path service) t))))
+    (let ((path (%journal-path (or (calls-tool-path service) t))))
       (case op
         (:list (op-calls-list path status limit))
         (:resume (op-calls-resume service path ids agent force))
@@ -62,7 +62,7 @@ by default the one that dispatched them")
 
 (defun op-calls-compact (path max-age)
   (multiple-value-bind (dropped kept)
-      (if max-age (call-log-compact path :max-age max-age) (call-log-compact path))
+      (if max-age (journal-compact path :max-age max-age) (journal-compact path))
     (if dropped
         (ok :dropped dropped :kept kept)
         (bad-request "call log has a malformed entry; not compacting"))))

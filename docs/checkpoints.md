@@ -42,12 +42,12 @@ Both default to `nil`: most services hold nothing worth carrying across a
 restart. The agent is the one service with a method today — it keeps
 `:messages` and `:turns`. While a run is in progress it also reports
 `:in-flight (:turn n :tool-calls (ids...))`, plus `:detached (ids...)` while a
-[detached call](agent.md#detached-tool-calls) runs on, and `:call-log-ids
+[detached call](agent.md#detached-tool-calls) runs on, and `:journal-ids
 (ids...)` for the calls with no result when the agent has a
 [call log](calls.md). Only the ids are kept: the turn and tool calls
 reference processes a restore cannot bring back, so a restore does not retry them,
 and a detached call's result never reaches a restored agent. The
-`:call-log-ids` can be [resumed](calls.md#resuming-a-call) to run those calls
+`:journal-ids` can be [resumed](calls.md#resuming-a-call) to run those calls
 again. A tool call with no result yet is recorded as an
 `{"error":"interrupted"}` `:tool` message, so the saved conversation can be
 sent to a provider as it is; results that had arrived are kept. `restore`

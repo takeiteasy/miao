@@ -404,7 +404,7 @@ once its first tool call is waiting on a hook."
                  'tool-again 'hook-deny-all)
       (m:with-process (runner)
         (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
-                                  :tools '(:tool-again) :call-log path :hooks '(:hook-deny-all)))
+                                  :tools '(:tool-again) :journal path :hooks '(:hook-deny-all)))
                (answer (call-child child (list :run :continue t :resume '("x-0")
                                                     :messages '((:role :user :content "go"))))))
           (is (equal '("x-0") (mapcar #'car (getf (second answer) :resumed))))
@@ -442,7 +442,7 @@ once its first tool call is waiting on a hook."
                    'tool-again-echo 'hook-suffix)
         (m:with-process (runner)
           (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
-                                    :tools '(:tool-again-echo) :call-log path
+                                    :tools '(:tool-again-echo) :journal path
                                     :hooks '(:hook-suffix) :log-raw log-raw))
                  (answer (call-child child (list :run :continue t :resume '("x-0")
                                                       :messages '((:role :user :content "go"))))))
@@ -469,7 +469,7 @@ once its first tool call is waiting on a hook."
                  'tool-again-echo 'hook-suffix 'hook-suffix-skipped 'hook-deny-all)
       (m:with-process (runner)
         (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
-                                 :tools '(:tool-again-echo) :call-log path :hooks hooks)))
+                                 :tools '(:tool-again-echo) :journal path :hooks hooks)))
           (call-child child (list :run :continue t :resume '("x-0")
                                        :messages '((:role :user :content "go"))))
           (is-true (nth-value 1 (m:receive :timeout 8))))))))

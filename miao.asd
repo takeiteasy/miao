@@ -44,7 +44,6 @@
                ;; and folds a steer through it.
                (:file "vault")
                (:file "journal")
-               (:file "calls")
                ;; Ahead of agent.lisp, which runs the hooks it defines.
                (:file "hook")
                (:file "protocol")

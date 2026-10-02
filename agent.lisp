@@ -95,10 +95,6 @@ pathname: record there instead.")
             :documentation "NIL (the default): runs are not journaled. T:
 journal to the default log (~takeiteasy/miao#119). A string or pathname: journal
 there instead. A sub-agent inherits it.")
-   (call-log :initarg :call-log :initform nil :reader agent-call-log
-             :documentation "NIL (the default): dispatched tool calls are not
-recorded. T: record each to the default call log (~takeiteasy/miao#73). A
-string or pathname: record there instead.")
    ;; Run state, reset by START-RUN.
    ;; Newest first, so adding one is O(1); CONVERSATION reads it in order.
    (messages :initform nil :accessor %messages)
@@ -113,7 +109,7 @@ string or pathname: record there instead.")
    ;; (ref id name) of calls due to detach once a slot frees, oldest first.
    (detach-deferred :initform nil :accessor %detach-deferred)
    (call-tokens :initform nil :accessor %call-tokens)
-   (call-log-ids :initform nil :accessor %call-log-ids)
+   (journal-call-ids :initform nil :accessor %journal-call-ids)
    (input-log-id :initform nil :accessor %input-log-id)
    (steer-queue :initform nil :accessor %steer-queue)
    (step-ref :initform 0 :accessor %step-ref)
@@ -174,7 +170,6 @@ string or pathname: record there instead.")
         :retry-backoff (agent-retry-backoff service)
         :vault (agent-vault service)
         :journal (agent-journal service)
-        :call-log (agent-call-log service)
         :hooks (mapcar #'hook-spec-label (agent-hooks-spec service))
         :log-raw (agent-log-raw service)))
 
@@ -258,13 +253,13 @@ string or pathname: record there instead.")
 the log id of a new one, nil when not recorded, or the reply for a
 redelivery, (:OK (:DUPLICATE status)); a bad-request when there is no call
 log or the id was used for other messages."
-  (let ((path (call-log-of service))
+  (let ((path (journal-of service))
         (input-id (getf args :input-id)))
     (cond ((not (stringp input-id)) (bad-request ":input-id must be a string"))
-          ((not path) (bad-request ":input-id needs a :call-log"))
+          ((not path) (bad-request ":input-id needs a :journal"))
           (t (let ((digest (messages-digest (getf args :messages))))
                (multiple-value-bind (id duplicate status prior)
-                   (call-log-input path (m:service-name service) input-id digest
+                   (journal-input path (m:service-name service) input-id digest
                                    :record record)
                  (cond ((not duplicate) id)
                        ((not (equal prior digest))
@@ -272,9 +267,9 @@ log or the id was used for other messages."
                        (t (ok :duplicate status)))))))))
 
 (defun record-input-done (service outcome)
-  (a:when-let ((path (call-log-of service)))
+  (a:when-let ((path (journal-of service)))
     (a:when-let ((id (%input-log-id service)))
-      (call-log-done path (list (list id outcome nil)))
+      (journal-call-done path (list (list id outcome nil)))
       (setf (%input-log-id service) nil))))
 
 (defun begin-run (service args input-log-id)
@@ -297,7 +292,7 @@ log or the id was used for other messages."
           (%awaiting-detached service) nil
           (%detach-deferred service) nil
           (%call-tokens service) nil
-          (%call-log-ids service) nil
+          (%journal-call-ids service) nil
           ;; %STEER-QUEUE is deliberately not cleared here: a steer (or
           ;; a vault :restore) sent while the agent was idle waits in
           ;; the queue rather than being dropped, and folds in on the
@@ -712,16 +707,16 @@ interrupt -- leaves the timer's :RETRY unmatchable."
 (defun accept-call (service call &optional (raw-arguments (getf call :arguments)))
   "Log CALL as accepted and announce it. RAW-ARGUMENTS, the arguments the model
 sent where a hook rewrote them, go to the log under :LOG-RAW."
-  (a:when-let ((path (call-log-of service)))
+  (a:when-let ((path (journal-of service)))
     (push (cons (getf call :id)
-                (first (call-log-accept
+                (first (journal-call-accept
                         path (m:service-name service) (%turns service)
                         (list (if (and (agent-log-raw service)
                                        (not (equal raw-arguments (getf call :arguments))))
                                   (list* :raw-arguments raw-arguments call)
                                   call))
-                        :cap (or (agent-max-tool-result service) *call-log-max-content*))))
-          (%call-log-ids service)))
+                        :cap (or (agent-max-tool-result service) *journal-max-content*))))
+          (%journal-call-ids service)))
   (emit service (tool-call-event (m:agent-ref service) (getf call :id)
                                  (getf call :name) (getf call :arguments))))
 
@@ -853,8 +848,7 @@ child of an unnamed parent is not."
                             :sink (%fanout service)
                             :vault (agent-vault service)
                             :journal (agent-journal service)
-                            :call-log (agent-call-log service)
-                            :hooks (%hooks service)
+                                                :hooks (%hooks service)
                             :run-handle (%run-handle service)
                             :log-raw (agent-log-raw service))))
     (on-cancel (call-token service id) (lambda () (m:cast child '(:cancel))))
@@ -917,7 +911,7 @@ call that has answered, or belongs to an earlier step, is left alone. Past
       (if (detached-slot-free-p service)
           (progn
             (push (list (cons ref id) :name name :token (call-token service id)
-                        :log-id (call-log-id service id))
+                        :log-id (journal-call-id service id))
                   (%detached service))
             (setf (cdr cell) (ok :status "running" :note "the result follows in a later message"))
             (emit service (tool-detached-event (m:agent-ref service) id name))
@@ -978,8 +972,8 @@ issued twice."
       (destructuring-bind (&key name token log-id &allow-other-keys) (cdr entry)
         (declare (ignore name))
         (cancel token)
-        (a:when-let ((path (call-log-of service)))
-          (when log-id (call-log-done path (list (list log-id outcome nil)))))
+        (a:when-let ((path (journal-of service)))
+          (when log-id (journal-call-done path (list (list log-id outcome nil)))))
         (when (eq outcome :interrupted)
           (emit service
                       (tool-result-event (m:agent-ref service) (cdr (car entry))
@@ -997,7 +991,7 @@ issued twice."
     (cond ((null ids) nil)
           ((not (and (listp ids) (every #'stringp ids)))
            (bad-request ":resume must be a list of call log ids"))
-          ((not (call-log-of service)) (bad-request ":resume needs a :call-log"))
+          ((not (journal-of service)) (bad-request ":resume needs a :journal"))
           ((not (or (getf args :messages) (getf args :continue)))
            (bad-request ":resume needs :messages or :continue")))))
 
@@ -1037,7 +1031,7 @@ DISPATCH-RESUMED-CALLS to run, each as a detached call.
 FORCE resumes a call to a tool that is not :RESUMABLE. A resumed call is
 detached, so it counts toward :MAX-DETACHED, and one past it is refused."
   (multiple-value-bind (resumed refused)
-      (call-log-resume (call-log-of service) ids (m:service-name service) (%turns service)
+      (journal-call-resume (journal-of service) ids (m:service-name service) (%turns service)
                        (let ((room (a:when-let ((cap (agent-max-detached service)))
                                      (- cap (length (%detached service))))))
                          (lambda (entry)
@@ -1064,7 +1058,7 @@ detached, so it counts toward :MAX-DETACHED, and one past it is refused."
         (ref (%step-ref service)))
     (push (list (cons ref log-id) :name name :call-id call-id :token token :log-id log-id)
           (%detached service))
-    (call-log-running (call-log-of service) (list log-id))
+    (journal-call-running (journal-of service) (list log-id))
     (emit service (tool-resumed-event (m:agent-ref service) call-id name))
     (flet ((send (arguments)
              (send-call service (list :tool ref log-id) #'%tool-call name
@@ -1110,7 +1104,7 @@ or an :INTERRUPTED error where none has arrived."
   (setf (%pending service) nil
         (%pending-order service) nil
         (%call-tokens service) nil
-        (%call-log-ids service) nil))
+        (%journal-call-ids service) nil))
 
 ;;; --- the journal (~takeiteasy/miao#119) -------------------------------------
 
@@ -1150,28 +1144,25 @@ a run that does not continue one replaces. Compacts a log grown past its size."
 ;;; TODO: synchronous file writes under an flock, on the agent's own process;
 ;;; a batched writer thread if a slow disk shows up as latency (#181).
 
-(defun call-log-of (service)
-  (%call-log-path (agent-call-log service)))
-
-(defun call-log-id (service id)
-  (cdr (assoc id (%call-log-ids service) :test #'equal)))
+(defun journal-call-id (service id)
+  (cdr (assoc id (%journal-call-ids service) :test #'equal)))
 
 (defun record-running (service ids)
-  (a:when-let ((path (call-log-of service)))
-    (call-log-running path (remove nil (mapcar (lambda (id) (call-log-id service id)) ids)))))
+  (a:when-let ((path (journal-of service)))
+    (journal-call-running path (remove nil (mapcar (lambda (id) (journal-call-id service id)) ids)))))
 
 (defun record-done (service results)
   "Log each of RESULTS, (provider call id, result, raw result), as finished."
   (record-log-done service (loop for (id result raw) in results
-                                 collect (list (call-log-id service id) result raw))))
+                                 collect (list (journal-call-id service id) result raw))))
 
 (defun record-log-done (service results)
   "Log each of RESULTS, (log id, result, raw result), as finished; one with no
 log id is skipped. A raw result that is not RESULT goes to the log under
 :LOG-RAW."
-  (a:when-let ((path (call-log-of service)))
-    (let ((cap (or (agent-max-tool-result service) *call-log-max-content*)))
-      (call-log-done
+  (a:when-let ((path (journal-of service)))
+    (let ((cap (or (agent-max-tool-result service) *journal-max-content*)))
+      (journal-call-done
        path
        (loop for (log-id result raw) in results
              when log-id
@@ -1190,11 +1181,11 @@ log id is skipped. A raw result that is not RESULT goes to the log under
 
 (defun record-outstanding (service outcome)
   "Log every call this turn still awaiting a result as finished with OUTCOME."
-  (a:when-let ((path (call-log-of service)))
-    (call-log-done
+  (a:when-let ((path (journal-of service)))
+    (journal-call-done
      path
      (loop for cell in (%pending service)
-           for log-id = (call-log-id service (car cell))
+           for log-id = (journal-call-id service (car cell))
            when (and log-id (outstanding-p (cdr cell)))
              collect (list log-id outcome nil)))))
 
@@ -1767,7 +1758,7 @@ timeout."
         (%pending-order service) nil
         (%queued service) nil
         (%call-tokens service) nil
-        (%call-log-ids service) nil)
+        (%journal-call-ids service) nil)
   (drop-chains service :detached t)
   (record-input-done service (if (tool-error-p result)
                                  :error
@@ -1844,7 +1835,7 @@ completion and return its result. The one place miao reaches the loop
 synchronously: a plain process is the parent, since a service parent needs
 the meow fix a mounted agent does not (~takeiteasy/meow#59, already applied
 here but not assumed of the caller's own services). With :INPUT-ID, which
-needs :CALL-LOG, a redelivered run returns (:OK (:DUPLICATE status)) rather
+needs :JOURNAL, a redelivered run returns (:OK (:DUPLICATE status)) rather
 than running again."
   (let ((deadline (getf initargs :deadline 300000)))
     (m:with-process (%runner)
@@ -1875,7 +1866,7 @@ than running again."
   "The call log ids of the calls this run has not had an answer to, detached
 ones included, for a caller to resume."
   (append (loop for cell in (%pending service)
-                for id = (and (outstanding-p (cdr cell)) (call-log-id service (car cell)))
+                for id = (and (outstanding-p (cdr cell)) (journal-call-id service (car cell)))
                 when id collect id)
           (loop for entry in (%detached service)
                 for id = (getf (cdr entry) :log-id)
@@ -1888,7 +1879,7 @@ ones included, for a caller to resume."
             (list :in-flight (append (list :turn (%turns service)
                                            :tool-calls (copy-list (%pending-order service)))
                                      (a:when-let ((ids (outstanding-log-ids service)))
-                                       (list :call-log-ids ids))
+                                       (list :journal-ids ids))
                                      (when (%detached service)
                                        (list :detached (mapcar (lambda (entry) (cdr (car entry)))
                                                                (%detached service)))))))))
@@ -1911,7 +1902,7 @@ ones included, for a caller to resume."
         (%pending service) nil
         (%pending-order service) nil
         (%call-tokens service) nil
-        (%call-log-ids service) nil
+        (%journal-call-ids service) nil
         (%input-log-id service) nil
         (%steer-queue service) nil
         (%turn-in-flight service) nil

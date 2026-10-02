@@ -35,7 +35,7 @@ Runs on SBCL.
 - [Self-modification](docs/self.md)
 - [The vault](docs/vault.md)
 - [The run journal](docs/journal.md)
-- [The call log](docs/calls.md)
+- [Call records](docs/calls.md)
 - [Interceptor hooks](docs/hooks.md)
 - [Operator approval](docs/approvals.md)
 - [Redelivered inputs](docs/inputs.md)

@@ -62,12 +62,11 @@ when its run ends, so use `run-agent` for a one-shot run.[^conversation]
 | `:turn-retries` | 0 | times a turn that failed transiently is sent again |
 | `:retry-backoff` | 1000 | milliseconds before the first retry; each later one waits twice as long, or as long as `Retry-After` asks if longer, plus up to 25% jitter |
 | `:hooks` | nil | the [interceptor hooks](hooks.md) a run goes through, in order; a sub-agent inherits them |
-| `:log-raw` | nil | true: the call log also keeps what the hooks replaced |
+| `:log-raw` | nil | true: the journal's call records also keep what the hooks replaced |
 | `:sink` | nil | a stream sink, as `complete` takes; the first [subscriber](ui.md#subscribing) |
 | `:sampling` | nil | a plist passed through to `complete`, e.g. `:temperature` |
 | `:vault` | nil | record steering to the [vault](vault.md): nil is off, `t` the default log, a path to record there instead |
-| `:journal` | nil | record each run to the [journal](journal.md): nil is off, `t` the default log, a path to record there instead |
-| `:call-log` | nil | record each dispatched tool call to the [call log](calls.md): nil is off, `t` the default log, a path to record there instead |
+| `:journal` | nil | record each run and each dispatched tool call to the [journal](journal.md): nil is off, `t` the default log, a path to record there instead |
 
 ## The allow-list and trust
 
@@ -347,7 +346,7 @@ sink that signals an error loses that event and carries on.
 With `:sub-agents t`, the model gets a reserved tool, `agent-task`, taking one
 `:task` string. Calling it delegates a child agent — under meow's own agent
 supervisor, via `m:delegate` — with this agent's model, allow-list,
-`:max-parallel-tools`, `:vault`, `:call-log` and [`:hooks`](hooks.md), runs it to completion, and returns its final answer as the tool
+`:max-parallel-tools`, `:vault`, `:journal` and [`:hooks`](hooks.md), runs it to completion, and returns its final answer as the tool
 result. The child's `:ref`, echoed on its events, is a cons of an internal
 step counter and the call id. A child does not itself get `:sub-agents`, so
 delegation does not nest by default.
@@ -385,7 +384,7 @@ calls in flight — see [checkpoints](checkpoints.md). A checkpoint taken
 mid-run keeps the conversation, closes each unanswered tool call as
 `interrupted` and drops the abandoned turn. A detached call keeps its stub and
 is listed under `:in-flight :detached`, and the log ids of the calls with no result
-under `:in-flight :call-log-ids`. A restore ends them, and its result is never
+under `:in-flight :journal-ids`. A restore ends them, and its result is never
 delivered to the restored agent, but a caller can [resume](calls.md#resuming-a-call)
 them from those ids. `restore` always lands a not-running agent, ready for
 `(:run :continue t)`, and nothing more from the abandoned turn reaches the sink.

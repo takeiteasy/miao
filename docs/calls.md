@@ -1,11 +1,11 @@
-# The call log
+# Call records
 
-Every tool call an agent dispatches is recorded in an append-only log, so its
-status outlives the agent that dispatched it. Off by default.
+Every tool call an agent dispatches is recorded in the [journal](journal.md), so
+its status outlives the agent that dispatched it. Off by default.
 
 ```lisp
 (m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama
-                           :tools '(:tool-shell) :call-log t)
+                           :tools '(:tool-shell) :journal t)
 
 (miao:call-entries (merge-pathnames ".miao/calls.log" (user-homedir-pathname)))
 ;; => ((:id "20260925-101500-123456-0" :agent :assistant :call-id "c1"
@@ -16,16 +16,11 @@ status outlives the agent that dispatched it. Off by default.
 A call that ended `:lost`, `:abandoned` or `:interrupted` can be
 [resumed](#resuming-a-call): run again, as a new call.
 
-## `:call-log`, the agent mount option
+## `:journal`, the agent mount option
 
-| Value | Records to |
-|---|---|
-| `nil` (default) | nowhere |
-| `t` | `~/.miao/calls.log`, resolved when first used |
-| a string or pathname | that file |
-
-A delegated [sub-agent](agent.md) inherits its parent's `:call-log`, so its
-calls land in the same file. A [fork](forking.md) is mounted as its source was.
+The calls go to the file the [`:journal`](journal.md#journal) option names. A
+delegated [sub-agent](agent.md) inherits its parent's, so its calls land in the
+same file. A [fork](forking.md) is mounted as its source was.
 
 ## Statuses
 
@@ -69,7 +64,7 @@ model's arguments and the tool's result, where a hook changed them.
 `:id` is the log's own, one per dispatch. `:call-id` is the provider's, which
 a provider may reuse on a later turn. `:arguments` and `:content` are JSON
 text, cut to `:max-tool-result` characters or, with none set,
-`*call-log-max-content*` (16 KiB). The log is read with `*read-eval*` nil and
+`*journal-max-content*` (16 KiB). The log is read with `*read-eval*` nil and
 appended under the same lock as the [vault](vault.md#the-log).
 
 ## API
@@ -78,13 +73,14 @@ appended under the same lock as the [vault](vault.md#the-log).
 |---|---|
 | `(call-entries path)` | each call, oldest first, with its `:status`, `:done-at`, `:content`, `:cut`, `:resumes` and `:resumed-by` |
 | `(input-entries path)` | each keyed `:run`, oldest first, with its `:status` and `:done-at` |
-| `(call-log-compact path :max-age s)` | the calls dropped and kept |
+| `(journal-compact path :max-age s)` | the calls dropped and kept |
 
-`call-log-compact` drops finished calls older than `max-age` seconds (default
-`*call-log-max-age*`, 7 days; `0` drops every finished one) with their lines.
-Calls not finished are kept. A log with a malformed entry is left as it is and
-`call-log-compact` answers nil. An append also compacts once the file passes
-`*call-log-compact-size*` (1 MiB) and has doubled since the last attempt.
+`journal-compact` drops finished calls older than `max-age` seconds (default
+`*journal-max-age*`, 7 days; `0` drops every finished one) with their lines, and
+[folds the old conversation entries](journal.md#compacting). Calls not finished
+are kept. A log with a malformed entry is left as it is and `journal-compact`
+answers nil. A call's finish also compacts once the file passes
+`*journal-compact-size*` (1 MiB) and has doubled since the last attempt.
 
 ## Resuming a call
 
@@ -125,9 +121,9 @@ new.
 A call is resumed once, checked and logged under one lock hold, so two
 resumes cannot both succeed. Calls that a cancel, a deadline or an
 interrupting `:steer` closed are `:interrupted` too, and resume like the
-others: the caller chooses. An agent needs a `:call-log` to resume, and a
+others: the caller chooses. An agent needs a `:journal` to resume, and a
 [checkpoint](checkpoints.md) taken mid-run lists the ids of its calls with no
-result under `:in-flight :call-log-ids`, ready to pass on after a restore.
+result under `:in-flight :journal-ids`, ready to pass on after a restore.
 
 ## `tool-calls`
 
@@ -137,7 +133,7 @@ result under `:in-flight :call-log-ids`, ready to pass on after a restore.
 |---|---|---|
 | `:list` | `:status` (default `:all`), `:limit` | `:entries`, `:total` |
 | `:resume` | `:ids` (required), `:agent`, `:force` | the agent's `:resumed` and `:refused` |
-| `:compact` | `:max-age` (seconds, default `*call-log-max-age*`) | `:dropped`, `:kept` |
+| `:compact` | `:max-age` (seconds, default `*journal-max-age*`) | `:dropped`, `:kept` |
 
 ```lisp
 (m:mount *ctx* 'miao:tool-calls)
@@ -147,7 +143,7 @@ result under `:in-flight :call-log-ids`, ready to pass on after a restore.
 
 `:resume` sends `(:resume ...)` to the agent that logged the calls, or to the
 mounted `:agent` named, which is required when the calls name none or several.
-`:path` is a mount option (default nil, the default an agent's `:call-log t`
+`:path` is a mount option (default nil, the default an agent's `:journal t`
 uses), read once at mount time.
 
 ## Limitations
@@ -170,6 +166,6 @@ uses), read once at mount time.
     as it exits.
 
 [^cut]: The arguments are cut to `:max-tool-result` characters or, with none
-    set, `*call-log-max-content*`, and a cut argument cannot be run again.
+    set, `*journal-max-content*`, and a cut argument cannot be run again.
 
 [^sub]: A sub-agent is not a tool: the log holds its task, not its conversation.

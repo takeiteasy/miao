@@ -109,7 +109,7 @@ repeating."
                  'tool-wait)
       (m:with-process (runner)
         (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
-                                 :tools '(:tool-wait) :tool-grace 100 :call-log path)))
+                                 :tools '(:tool-wait) :tool-grace 100 :journal path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually
                     (lambda ()
@@ -148,7 +148,7 @@ repeating."
                  'tool-slow)
       (m:with-process (runner)
         (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
-                                 :tools '(:tool-slow) :tool-grace 100 :call-log path)))
+                                 :tools '(:tool-slow) :tool-grace 100 :journal path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually (lambda () (= 2 (length (requests))))))
           (is (eq :running (getf (first (miao:call-entries path)) :status)))
