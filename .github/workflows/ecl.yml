@@ -1,0 +1,43 @@
+name: ecl
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ecl-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install ECL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev libgmp-dev
+          curl -sSfL https://ecl.common-lisp.dev/static/files/release/ecl-26.5.5.tgz -o ecl.tgz
+          tar xzf ecl.tgz
+          cd ecl-26.5.5
+          ./configure --prefix=/usr/local
+          make -j"$(nproc)"
+          sudo make install
+
+      - name: Install Quicklisp
+        run: |
+          curl -sSfLO https://beta.quicklisp.org/quicklisp.lisp
+          ecl --norc --nodebug --load quicklisp.lisp \
+              --eval '(quicklisp-quickstart:install)' --eval '(ext:quit 0)'
+          cp -R "$GITHUB_WORKSPACE" ~/quicklisp/local-projects/miao
+
+      - name: Install dependencies outside Quicklisp
+        run: |
+          git clone --depth 1 https://github.com/takeiteasy/meow \
+              ~/quicklisp/local-projects/meow
+          git clone --depth 1 https://github.com/takeiteasy/trivial-high-precision-timer \
+              ~/quicklisp/local-projects/trivial-high-precision-timer
+
+      - name: Test
+        run: MIAO_TEST_LISP=ecl tests/test.sh

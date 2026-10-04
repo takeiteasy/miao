@@ -94,6 +94,7 @@ tests/test.sh
 The script runs Roswell's SBCL when `ros` is installed, the runtime the
 [launcher](launcher.md) runs cores in, and the `sbcl` on `PATH` otherwise.
 `MIAO_TEST_LISP=sbcl`, `MIAO_TEST_LISP=ros` or `MIAO_TEST_LISP=ecl` chooses.[^runtime]
+The `ecl` workflow in GitHub Actions runs the ECL suite on request (`workflow_dispatch`).
 
 Tests that make real network requests are skipped unless `MIAO_LIVE_HTTP` is
 set, and the live protocol tests unless `MIAO_OLLAMA_URL` (the `/v1` route) or
