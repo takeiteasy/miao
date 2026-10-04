@@ -158,7 +158,7 @@ list arrives as \"\" as readily as \"{}\"."
 ;;; Deltas accumulate into the same reply the whole-response path returns, so
 ;;; a caller may ignore the sink entirely and read only the (:ok ...).
 
-(defstruct (streamed-call (:conc-name call-))
+(defstruct (streamed-call (:conc-name streamed-call-))
   id name (arguments (make-string-output-stream)))
 
 (defun read-streamed-completion (request stream status)
@@ -219,15 +219,15 @@ consumer of the sink alone reassembles without tracking arrival order."
          (arguments (and (hash-table-p function)
                          (gethash "arguments" function))))
     (a:when-let ((id (gethash "id" fragment)))
-      (when (stringp id) (setf (call-id call) id)))
+      (when (stringp id) (setf (streamed-call-id call) id)))
     (when (hash-table-p function)
       (a:when-let ((name (gethash "name" function)))
-        (when (stringp name) (setf (call-name call) (lisp-tool-name name)))))
+        (when (stringp name) (setf (streamed-call-name call) (lisp-tool-name name)))))
     (when (stringp arguments)
-      (write-string arguments (call-arguments call)))
+      (write-string arguments (streamed-call-arguments call)))
     (emit-event sink (tool-call-delta ref
-                                      :id (call-id call)
-                                      :name (call-name call)
+                                      :id (streamed-call-id call)
+                                      :name (streamed-call-name call)
                                       :arguments (if (stringp arguments)
                                                      arguments
                                                      "")))
@@ -235,10 +235,10 @@ consumer of the sink alone reassembles without tracking arrival order."
 
 (defun streamed-calls (calls tools)
   (loop for (nil . call) in calls
-        collect (make-call (call-id call) (call-name call)
+        collect (make-call (streamed-call-id call) (streamed-call-name call)
                            (parse-arguments
-                            (get-output-stream-string (call-arguments call))
-                            (call-schema (call-name call) tools))
+                            (get-output-stream-string (streamed-call-arguments call))
+                            (call-schema (streamed-call-name call) tools))
                            tools)))
 
 ;;; --- SSE --------------------------------------------------------------
