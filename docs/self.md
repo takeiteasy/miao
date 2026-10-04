@@ -75,7 +75,7 @@ under the same caps a worker applies: `*print-length*` 100, `*print-level*`
 The form is evaluated with `*package*` bound to `:package`, so symbols a
 macro interns while expanding -- a `defstruct`'s accessors -- land there too.
 
-A lapsed `:timeout` interrupts pre-emptively, except while SBCL is
+A lapsed `:timeout` interrupts pre-emptively, except while the Lisp is
 mid-way through one class, method, generic-function or struct definition:
 the interrupt waits for that definition to finish, then lands. A definition
 that outlasts a 2 second grace period -- user code it calls, such as a MOP
@@ -83,7 +83,7 @@ method or a `defstruct` constructor macro, has wedged -- is torn: the
 interrupt throws out of it and that one definition may be half applied. A
 `defgeneric` redefinition removes the old initial methods first, outside
 SBCL's own uninterruptible section, so a wedged `remove-method` method is
-torn the same way. A wedged `:eql` specializer or
+torn the same way.[^ecl] A wedged `:eql` specializer or
 slow compile is killed, not leaked, whether or not the form mutated something earlier.
 The caller gets `:timeout`; a form killed after landing one or more
 mutations is left partially applied and logged as a `:late-outcome` entry
@@ -168,8 +168,9 @@ or a slot (see [introspection](introspection.md#trust-posture)), `tool-self`
 
 ## Limitations
 
-- On ECL the CLOS-mutation hooks are not installed, so a deadline can tear a
-  class or struct definition ([#225](https://todo.sr.ht/~takeiteasy/miao/225)).
+- On ECL a deadline between a `defstruct` being defined and its constructor
+  can leave the struct without one
+  ([#238](https://todo.sr.ht/~takeiteasy/miao/238)).
 - Rollback restores declared service state, not code: an ordinary
   tool-self `:define`'s checkpoint does not undo the redefinition itself,
   only whatever state drifted around it. `:previous-source` is the manual
@@ -179,3 +180,7 @@ or a slot (see [introspection](introspection.md#trust-posture)), `tool-self`
 - The checkpoint taken before a write waits up to `checkpoint`'s own 30
   second `:timeout` for a busy service, independent of `:timeout`, and
   does not report which services it caught mid-run.
+
+[^ecl]: ECL expands a `defstruct` constructor's macros before it defines the
+    struct, so a wedge there is killed with nothing applied and is never
+    `:torn`.

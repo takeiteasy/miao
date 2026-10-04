@@ -227,8 +227,8 @@ immediately before the write."
 
 ;;; --- CLOS mutation latch (~takeiteasy/miao#79, #81) --------------------
 ;;;
-;;; SBCL's own PCL/DEFSTRUCT loaders are hooked to say exactly when a form's
-;;; evaluation is inside a class, method, generic-function or struct
+;;; The PCL/DEFSTRUCT loaders of SBCL and ECL are hooked to say exactly when a
+;;; form's evaluation is inside a class, method, generic-function or struct
 ;;; mutation, so :DEFINE only defers a lapsed deadline for the duration of
 ;;; one mutation instead of across the whole form.
 ;;;
@@ -244,8 +244,9 @@ immediately before the write."
 ;;; interrupt throws out of it anyway and the form reports :TORN: that one
 ;;; definition may be half applied.
 ;;;
-;;; The hooks are installed with SB-INT:ENCAPSULATE, the primitive TRACE and
-;;; PROFILE use, so a rename breaks loudly. They are gated on the latch
+;;; The hooks are installed with SB-INT:ENCAPSULATE on SBCL, the primitive
+;;; TRACE and PROFILE use, and by replacing the function's definition on ECL,
+;;; so a rename breaks loudly. They are gated on the latch
 ;;; being bound, so a DEFMETHOD elsewhere in the image is unaffected.
 ;;;
 ;;; A DEFGENERIC redefinition removes the old initial methods under a system
@@ -340,7 +341,38 @@ second copy of the same hook."
         do (sb-int:unencapsulate name 'miao-self)
            (sb-int:encapsulate name 'miao-self hook)))
 
-#-sbcl
+#+ecl (a:define-constant +clos-held-hooks+
+    '(clos:load-defclass clos::install-method si::define-structure)
+  :test #'equal
+  :documentation "ECL internals each of which is one whole mutation.
+SI::DEFINE-STRUCTURE is held for the whole call: ECL has no call that ends
+a struct's span.")
+;; TODO: a deadline between SI::DEFINE-STRUCTURE returning and the
+;; constructor's DEFUN leaves a struct without its constructor; hold the
+;; whole DEFSTRUCT form instead (~takeiteasy/miao#238)
+
+#+ecl (defun %hook-ecl-function (name hook)
+  "Replaces NAME's definition with a call to HOOK, given the original and
+the arguments. The original is kept on NAME's plist, so installing again
+wraps it rather than the previous hook."
+  (let* ((original (or (get name 'miao-self-original)
+                       (setf (get name 'miao-self-original) (fdefinition name))))
+         (wrapper (lambda (&rest args) (apply hook original args))))
+    (setf (fdefinition name) wrapper
+          (get name 'miao-self-hook) wrapper)))
+
+#+ecl (defmethod clos:ensure-generic-function-using-class :around (generic-function name &rest args)
+  (if *clos-mutation-latch*
+      (apply #'%hold-clos-mutation #'call-next-method generic-function name args)
+      (call-next-method)))
+
+#+ecl (defun %install-clos-mutation-hooks ()
+  "Idempotent: %HOOK-ECL-FUNCTION wraps the saved original, and the :AROUND
+method is redefined in place."
+  (dolist (name +clos-held-hooks+)
+    (%hook-ecl-function name #'%hold-clos-mutation)))
+
+#-(or sbcl ecl)
 (defun clos-mutation-hooks-installed-p () nil)
 
 #+sbcl
@@ -352,7 +384,19 @@ pre-emptive-only."
   (loop for (name) in (%clos-hook-alist)
         always (sb-int:encapsulated-p name 'miao-self)))
 
-#+sbcl (eval-when (:load-toplevel :execute) (%install-clos-mutation-hooks))
+#+ecl
+(defun clos-mutation-hooks-installed-p ()
+  "As on SBCL: every hooked function still holds its wrapper, so a change
+to ECL's internals fails a test instead of reverting :DEFINE to
+pre-emptive-only."
+  (and (loop for name in +clos-held-hooks+
+             always (and (get name 'miao-self-hook)
+                         (eq (fdefinition name) (get name 'miao-self-hook))))
+       (find-method #'clos:ensure-generic-function-using-class '(:around)
+                    (list (find-class t) (find-class t)) nil)
+       t))
+
+#+(or sbcl ecl) (eval-when (:load-toplevel :execute) (%install-clos-mutation-hooks))
 
 ;;; --- host eval, bounded and interruptible ------------------------------
 

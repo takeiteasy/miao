@@ -68,10 +68,22 @@ closed: a class that cannot say which initargs are credentials records none."
         (secret-initargs (closer-mop:class-prototype class)))
     (error () :all)))
 
+(defvar *unreadable-function-dispatch*
+  (let ((table (copy-pprint-dispatch)))
+    (set-pprint-dispatch 'function
+                         (lambda (stream function)
+                           (declare (ignore stream))
+                           (error 'print-not-readable :object function))
+                         1 table)
+    table)
+  "Refuses a function before it is printed: ECL prints a bytecode closure
+readably as a structure large enough to exhaust the heap, and reads it back.")
+
 (defun %readable-p (value)
-  "Whether VALUE prints and reads back as it would be remounted: SBCL prints
-a function readably as a #. form, which the guarded read then refuses."
-  (handler-case (let ((*print-readably* t))
+  "Whether VALUE prints and reads back as it would be remounted."
+  (handler-case (let ((*print-readably* t)
+                      (*print-pretty* t)
+                      (*print-pprint-dispatch* *unreadable-function-dispatch*))
                   (%read-initargs (%print-initargs value))
                   t)
     (error () nil)))

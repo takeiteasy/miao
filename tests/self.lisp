@@ -137,7 +137,7 @@
 
 ;;; --- the CLOS mutation latch (~takeiteasy/miao#79, #81) --------------------
 ;;;
-;;; RUN-IN-HOST defers a lapsed deadline only while one of SBCL's own
+;;; RUN-IN-HOST defers a lapsed deadline only while one of the Lisp's own
 ;;; loaders is mid-mutation, so a wedged :eql specializer or slow compile
 ;;; is killed whether or not the form mutated something earlier.
 
@@ -265,8 +265,12 @@ interrupt still has to land and unwind."
                            :form "(defstruct (self-test-wedged-struct (:constructor make-self-test-wedged-struct (&aux (a (self-test-slow-macro))))) a)")))
          (is (equal :timeout (miao:tool-error result))))
        (is-true (no-miao-self-eval-thread-p))
-       (is-true (eventually #'late-outcome-entry))
-       (is (equal '(:error :torn) (getf (late-outcome-entry) :outcome)))))))
+       ;; ECL expands the constructor's macro before defining the struct, so
+       ;; the wedge is killed with nothing mutated
+       #+ecl (is-false (class-named "SELF-TEST-WEDGED-STRUCT"))
+       #+ecl (is (null (late-outcome-entry)))
+       #-ecl (is-true (eventually #'late-outcome-entry))
+       #-ecl (is (equal '(:error :torn) (getf (late-outcome-entry) :outcome)))))))
 
 (test self-eval-a-wedge-in-a-mop-method-is-torn-not-leaked
   (with-self ()
