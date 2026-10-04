@@ -159,8 +159,8 @@ the queue is full."
       (incf (jw-bytes writer) size)
       (unless (jw-thread writer)
         (setf (jw-thread writer)
-              (bt:make-thread (lambda () (%journal-writer-loop writer))
-                              :name "miao-journal-writer")))
+              (spawn-thread (lambda () (%journal-writer-loop writer))
+                            :name "miao-journal-writer")))
       (bt:condition-broadcast (jw-wake writer)))))
 
 (defun journal-drain (path &key timeout)

@@ -107,6 +107,16 @@
 
 ;;; --- implementation hooks --------------------------------------------------
 
+(defun spawn-thread (function &key name)
+  "A thread running FUNCTION whose unhandled error is reported on *ERROR-OUTPUT*
+and ends only that thread. ECL otherwise opens a REPL in the thread."
+  (bt:make-thread (lambda ()
+                    (handler-case (funcall function)
+                      (error (condition)
+                        (format *error-output* "~&miao: thread ~a: ~a~%" name condition)
+                        nil)))
+                  :name name))
+
 (defmacro without-interrupts (&body body)
   `(#+sbcl sb-sys:without-interrupts #+ecl mp:without-interrupts ,@body))
 

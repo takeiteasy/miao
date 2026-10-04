@@ -203,7 +203,7 @@ immediately before the write."
         (let* ((result nil)
                (state (list :running))
                (wake (bt:make-semaphore)))
-          (bt:make-thread
+          (spawn-thread
            (lambda ()
              (when (eq :running (car state))
                (setf result (reload-child context name))
@@ -386,7 +386,7 @@ ON-LATE, if given, after the caller has already received :TIMEOUT or
          (done (bt:make-semaphore))
          (wake (bt:make-semaphore))
          (registry m:*registry*)
-         (worker (bt:make-thread
+         (worker (spawn-thread
                   (lambda ()
                     (let ((m:*registry* registry)
                           (*clos-mutation-latch* latch))
@@ -431,7 +431,7 @@ ON-LATE, if given, after the caller has already received :TIMEOUT or
   "Once GRACE seconds pass without WORKER exiting, throws it out of the
 mutation it is still in. GRACE is read by the caller: a binding is not
 visible on the helper thread."
-  (bt:make-thread
+  (spawn-thread
    (lambda ()
      (unless (bt:wait-on-semaphore done :timeout grace)
        (ignore-errors

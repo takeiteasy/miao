@@ -157,7 +157,7 @@ always comes from here."
         (read nil)
         (done (bt:make-semaphore))
         (stream (uiop:process-info-output (worker-process worker))))
-    (bt:make-thread
+    (spawn-thread
      (lambda ()
        (unwind-protect
             (setf reply (handler-case (let ((*read-eval* nil))

@@ -46,7 +46,7 @@ always comes from here and never after the process is reaped."
         (drained nil))
     ;; Drain concurrently: a command that outruns the pipe buffer would
     ;; otherwise block on write while we block waiting for it to exit.
-    (bt:make-thread
+    (spawn-thread
      (lambda ()
        (unwind-protect
             ;; A timeout's TERMINATE-PROCESS-GROUP reaps the process from
