@@ -98,12 +98,11 @@ declared type, and carries no coercion of its own.
 (miao:json-schema->schema (com.inuoe.jzon:parse text))
 ```
 
-`schema->json-schema` returns a hash table, which jzon serialises directly, so
-a protocol embeds it in a larger request body rather than splicing strings.
-Properties render in declaration order -- SBCL's hash tables iterate in
-insertion order, so a schema renders the same way on every run, which keeps a
-request body stable for prompt caching. `json-schema->schema` is its inverse;
-an unrecognised construct is an error, matching the closed set.
+`schema->json-schema` returns an insertion-ordered JSON object, which jzon
+serialises directly, so a protocol embeds it in a larger request body rather
+than splicing strings. Properties render in declaration order on every Lisp,
+which keeps a request body stable for prompt caching. `json-schema->schema` is its inverse; an unrecognised construct
+is an error, matching the closed set.
 
 A round trip preserves every specifier, its options and the `required` set,
 except `:required-when`, which stays in the description as text. It does not

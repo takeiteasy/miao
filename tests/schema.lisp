@@ -13,6 +13,10 @@
 (defun json (schema)
   (com.inuoe.jzon:stringify (miao:schema->json-schema schema)))
 
+(defun rendered-schema (schema)
+  "SCHEMA's JSON Schema as jzon parses it back."
+  (com.inuoe.jzon:parse (json schema)))
+
 (defun same-json (json text)
   "JSON, a rendered schema, against TEXT. Compared structurally: a JSON
 object carries no key order."
@@ -33,7 +37,10 @@ object carries no key order."
                 (and (vectorp b) (not (stringp b)) (= (length a) (length b))
                      (every #'same a b)))
                (t (equal a b)))))
-    (same json (com.inuoe.jzon:parse text))))
+    (same (if (miao::json-object-p json)
+              (com.inuoe.jzon:parse (com.inuoe.jzon:stringify json))
+              json)
+          (com.inuoe.jzon:parse text))))
 
 (defparameter +every-specifier+
   `((:name string :required t :doc "a name")
@@ -119,12 +126,12 @@ object carries no key order."
     (signals error (miao:validate-schema schema))))
 
 (test required-when-renders-as-prose
-  (let ((properties (gethash "properties" (miao:schema->json-schema
+  (let ((properties (gethash "properties" (rendered-schema
                                            '((:op (member :read :write))
                                              (:data string :required-when (:op :write)
                                               :doc "file contents")
                                              (:key string :required-when (:op (:read :write)))))))
-        (required (gethash "required" (miao:schema->json-schema
+        (required (gethash "required" (rendered-schema
                                        '((:op (member :read :write))
                                          (:data string :required-when (:op :write)))))))
     (is (equal "file contents. Required when op is write."
@@ -176,7 +183,7 @@ object carries no key order."
 (test rendering-covers-every-specifier
   (flet ((rendered (spec)
            (gethash "x" (gethash "properties"
-                                 (miao:schema->json-schema (list (list :x spec)))))))
+                                 (rendered-schema (list (list :x spec)))))))
     (is (same-json (rendered 'string) "{\"type\":\"string\"}"))
     (is (same-json (rendered '(integer 1)) "{\"type\":\"integer\",\"minimum\":1}"))
     (is (same-json (rendered '(integer 1 100))
@@ -197,11 +204,9 @@ object carries no key order."
                      \"additionalProperties\":false}"))
     (is (same-json (rendered 'miao:any) "{}"))))
 
-#+sbcl ; hash-table iteration order (#230)
 (test rendering-keeps-declaration-order
-  "Property order follows declaration, not alphabetical or hash order --
-SBCL's hash tables iterate in insertion order, so a rendered schema renders
-the same way on every run."
+  "Property order follows declaration, not alphabetical or hash order, so a
+rendered schema renders the same way on every run and implementation."
   (is (string= (json '((:zeta string :doc "last letter" :default "z")
                         (:alpha (miao:object (:yak integer :required t) (:bee boolean)))
                         (:mid (integer 1 9))))

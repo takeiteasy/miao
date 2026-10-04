@@ -111,6 +111,13 @@ needs and a user message."
       (is (equal "user" (gethash "role" message)))
       (is (equal "hello" (gethash "content" message))))))
 
+(test the-body-writes-its-keys-in-a-fixed-order
+  (with-openai ((json-response +hello-reply+))
+    (ask :temperature 0.2 :max-tokens 64)
+    (let ((body (getf (first (fake-http-requests *backend*)) :body)))
+      (is (apply #'< (mapcar (lambda (key) (search (format nil "\"~a\":" key) body))
+                             '("model" "messages" "stream" "temperature" "max_tokens")))))))
+
 (test sampling-parameters-travel-under-their-wire-names
   (with-openai ((json-response +hello-reply+))
     (ask :temperature 0.2 :max-tokens 64 :stop '("STOP") :top-k 40)

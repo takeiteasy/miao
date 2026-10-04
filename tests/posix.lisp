@@ -28,8 +28,6 @@
            (is (member "héllo.txt" (miao::fs-list-names fd nil) :test #'string=))
         (miao::fs-close fd)))))
 
-;; SBCL only: key order follows hash-table iteration (#230).
-#+sbcl
 (test the-messages-digest-is-stable-across-implementations
   (is (string= "2b2faee6c0473e3a8d938b0fd8621e75"
                (miao::messages-digest (list (list :role "user" :content "héllo ✓"))))))

@@ -50,11 +50,11 @@ problem string. The shared CHECK-REQUEST stays neutral, so this runs on top."
                                             (getf request :messages))
                             "stream" streaming)))
     (when tools
-      (setf (gethash "tools" json) (tools->json tools)))
+      (setf (json-get json "tools") (tools->json tools)))
     (dolist (param +openai-params+ json)
       (let ((value (getf request (param-name param) *absent*)))
         (unless (eq value *absent*)
-          (setf (gethash (wire-key (param-name param)) json)
+          (setf (json-get json (wire-key (param-name param)))
                 (value->json value (param-type param))))))))
 
 (defun message->json (message tools)
@@ -65,9 +65,9 @@ problem string. The shared CHECK-REQUEST stays neutral, so this runs on top."
                             ;; tool calls carries no content at all.
                             "content" (if content (content-text content) 'null))))
     (when (eq role :tool)
-      (setf (gethash "tool_call_id" json) (getf message :tool-call-id)))
+      (setf (json-get json "tool_call_id") (getf message :tool-call-id)))
     (a:when-let ((calls (getf message :tool-calls)))
-      (setf (gethash "tool_calls" json)
+      (setf (json-get json "tool_calls")
             (map 'vector (lambda (call) (tool-call->json call tools)) calls)))
     json))
 

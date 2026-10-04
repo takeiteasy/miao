@@ -270,19 +270,41 @@ has an even length too, and must not pass as one empty entry."
 
 ;;; --- JSON Schema ------------------------------------------------------
 
+(defstruct (json-object (:constructor %make-json-object ()))
+  "A JSON object jzon writes in insertion order, which a hash table does not
+promise on every implementation. PAIRS is newest first."
+  (pairs '()))
+
 (defun json-object (&rest plist)
-  (let ((table (make-hash-table :test #'equal)))
+  (let ((object (%make-json-object)))
     (loop for (key value) on plist by #'cddr
-          do (setf (gethash key table) value))
-    table))
+          do (setf (json-get object key) value))
+    object))
+
+(defun json-get (object key)
+  (cdr (assoc key (json-object-pairs object) :test #'equal)))
+
+(defun (setf json-get) (value object key)
+  "Set KEY, keeping its place if OBJECT already has it."
+  (let ((pair (assoc key (json-object-pairs object) :test #'equal)))
+    (if pair
+        (setf (cdr pair) value)
+        (push (cons key value) (json-object-pairs object)))
+    value))
+
+(defmethod json:write-value ((writer json:writer) (object json-object))
+  (json:with-object writer
+    (loop for (key . value) in (reverse (json-object-pairs object))
+          do (json:write-key writer key)
+             (json:write-value writer value))))
 
 (defun schema->json-schema (schema)
-  "SCHEMA as a JSON Schema object: a hash table jzon serialises directly."
+  "SCHEMA as a JSON Schema object: a JSON-OBJECT jzon serialises directly."
   (validate-schema schema)
-  (let ((properties (make-hash-table :test #'equal))
+  (let ((properties (json-object))
         (required '()))
     (dolist (param schema)
-      (setf (gethash (param-key param) properties)
+      (setf (json-get properties (param-key param))
             (property->json (param-type param) (param-options param)))
       (when (getf (param-options param) :required)
         (push (param-key param) required)))
@@ -300,9 +322,9 @@ has an even length too, and must not pass as one empty entry."
                         (and doc (string-right-trim "." doc))
                         (car condition) (cdr condition))))
     (when doc
-      (setf (gethash "description" json) doc))
+      (setf (json-get json "description") doc))
     (when (member :default options)
-      (setf (gethash "default" json) (json-value (getf options :default))))
+      (setf (json-get json "default") (json-value (getf options :default))))
     json))
 
 (defun json-value (value)
@@ -319,15 +341,15 @@ their lower-cased name rather than as a symbol."
      (let ((json (json-object "type" "integer"))
            (bounds (when (consp spec) (rest spec))))
        (destructuring-bind (&optional (low '*) (high '*)) bounds
-         (unless (eq low '*) (setf (gethash "minimum" json) low))
-         (unless (eq high '*) (setf (gethash "maximum" json) high)))
+         (unless (eq low '*) (setf (json-get json "minimum") low))
+         (unless (eq high '*) (setf (json-get json "maximum") high)))
        json))
     ((spec-is spec "MEMBER")
      (json-object "type" "string"
                   "enum" (map 'vector #'json-value (rest spec))))
     ((spec-is spec "OR")
      (let ((json (specifier->json (third spec))))
-       (setf (gethash "type" json) (vector (gethash "type" json) "null"))
+       (setf (json-get json "type") (vector (json-get json "type") "null"))
        json))
     ((spec-is spec "ARRAY-OF")
      (json-object "type" "array" "items" (specifier->json (second spec))))

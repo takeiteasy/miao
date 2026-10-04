@@ -122,7 +122,7 @@ TOOLS names."
   (let ((json (json-object)))
     (loop for (name value) on arguments by #'cddr
           for param = (find name schema :key #'param-name)
-          do (setf (gethash (wire-key name) json)
+          do (setf (json-get json (wire-key name))
                    (value->json value (and param (param-type param)))))
     json))
 
@@ -135,7 +135,7 @@ TOOLS names."
     ((spec-is spec "MAP-OF")
      (let ((json (json-object)))
        (loop for (key entry) on value by #'cddr
-             do (setf (gethash (as-text key) json)
+             do (setf (json-get json (as-text key))
                       (value->json entry (second spec))))
        json))
     ((spec-is spec "OBJECT") (arguments->json value (rest spec)))
@@ -154,7 +154,7 @@ TOOLS names."
           (loop for (name) on value by #'cddr always (keywordp name)))
      (let ((json (json-object)))
        (loop for (name entry) on value by #'cddr
-             do (setf (gethash (wire-key name) json) (untyped->json entry)))
+             do (setf (json-get json (wire-key name)) (untyped->json entry)))
        json))
     (t (map 'vector #'untyped->json value))))
 
@@ -208,7 +208,7 @@ is what COERCE-ARGS matches a schema on."
                           "parameters" (schema->json-schema
                                         (tool-schema metadata)))))
            (a:when-let ((summary (getf metadata :summary)))
-             (setf (gethash "description" function) summary))
+             (setf (json-get function "description") summary))
            (json-object "type" "function" "function" function)))
        tools))
 
