@@ -89,7 +89,7 @@
                ;; Last: SAVE-IMAGE needs CHECKPOINT (checkpoint.lisp),
                ;; M:SUSPEND/M:RESUME, and PROVIDER-API-KEY (provider.lisp)
                ;; to refuse a credentialed mount.
-               (:file "image-generation"))
+               #+sbcl (:file "image-generation"))
   :in-order-to ((test-op (test-op "miao/tests"))))
 
 (defsystem "miao/cli"
@@ -151,7 +151,7 @@
                (:file "hooks")
                (:file "approval")
                (:file "inputs")
-               (:file "image-generation")
+               #+sbcl (:file "image-generation")
                (:file "self"))
   :perform (test-op (o c)
              (unless (symbol-call :fiveam :run! :miao)
