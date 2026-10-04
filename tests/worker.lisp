@@ -103,8 +103,10 @@
       (is (null (getf (second result) :values))))))
 
 (test worker-elides-past-100-values
-  (with-worker (w)
-    (let ((result (miao::worker-eval
-                   w "(apply #'values (loop for i below 150 collect i))" 5000)))
-      (is (= 100 (length (getf (second result) :values))))
-      (is (eq t (getf (second result) :elided))))))
+  (if (< multiple-values-limit 150)
+      (skip "needs MULTIPLE-VALUES-LIMIT of 150 or more")
+      (with-worker (w)
+        (let ((result (miao::worker-eval
+                       w "(apply #'values (loop for i below 150 collect i))" 5000)))
+          (is (= 100 (length (getf (second result) :values))))
+          (is (eq t (getf (second result) :elided)))))))

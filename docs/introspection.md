@@ -98,8 +98,7 @@ under a context")`.
 
 ## Limitations
 
-- On ECL `tool-image` reports no `:file` or `:position` for a function or
-  method ([#224](https://todo.sr.ht/~takeiteasy/miao/224)).
+- On ECL `tool-image` reports no `:file` or `:position` for a method ([#224](https://todo.sr.ht/~takeiteasy/miao/224)).
 
 ## Trust posture
 

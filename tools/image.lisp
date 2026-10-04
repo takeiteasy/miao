@@ -227,7 +227,10 @@ or NIL if it cannot be printed."
                 (let ((path (sb-introspect:definition-source-pathname source)))
                   (and path (list :file (namestring path)
                                   :position (sb-introspect:definition-source-character-offset source))))))
-  #-sbcl (progn symbol nil))
+  #+ecl (multiple-value-bind (file position)
+            (ignore-errors (ext:compiled-function-file (fdefinition symbol)))
+          (and (stringp file) (list :file file :position position)))
+  #-(or sbcl ecl) (progn symbol nil))
 
 ;;; --- :packages -----------------------------------------------------
 

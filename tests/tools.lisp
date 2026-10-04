@@ -951,9 +951,9 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 
 (test gated-eval-lets-a-form-catch-its-own-error
   (with-tools
-    (is (search "not a LIST"
+    (is (search "CAUGHT"
                 (result-value (tool :tool-gated-eval
-                                    :form "(handler-case (car 1) (error (e) (princ-to-string e)))")
+                                    :form "(handler-case (car 1) (error () :caught))")
                               :value)))))
 
 (test gated-eval-keeps-no-state-between-calls
