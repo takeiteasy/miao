@@ -317,7 +317,7 @@ inspected:
 past the reply — a caller that hits `:elided` there needs `tool-repl` to look
 further at the value.
 
-A worker runs the host's own SBCL binary. `*worker-command*` overrides the
+A worker runs the host's own Lisp binary. `*worker-command*` overrides the
 invocation. Starting one costs about 33 ms, and an exchange with a running
 one about 0.2 ms, which is why an evaluation gets a fresh process instead
 of a pooled one.

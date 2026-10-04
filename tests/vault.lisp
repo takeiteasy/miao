@@ -457,8 +457,7 @@ after the message that triggered it has already returned."
 (defun dead-pid ()
   "A pid with no running process."
   (loop for pid from 99990 downto 2
-        unless (handler-case (progn (sb-posix:kill pid 0) t)
-                 (sb-posix:syscall-error (e) (= (sb-posix:syscall-errno e) sb-posix:eperm)))
+        unless (miao::posix-kill-alive-p pid)
           return pid))
 
 (test another-process-claim-blocks-restore-and-discard
@@ -488,36 +487,36 @@ after the message that triggered it has already returned."
       (is (eq :claimed (miao:vault-claim-pending path id))))))
 
 (test process-start-time-reads-this-process
-  (let ((start (miao::%process-start-time (sb-posix:getpid))))
+  (let ((start (miao::%process-start-time (miao::posix-getpid))))
     (is (integerp start))
-    (is (eql start (miao::%process-start-time (sb-posix:getpid)))))
+    (is (eql start (miao::%process-start-time (miao::posix-getpid)))))
   (is (null (miao::%process-start-time (dead-pid)))))
 
 (test a-claim-whose-pid-was-reused-is-restorable
   (with-vault-path (path)
     (let ((id (miao:vault-record path :assistant "once"))
-          (start (miao::%process-start-time (sb-posix:getpid))))
-      (append-claim path id (foreign-owner :pid (sb-posix:getpid) :start (1- start)))
+          (start (miao::%process-start-time (miao::posix-getpid))))
+      (append-claim path id (foreign-owner :pid (miao::posix-getpid) :start (1- start)))
       (is-false (getf (first (miao:vault-entries path)) :claimed))
       (is (eq :claimed (miao:vault-claim-pending path id))))))
 
 (test a-claim-with-a-matching-start-time-is-live
   (with-vault-path (path)
     (let ((id (miao:vault-record path :assistant "once"))
-          (ppid (sb-posix:getppid)))
+          (ppid (miao::posix-getppid)))
       (append-claim path id (foreign-owner :pid ppid :start (miao::%process-start-time ppid)))
       (is (eq :held (miao:vault-claim-pending path id))))))
 
 (test a-claim-from-an-earlier-image-of-this-process-is-restorable
   (with-vault-path (path)
     (let ((id (miao:vault-record path :assistant "once")))
-      (append-claim path id (foreign-owner :pid (sb-posix:getpid)
-                                           :start (miao::%process-start-time (sb-posix:getpid))))
+      (append-claim path id (foreign-owner :pid (miao::posix-getpid)
+                                           :start (miao::%process-start-time (miao::posix-getpid))))
       (is-false (getf (first (miao:vault-entries path)) :claimed))
       (is (eq :claimed (miao:vault-claim-pending path id))))))
 
 (test saving-an-image-forgets-the-vault-token
-  (is (member 'miao::%forget-vault-token sb-ext:*save-hooks*))
+  #+sbcl (is (member 'miao::%forget-vault-token sb-ext:*save-hooks*))
   (let ((miao::*vault-token* "abc"))
     (miao::%forget-vault-token)
     (is (null miao::*vault-token*))))
@@ -609,7 +608,7 @@ after the message that triggered it has already returned."
     (let ((id (miao:vault-record path :assistant "hi" :claim t)))
       (is (equal (getf (miao::%vault-owner) :token)
                  (getf (getf (first (miao::%read-log path)) :claimed-by) :token)))
-      (is (eql (miao::%process-start-time (sb-posix:getpid))
+      (is (eql (miao::%process-start-time (miao::posix-getpid))
                (getf (getf (first (miao::%read-log path)) :claimed-by) :start)))
       (is (eq :held (miao:vault-claim-pending path id))))))
 

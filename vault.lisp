@@ -91,8 +91,6 @@ draws its own.")
 (defun %forget-vault-token ()
   (setf *vault-token* nil))
 
-(pushnew '%forget-vault-token sb-ext:*save-hooks*)
-
 #+linux
 (defun %proc-stat-fields (line)
   "The whitespace-separated fields of /proc/<pid>/stat after its command name."
@@ -109,20 +107,16 @@ draws its own.")
 when it cannot be read."
   (ignore-errors
    #+darwin
-   (sb-alien:with-alien ((mib (array sb-alien:int 4))
-                         (buf (array (sb-alien:unsigned 8) 1024))
-                         (len sb-alien:unsigned-long 1024))
-     (loop for i from 0 for v in (list 1 14 1 pid) do (setf (sb-alien:deref mib i) v))
-     (when (and (zerop (sb-alien:alien-funcall
-                        (sb-alien:extern-alien
-                         "sysctl" (function sb-alien:int (* sb-alien:int) sb-alien:unsigned-int
-                                            (* t) (* sb-alien:unsigned-long) (* t) sb-alien:unsigned-long))
-                        (sb-alien:cast mib (* sb-alien:int)) 4
-                        (sb-alien:cast buf (* t)) (sb-alien:addr len) nil 0))
-                (plusp len))
-       (let ((sap (sb-alien:alien-sap buf)))
-         (+ (* 1000000 (sb-sys:signed-sap-ref-64 sap 0))
-            (sb-sys:signed-sap-ref-32 sap 8)))))
+   (cffi:with-foreign-objects ((mib :int 4) (buf :uint8 1024) (len :unsigned-long))
+     (loop for i from 0 for v in (list 1 14 1 pid) do (setf (cffi:mem-aref mib :int i) v))
+     (setf (cffi:mem-ref len :unsigned-long) 1024)
+     (when (and (zerop (cffi:foreign-funcall "sysctl" :pointer mib :unsigned-int 4
+                                                      :pointer buf :pointer len
+                                                      :pointer (cffi:null-pointer)
+                                                      :unsigned-long 0 :int))
+                (plusp (cffi:mem-ref len :unsigned-long)))
+       (+ (* 1000000 (cffi:mem-ref buf :int64 0))
+          (cffi:mem-ref buf :int32 8))))
    #+linux
    (with-open-file (stream (format nil "/proc/~d/stat" pid))
      (let* ((line (read-line stream))
@@ -133,7 +127,7 @@ when it cannot be read."
   "This image's claim owner: (:pid :host :start :token). The start time is
 read on every call, never cached: a saved core would carry it to a process
 with a different one."
-  (let ((pid (sb-posix:getpid)))
+  (let ((pid (posix-getpid)))
     (list :pid pid :host (machine-instance) :start (%process-start-time pid)
           :token (or *vault-token*
                      (setf *vault-token*
@@ -150,9 +144,8 @@ under another token is an earlier image's, replaced by a relaunch: dead."
     (or (equal (getf owner :token) (getf (%vault-owner) :token))
         (not (equal (getf owner :host) (machine-instance)))
         (not (integerp pid))
-        (and (/= pid (sb-posix:getpid))
-             (handler-case (progn (sb-posix:kill pid 0) t)
-               (sb-posix:syscall-error (e) (= (sb-posix:syscall-errno e) sb-posix:eperm)))
+        (and (/= pid (posix-getpid))
+             (posix-kill-alive-p pid)
              (let ((now (and start (%process-start-time pid))))
                (or (null now) (eql start now)))))))
 

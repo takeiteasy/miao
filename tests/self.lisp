@@ -145,8 +145,8 @@
   "T once every RUN-IN-HOST worker has actually exited -- polled rather
 than asserted immediately after :TIMEOUT, since ABANDON-SELF-EVAL's
 interrupt still has to land and unwind."
-  (eventually (lambda () (notany (lambda (thread) (equal "miao-self-eval" (sb-thread:thread-name thread)))
-                                 (sb-thread:list-all-threads)))))
+  (eventually (lambda () (notany (lambda (thread) (equal "miao-self-eval" (bt:thread-name thread)))
+                                 (bt:all-threads)))))
 
 (test clos-mutation-hooks-are-installed
   (is-true (miao::clos-mutation-hooks-installed-p)))
@@ -250,7 +250,7 @@ interrupt still has to land and unwind."
   (self :define :package "MIAO-SELF-TEST"
                 :form (format nil "(defclass ~a (standard-class) ())" name))
   (self :define :package "MIAO-SELF-TEST"
-                :form (format nil "(defmethod sb-mop:validate-superclass ((c ~a) (s standard-class)) t)" name))
+                :form (format nil "(defmethod closer-mop:validate-superclass ((c ~a) (s standard-class)) t)" name))
   (self :define :package "MIAO-SELF-TEST"
                 :form (format nil "(defmethod shared-initialize :after ((c ~a) slots &key) (sleep ~a))" name seconds)))
 
@@ -284,7 +284,7 @@ interrupt still has to land and unwind."
 (test self-eval-a-wedge-in-remove-method-during-a-redefinition-is-torn-not-leaked
   (with-self ()
     (self :define :package "MIAO-SELF-TEST"
-                  :form "(defclass self-test-slow-gf (standard-generic-function) () (:metaclass sb-mop:funcallable-standard-class))")
+                  :form "(defclass self-test-slow-gf (standard-generic-function) () (:metaclass closer-mop:funcallable-standard-class))")
     (self :define :package "MIAO-SELF-TEST"
                   :form "(defgeneric self-test-redefined (x) (:generic-function-class self-test-slow-gf) (:method ((x integer)) 1))")
     (self :define :package "MIAO-SELF-TEST"

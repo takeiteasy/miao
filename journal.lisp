@@ -219,7 +219,7 @@ writing then is left running. A later entry starts the writer again."
         (bt:with-lock-held ((jw-lock writer))
           (setf (jw-retiring writer) nil))))))
 
-(pushnew 'journal-drain-all sb-ext:*exit-hooks*)
+(add-exit-hook 'journal-drain-all)
 
 (defun journal-append (path run agent parent kind &rest fields)
   "Queue an entry of KIND with FIELDS for PATH and return its id. An entry that

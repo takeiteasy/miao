@@ -51,15 +51,16 @@
   ;; A second kill must not signal a pid the first has already reaped.
   (let ((worker (miao::start-worker))
         (kills 0))
-    (sb-int:encapsulate 'miao::terminate-process-group 'count-kills
-                        (lambda (function process)
-                          (incf kills)
-                          (funcall function process)))
-    (unwind-protect
-         (progn (miao::kill-worker worker)
-                (miao::kill-worker worker)
-                (is (eql 1 kills)))
-      (sb-int:unencapsulate 'miao::terminate-process-group 'count-kills))))
+    (let ((original (fdefinition 'miao::terminate-process-group)))
+      (setf (fdefinition 'miao::terminate-process-group)
+            (lambda (process)
+              (incf kills)
+              (funcall original process)))
+      (unwind-protect
+           (progn (miao::kill-worker worker)
+                  (miao::kill-worker worker)
+                  (is (eql 1 kills)))
+        (setf (fdefinition 'miao::terminate-process-group) original)))))
 
 ;;; --- elision (~takeiteasy/miao#26) --------------------------------------
 

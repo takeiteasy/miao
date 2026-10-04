@@ -228,7 +228,7 @@ brings a saved chat back."
              (write-string *prompt* out)
              (finish-output out))
            (block session
-             (handler-bind ((sb-sys:interactive-interrupt
+             (handler-bind ((miao:interactive-interrupt
                               (lambda (condition)
                                 (declare (ignore condition))
                                 (if (eq :cancelled (handle-interrupt client))

@@ -1,7 +1,5 @@
 (in-package #:miao)
 
-(eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
-
 ;;; Generations (~takeiteasy/miao#11). A checkpoint is one s-expression file
 ;;; recording every named service's own declared state, taken through the
 ;;; SNAPSHOT/RESTORE convention (tool.lisp) shared by every tool, the agent
@@ -66,8 +64,8 @@ being the name of the context CONTEXT-PROCESS is."
 closed: a class that cannot say which initargs are credentials records none."
   (handler-case
       (let ((class (find-class class)))
-        (sb-mop:finalize-inheritance class)
-        (secret-initargs (sb-mop:class-prototype class)))
+        (closer-mop:finalize-inheritance class)
+        (secret-initargs (closer-mop:class-prototype class)))
     (error () :all)))
 
 (defun %readable-p (value)
@@ -174,7 +172,7 @@ cannot bring back."
 (defun generation-id ()
   "A name that sorts by the time it was made, to the microsecond, then a random
 tail so two processes in the same microsecond do not collide."
-  (multiple-value-bind (seconds microseconds) (sb-ext:get-time-of-day)
+  (multiple-value-bind (seconds microseconds) (unix-time-micros)
     (multiple-value-bind (sec min hour day month year)
         (decode-universal-time (+ seconds (encode-universal-time 0 0 0 1 1 1970 0)))
       (format nil "~4,'0d~2,'0d~2,'0d-~2,'0d~2,'0d~2,'0d-~6,'0d-~3,'0d"
@@ -240,24 +238,22 @@ worker applies to a submitted form."
       (or (gethash key *log-locks*)
           (setf (gethash key *log-locks*) (bt:make-lock :name key))))))
 
-(defconstant +lock-ex+ 2)
-
 (defun %flock-exclusive (fd)
-  (loop until (zerop (sb-alien:alien-funcall
-                      (sb-alien:extern-alien "flock" (function sb-alien:int sb-alien:int sb-alien:int))
-                      fd +lock-ex+))
-        unless (= (sb-alien:get-errno) sb-posix:eintr)
-          do (error "flock failed, errno ~d" (sb-alien:get-errno))))
+  (loop until (zerop (%flock fd +lock-ex+))
+        unless (= (%errno) +eintr+)
+          do (error "flock failed, errno ~d" (%errno))))
 
 (defun call-with-log-lock (path thunk)
   (bt:with-lock-held ((%log-lock path))
-    (let ((fd (sb-posix:open (concatenate 'string (%log-key path) ".lock")
-                             (logior sb-posix:o-creat sb-posix:o-rdwr) #o644)))
+    (let ((fd (%open (concatenate 'string (%log-key path) ".lock")
+                     (logior +o-creat+ +o-rdwr+) #o644)))
+      (when (minusp fd)
+        (error "cannot open the log lock for ~a, errno ~d" path (%errno)))
       (unwind-protect
-           (progn (sb-posix:fcntl fd sb-posix:f-setfd 1) ; FD_CLOEXEC
+           (progn (%fcntl-setfd fd +fd-cloexec+)
                   (%flock-exclusive fd)
                   (funcall thunk))
-        (sb-posix:close fd)))))
+        (%close fd)))))
 
 (defmacro with-log-lock ((path) &body body)
   "Run BODY holding PATH's in-process lock and its cross-process flock."

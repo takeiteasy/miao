@@ -62,7 +62,8 @@
 (defparameter +getpid-form+
   ;; A worker runs the host implementation, so the bare image it starts has
   ;; exactly the internals this one does.
-  "(sb-unix:unix-getpid)")
+  #+sbcl "(sb-unix:unix-getpid)"
+  #+ecl "(ext:getpid)")
 
 (defun unix-process-alive-p (pid)
   (zerop (nth-value 2 (uiop:run-program (list "kill" "-0" (princ-to-string pid))
@@ -399,11 +400,11 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (let* ((stop nil)
            (changed nil)
-           (start (sb-posix:getcwd))
+           (start (namestring (uiop:getcwd)))
            (watcher (bt:make-thread
                      (lambda ()
                        (loop until stop
-                             do (unless (string= start (sb-posix:getcwd))
+                             do (unless (string= start (namestring (uiop:getcwd)))
                                   (setf changed t)))))))
       (unwind-protect
            (dotimes (i 200)
@@ -416,15 +417,14 @@ last resort with no dedicated OS mechanism behind it."
         (setf stop t)
         (bt:join-thread watcher))
       (is (not changed))
-      (is (string= start (sb-posix:getcwd))))))
+      (is (string= start (namestring (uiop:getcwd)))))))
 
 (test fs-write-creates-a-file-with-the-usual-mode
   (with-tools
-    (let ((old (sb-posix:umask #o022)))
+    (let ((old (miao::posix-umask #o022)))
       (unwind-protect (tool :tool-fs :op :write :path "m.txt" :data "x")
-        (sb-posix:umask old)))
-    (is (= #o644 (logand #o777 (sb-posix:stat-mode
-                                (sb-posix:stat (concatenate 'string *sandbox* "/m.txt"))))))))
+        (miao::posix-umask old)))
+    (is (= #o644 (miao::file-mode (concatenate 'string *sandbox* "/m.txt"))))))
 
 (defun listing-fixture ()
   (write-file (concatenate 'string *sandbox* "/.hidden") "h")

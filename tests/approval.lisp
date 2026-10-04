@@ -152,7 +152,7 @@ and a recorder on its events."
     (let ((table (miao::%approved-always (m:service-of (m:lookup :hook-approval)))))
       (add-orphan-approval table)
       (is (= 1 (hash-table-count table)))
-      (is-true (eventually (lambda () (sb-ext:gc :full t) (zerop (hash-table-count table))) 3)))))
+      (is-true (eventually (lambda () (full-gc) (zerop (hash-table-count table))) 3)))))
 
 (test an-explicit-tools-option-replaces-the-trust-rule
   (with-approval-agent (agent recorder (list (echo-call "c1") (op-call "c2") (done-reply))

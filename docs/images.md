@@ -76,9 +76,9 @@ model-reachable tool op.
 ## Limitations
 
 - SBCL only. `image-generation.lisp` is loaded only under `#+sbcl`; other
-  implementations have declared-state [generations](checkpoints.md) but no
-  image ones ([#221](https://todo.sr.ht/~takeiteasy/miao/221),
-  [#222](https://todo.sr.ht/~takeiteasy/miao/222)).
+  implementations, ECL included, have declared-state
+  [generations](checkpoints.md) but no image ones
+  ([#222](https://todo.sr.ht/~takeiteasy/miao/222)).
 - Needs a current SBCL build. 2.2.9 (Debian's `apt` package as of this
   writing) segfaults inside `save-lisp-and-die`'s own C runtime; 2.6.8 is
   known good.

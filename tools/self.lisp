@@ -207,14 +207,14 @@ immediately before the write."
            (lambda ()
              (when (eq :running (car state))
                (setf result (reload-child context name))
-               (unless (eq :running (sb-ext:compare-and-swap (car state) :running :done))
+               (unless (atomics:cas (car state) :running :done)
                  (ignore-errors (funcall on-late result))))
              (bt:signal-semaphore wake))
            :name "miao-self-reload")
           (when cancel
             (on-cancel cancel (lambda () (bt:signal-semaphore wake))))
           (bt:wait-on-semaphore wake :timeout (/ timeout 1000))
-          (if (eq :running (sb-ext:compare-and-swap (car state) :running :stopped))
+          (if (atomics:cas (car state) :running :stopped)
               (fail (if (and cancel (cancelled-p cancel)) :cancelled :timeout))
               result)))))
 
@@ -264,14 +264,14 @@ evaluated.")
 (defvar *clos-mutation-grace-ms* 2000
   "How long a lapsed deadline waits for one CLOS mutation before tearing it.")
 
-(a:define-constant +clos-held-hooks+
+#+sbcl (a:define-constant +clos-held-hooks+
     '(sb-pcl::load-defclass sb-pcl::load-defmethod
       sb-pcl::set-initial-methods sb-pcl::compile-or-load-defgeneric)
   :test #'equal
   :documentation "SBCL internals each of which is one whole mutation:
 the interrupt is deferred for exactly the call.")
 
-(a:define-constant +clos-span-hooks+
+#+sbcl (a:define-constant +clos-span-hooks+
     '((sb-kernel::%defstruct . :begin) (sb-kernel::%target-defstruct . :end))
   :test #'equal
   :documentation "A defstruct is several steps between these two; the
@@ -304,7 +304,7 @@ interrupt is deferred across the span so a struct is never torn.")
           (decf (clos-latch-depth latch))
           (%finish-clos-mutation latch)))))
 
-(defun %remove-initial-methods (name)
+#+sbcl (defun %remove-initial-methods (name)
   "Removes the initial methods of the generic function NAME that a
 redefinition would remove itself, but under a system lock with interrupts
 off, where a user REMOVE-METHOD method could not be interrupted."
@@ -315,7 +315,7 @@ off, where a user REMOVE-METHOD method could not be interrupted."
           (remove-method function method))
         (setf (sb-pcl::generic-function-initial-methods function) '())))))
 
-(defun %hold-defgeneric (next &rest args)
+#+sbcl (defun %hold-defgeneric (next &rest args)
   (if (null *clos-mutation-latch*)
       (apply next args)
       (apply #'%hold-clos-mutation
@@ -324,7 +324,7 @@ off, where a user REMOVE-METHOD method could not be interrupted."
                (apply next args))
              args)))
 
-(defun %clos-hook-alist ()
+#+sbcl (defun %clos-hook-alist ()
   (append (mapcar (lambda (name) (cons name #'%hold-clos-mutation)) +clos-held-hooks+)
           (list (cons 'sb-pcl::load-defgeneric #'%hold-defgeneric))
           (mapcar (lambda (entry)
@@ -333,13 +333,17 @@ off, where a user REMOVE-METHOD method could not be interrupted."
                                           #'%end-clos-mutation)))
                   +clos-span-hooks+)))
 
-(defun %install-clos-mutation-hooks ()
+#+sbcl (defun %install-clos-mutation-hooks ()
   "Idempotent: UNENCAPSULATEs first, so reloading this file never stacks a
 second copy of the same hook."
   (loop for (name . hook) in (%clos-hook-alist)
         do (sb-int:unencapsulate name 'miao-self)
            (sb-int:encapsulate name 'miao-self hook)))
 
+#-sbcl
+(defun clos-mutation-hooks-installed-p () nil)
+
+#+sbcl
 (defun clos-mutation-hooks-installed-p ()
   "T if every hook %INSTALL-CLOS-MUTATION-HOOKS installs is still in
 place -- checked by a test, so a future SBCL rename of one of these
@@ -348,7 +352,7 @@ pre-emptive-only."
   (loop for (name) in (%clos-hook-alist)
         always (sb-int:encapsulated-p name 'miao-self)))
 
-(eval-when (:load-toplevel :execute) (%install-clos-mutation-hooks))
+#+sbcl (eval-when (:load-toplevel :execute) (%install-clos-mutation-hooks))
 
 ;;; --- host eval, bounded and interruptible ------------------------------
 
@@ -395,7 +399,7 @@ ON-LATE, if given, after the caller has already received :TIMEOUT or
                                        (throw 'self-abandoned nil))
                                      (unwind-protect (eval-in-host form package)
                                        (setf (car in-region) nil))))
-                             (when (and (not (eq :running (sb-ext:compare-and-swap (car state) :running :done)))
+                             (when (and (not (atomics:cas (car state) :running :done))
                                         result on-late)
                                (ignore-errors (funcall on-late result))))
                         (bt:signal-semaphore done)
@@ -406,7 +410,7 @@ ON-LATE, if given, after the caller has already received :TIMEOUT or
     (when cancel
       (on-cancel cancel (lambda () (bt:signal-semaphore wake))))
     (bt:wait-on-semaphore wake :timeout (/ timeout-ms 1000))
-    (if (not (eq :running (sb-ext:compare-and-swap (car state) :running :stopped)))
+    (if (not (atomics:cas (car state) :running :stopped))
         result
         (progn (abandon-self-eval worker in-region latch done)
                (fail (if (and cancel (cancelled-p cancel)) :cancelled :timeout))))))

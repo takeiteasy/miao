@@ -197,6 +197,7 @@ object carries no key order."
                      \"additionalProperties\":false}"))
     (is (same-json (rendered 'miao:any) "{}"))))
 
+#+sbcl ; hash-table iteration order (#230)
 (test rendering-keeps-declaration-order
   "Property order follows declaration, not alphabetical or hash order --
 SBCL's hash tables iterate in insertion order, so a rendered schema renders

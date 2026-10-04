@@ -1,9 +1,9 @@
 (in-package #:miao)
 
-;; SB-INTROSPECT backs the lambda lists and source locations below; it
-;; ships with SBCL itself, so REQUIRE rather than a Quicklisp dependency,
-;; ahead of the DEFUNs that call into it.
-(eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-introspect))
+;; SB-INTROSPECT backs the source locations below; it ships with SBCL itself,
+;; so REQUIRE rather than a Quicklisp dependency, ahead of the DEFUNs that
+;; call into it. Other implementations report no source locations.
+#+sbcl (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-introspect))
 
 ;;; Read-only introspection over the live CL image: describe, apropos,
 ;;; documentation and source locations. See ~takeiteasy/miao#10.
@@ -113,7 +113,7 @@ the implementation cannot say."
           (and list (prin1-to-string list))))))
 
 (defun function-lambda-list (symbol)
-  (sb-introspect:function-lambda-list symbol))
+  (trivial-arguments:arglist symbol))
 
 ;;; --- :apropos --------------------------------------------------------
 
@@ -192,20 +192,24 @@ or NIL if it cannot be printed."
 (defun symbol-methods (symbol)
   (and (fboundp symbol)
        (typep (fdefinition symbol) 'generic-function)
-       (ignore-errors (sb-mop:generic-function-methods (fdefinition symbol)))))
+       (ignore-errors (closer-mop:generic-function-methods (fdefinition symbol)))))
+
+(defun method-source-location (method)
+  #+sbcl (let* ((source (ignore-errors (sb-introspect:find-definition-source method)))
+                (path (and source (sb-introspect:definition-source-pathname source))))
+           (and path (list :file (namestring path)
+                           :position (sb-introspect:definition-source-character-offset source))))
+  #-sbcl (progn method nil))
 
 (defun method-report (method)
-  (let* ((source (ignore-errors (sb-introspect:find-definition-source method)))
-         (path (and source (sb-introspect:definition-source-pathname source))))
-    (append (list :specializers (print-standard (mapcar #'specializer-name
-                                                        (sb-mop:method-specializers method)))
-                  :qualifiers (print-standard (method-qualifiers method)))
-            (and path (list :file (namestring path)
-                            :position (sb-introspect:definition-source-character-offset source))))))
+  (append (list :specializers (print-standard (mapcar #'specializer-name
+                                                      (closer-mop:method-specializers method)))
+                :qualifiers (print-standard (method-qualifiers method)))
+          (method-source-location method)))
 
 (defun specializer-name (specializer)
-  (if (typep specializer 'sb-mop:eql-specializer)
-      (list 'eql (sb-mop:eql-specializer-object specializer))
+  (if (typep specializer 'closer-mop:eql-specializer)
+      (list 'eql (closer-mop:eql-specializer-object specializer))
       (class-name specializer)))
 
 (defun function-form (symbol)
@@ -217,12 +221,13 @@ or NIL if it cannot be printed."
                       :truncated (> (length text) +source-form-limit+)))))))
 
 (defun function-source (symbol)
-  (let ((source (first (ignore-errors
-                         (sb-introspect:find-definition-sources-by-name symbol :function)))))
-    (and source
-         (let ((path (sb-introspect:definition-source-pathname source)))
-           (and path (list :file (namestring path)
-                           :position (sb-introspect:definition-source-character-offset source)))))))
+  #+sbcl (let ((source (first (ignore-errors
+                                (sb-introspect:find-definition-sources-by-name symbol :function)))))
+           (and source
+                (let ((path (sb-introspect:definition-source-pathname source)))
+                  (and path (list :file (namestring path)
+                                  :position (sb-introspect:definition-source-character-offset source))))))
+  #-sbcl (progn symbol nil))
 
 ;;; --- :packages -----------------------------------------------------
 

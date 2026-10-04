@@ -209,11 +209,11 @@ answers REPLIES, and call BODY with it and a recorder on its events."
     (append-ticks path 1)
     (miao:journal-drain path)
     (with-writer-setting (miao::*journal-write-retries* '(0.2 0.2 0.2 0.2 0.2))
-      (sb-posix:chmod (namestring path) #o444)
+      (miao::posix-chmod (namestring path) #o444)
       (unwind-protect
            (progn (append-ticks path 1)
                   (sleep 0.3))
-        (sb-posix:chmod (namestring path) #o644))
+        (miao::posix-chmod (namestring path) #o644))
       (miao:journal-drain path)
       (is (= 2 (length (miao::%read-log path)))))))
 
@@ -222,12 +222,12 @@ answers REPLIES, and call BODY with it and a recorder on its events."
     (append-ticks path 1)
     (miao:journal-drain path)
     (with-writer-setting (miao::*journal-write-retries* '(0.05 0.05))
-      (sb-posix:chmod (namestring path) #o444)
+      (miao::posix-chmod (namestring path) #o444)
       (unwind-protect
            (progn (append-ticks path 1)
                   (miao:journal-drain path)
                   (is (= 1 (length (miao::%read-log path)))))
-        (sb-posix:chmod (namestring path) #o644)))))
+        (miao::posix-chmod (namestring path) #o644)))))
 
 (test a-drain-with-a-timeout-says-whether-the-queue-emptied
   (with-vault-path (path)

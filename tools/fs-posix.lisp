@@ -1,83 +1,46 @@
 (in-package #:miao)
 
-(eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
-
 ;;; Primitives for tool-fs's atomic sandbox walk (~takeiteasy/miao#52, #53,
 ;;; #59). Each path component is opened with O_NOFOLLOW relative to the
 ;;; directory fd held for its parent -- refusing a symlink outright rather
 ;;; than resolving it -- and the final component is operated on relative to
 ;;; the last fd, so the check that it is not a symlink and the operation share
 ;;; one file descriptor and cannot be swapped apart. The process's current
-;;; directory is never touched.
-;;;
-;;; sb-posix carries none of the *at calls, so they are bound here.
+;;; directory is never touched. The libc calls are in posix.lisp.
 
 ;;; --- errno, normalised to keywords -----------------------------------
 
 (defun errno-keyword (errno)
-  (cond ((= errno sb-posix:enoent) :enoent)
-        ((= errno sb-posix:eexist) :eexist)
-        ((= errno sb-posix:enotdir) :enotdir)
-        ((= errno sb-posix:eisdir) :eisdir)
-        ((= errno sb-posix:eperm) :eperm)
-        ((= errno sb-posix:enotempty) :enotempty)
-        ((= errno sb-posix:eloop) :eloop)
+  (cond ((= errno +enoent+) :enoent)
+        ((= errno +eexist+) :eexist)
+        ((= errno +enotdir+) :enotdir)
+        ((= errno +eisdir+) :eisdir)
+        ((= errno +eperm+) :eperm)
+        ((= errno +enotempty+) :enotempty)
+        ((= errno +eloop+) :eloop)
         (t :other)))
-
-(defun sb-posix-errno-keyword (condition)
-  (errno-keyword (sb-posix:syscall-errno condition)))
 
 (defun syscall-result (value failed)
   "VALUE, or (values nil errno-keyword) when FAILED. Reads errno at once, so
 nothing runs between the failing call and here."
   (if failed
-      (values nil (errno-keyword (sb-alien:get-errno)))
+      (values nil (errno-keyword (%errno)))
       (values value nil)))
-
-;;; --- the *at calls ----------------------------------------------------
-
-;;; openat(2) is variadic: on arm64 macOS a variadic argument travels on the
-;;; stack, so binding MODE as an ordinary fixed argument hands the kernel
-;;; garbage. Declaring it after &OPTIONAL makes SBCL use the variadic
-;;; convention, as sb-posix's own OPEN does.
-(defun %openat (dirfd name flags mode)
-  (sb-alien:alien-funcall
-   (sb-alien:extern-alien "openat" (function sb-alien:int sb-alien:int sb-alien:c-string
-                                             sb-alien:int &optional sb-alien:unsigned-int))
-   dirfd name flags mode))
-
-(sb-alien:define-alien-routine ("mkdirat" %mkdirat) sb-alien:int
-  (dirfd sb-alien:int) (name sb-alien:c-string) (mode sb-alien:unsigned-int))
-
-(sb-alien:define-alien-routine ("unlinkat" %unlinkat) sb-alien:int
-  (dirfd sb-alien:int) (name sb-alien:c-string) (flags sb-alien:int))
-
-;;; Not exported by sb-posix.
-(defconstant +at-removedir+ #+darwin #x80 #+linux #x200)
-
-(sb-alien:define-alien-routine ("readlinkat" %readlinkat) sb-alien:long
-  (dirfd sb-alien:int) (name sb-alien:c-string)
-  (buffer (* sb-alien:char)) (size sb-alien:unsigned-long))
-
-(sb-alien:define-alien-routine ("fdopendir" %fdopendir) sb-alien:system-area-pointer
-  (fd sb-alien:int))
 
 ;;; --- directory fds ----------------------------------------------------
 ;;; Each returns an fd, or (values nil errno-kw).
 
 (defun fs-open-root (root)
-  (handler-case (values (sb-posix:open root (logior sb-posix:o-directory
-                                                     sb-posix:o-nofollow))
-                        nil)
-    (sb-posix:syscall-error (e) (values nil (sb-posix-errno-keyword e)))))
+  (let ((fd (%open root (logior +o-directory+ +o-nofollow+) 0)))
+    (syscall-result fd (minusp fd))))
 
 (defun fs-open-dir (dirfd name)
   "NAME under DIRFD as a directory, refusing a symlink."
-  (let ((fd (%openat dirfd name (logior sb-posix:o-directory sb-posix:o-nofollow) 0)))
+  (let ((fd (%openat dirfd name (logior +o-directory+ +o-nofollow+) 0)))
     (syscall-result fd (minusp fd))))
 
 (defun fs-close (fd)
-  (ignore-errors (sb-posix:close fd)))
+  (%close fd))
 
 ;;; --- the leaf: open, mkdir, unlink, readlink, list --------------------
 
@@ -86,10 +49,10 @@ nothing runs between the failing call and here."
 :TRUNC), always with O_NOFOLLOW added. Returns an fd, or (values nil
 errno-keyword)."
   (let ((fd (%openat dirfd name
-                     (logior sb-posix:o-nofollow
-                             (if (member :wronly flags) sb-posix:o-wronly sb-posix:o-rdonly)
-                             (if (member :creat flags) sb-posix:o-creat 0)
-                             (if (member :trunc flags) sb-posix:o-trunc 0))
+                     (logior +o-nofollow+
+                             (if (member :wronly flags) +o-wronly+ +o-rdonly+)
+                             (if (member :creat flags) +o-creat+ 0)
+                             (if (member :trunc flags) +o-trunc+ 0))
                      mode)))
     (syscall-result fd (minusp fd))))
 
@@ -110,8 +73,8 @@ not empty, and on anything that is not a directory."
   "True when NAME under DIRFD is itself a symlink, dangling or not.
 READLINKAT fails with EINVAL on anything else, which is enough to tell the
 two apart without a full STAT."
-  (sb-alien:with-alien ((buffer (array sb-alien:char 8)))
-    (not (minusp (%readlinkat dirfd name (sb-alien:cast buffer (* sb-alien:char)) 8)))))
+  (cffi:with-foreign-pointer (buffer 8)
+    (not (minusp (%readlinkat dirfd name buffer 8)))))
 
 (defun fs-list-names (dirfd name &key hide-links)
   "Every entry of NAME under DIRFD (DIRFD itself when NAME is NIL), sorted.
@@ -120,21 +83,20 @@ opened. HIDE-LINKS leaves symlinks out. Entries are read from the fd the walk
 already validated, so the listing cannot be redirected by a swapped path."
   (multiple-value-bind (fd errno) (fs-open-dir dirfd (or name "."))
     (unless fd (return-from fs-list-names (values nil errno)))
-    (let ((sap (%fdopendir fd)))
-      (when (zerop (sb-sys:sap-int sap))
+    (let ((dir (%fdopendir fd)))
+      (when (cffi:null-pointer-p dir)
         (fs-close fd)
         (return-from fs-list-names (values nil :other)))
       ;; CLOSEDIR now owns FD.
-      (let ((dir (sb-alien:sap-alien sap (* t)))
-            (names '()))
+      (let ((names '()))
         (unwind-protect
-             (loop for entry = (sb-posix:readdir dir)
-                   until (sb-alien:null-alien entry)
-                   do (let ((entry-name (sb-posix:dirent-name entry)))
+             (loop for entry = (%readdir dir)
+                   until (cffi:null-pointer-p entry)
+                   do (let ((entry-name (dirent-name entry)))
                         (unless (or (string= entry-name ".") (string= entry-name "..")
                                     (and hide-links (fs-symlink-leaf-p fd entry-name)))
                           (push entry-name names))))
-          (sb-posix:closedir dir))
+          (%closedir dir))
         (values (sort names #'string<) nil)))))
 
 ;;; --- the walk ----------------------------------------------------------

@@ -168,6 +168,8 @@ or a slot (see [introspection](introspection.md#trust-posture)), `tool-self`
 
 ## Limitations
 
+- On ECL the CLOS-mutation hooks are not installed, so a deadline can tear a
+  class or struct definition ([#225](https://todo.sr.ht/~takeiteasy/miao/225)).
 - Rollback restores declared service state, not code: an ordinary
   tool-self `:define`'s checkpoint does not undo the redefinition itself,
   only whatever state drifted around it. `:previous-source` is the manual

@@ -612,7 +612,7 @@ is unwound, rather than left running until the backend answers or hangs up."
         (unwind-protect
              (setf result (funcall function (lambda (url)
                                               (open-connection url exchange timeout-ms))))
-          (sb-sys:without-interrupts
+          (without-interrupts
             (close-socket (exchange-socket exchange))))))
     (when cancel-timer (funcall cancel-timer))
     (let ((reason (finish-exchange exchange)))
@@ -656,8 +656,10 @@ blocked in a read on it asleep. Cheap, and safe to call from any thread."
                     (puri:uri-host uri) (or (puri:uri-port uri) (if securep 443 80))
                     :element-type '(unsigned-byte 8)
                     ;; Bounds the connect phase alone, ahead of the whole-
-                    ;; exchange deadline.
-                    :timeout (max 1 (ceiling timeout-ms 1000))
+                    ;; exchange deadline. TODO: usocket rejects :timeout on
+                    ;; ECL, where only the whole-exchange deadline bounds a
+                    ;; connect (#229).
+                    #-ecl :timeout #-ecl (max 1 (ceiling timeout-ms 1000))
                     :nodelay :if-supported))))
     ;; A cancel that landed while connecting found no socket to close.
     (when (bt:with-lock-held ((exchange-lock exchange))

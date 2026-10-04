@@ -115,7 +115,7 @@ is not enough: it would admit siblings such as /sandbox-root-evil."
         (errno-result errno "no such directory")
         (ok :files names))))
 
-;;; The fd-stream in FS-SLURP-FD and FS-SPIT-FD owns the fd and closes it:
+;;; FS-SLURP-FD and FS-SPIT-FD own the fd and close it:
 ;;; closing it again here would risk closing a descriptor another thread has
 ;;; since been handed.
 
@@ -127,7 +127,7 @@ is not enough: it would admit siblings such as /sandbox-root-evil."
               ((eq encoding :base64)
                (ok :data (cl-base64:usb8-array-to-base64-string (fs-slurp-octets-fd fd))))
               (t (handler-case (ok :data (fs-slurp-fd fd))
-                   (sb-int:stream-decoding-error ()
+                   (babel-encodings:character-decoding-error ()
                      (bad-request "file is not valid UTF-8; read it with :encoding base64"))))))))
 
 (defun fs-op-write (dirfd leaf data encoding)
@@ -185,18 +185,37 @@ is not enough: it would admit siblings such as /sandbox-root-evil."
               (:enotdir (bad-request "not a directory"))
               (t (errno-result errno)))))))
 
-(defun fs-slurp-fd (fd)
-  (with-open-stream (s (sb-sys:make-fd-stream fd :input t :element-type 'character))
-    (uiop:slurp-stream-string s)))
-
-(defun fs-spit-fd (fd data)
-  (with-open-stream (s (sb-sys:make-fd-stream fd :output t :element-type 'character))
-    (write-string data s)))
-
 (defun fs-slurp-octets-fd (fd)
-  (with-open-stream (s (sb-sys:make-fd-stream fd :input t :element-type '(unsigned-byte 8)))
-    (a:read-stream-content-into-byte-vector s)))
+  "Every octet FD holds, closing FD."
+  (let ((chunk 65536)
+        (out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
+    (unwind-protect
+         (cffi:with-foreign-pointer (buffer chunk)
+           (loop for n = (%read fd buffer chunk)
+                 do (cond ((plusp n)
+                           (dotimes (i n)
+                             (vector-push-extend (cffi:mem-ref buffer :uint8 i) out)))
+                          ((zerop n) (return))
+                          ((/= (%errno) +eintr+) (error "read failed, errno ~d" (%errno)))))
+           (coerce out '(simple-array (unsigned-byte 8) (*))))
+      (fs-close fd))))
+
+(defun fs-slurp-fd (fd)
+  "FD's contents as UTF-8 text, closing FD."
+  (babel:octets-to-string (fs-slurp-octets-fd fd) :encoding :utf-8))
 
 (defun fs-spit-octets-fd (fd octets)
-  (with-open-stream (s (sb-sys:make-fd-stream fd :output t :element-type '(unsigned-byte 8)))
-    (write-sequence octets s)))
+  "Write OCTETS to FD, closing FD."
+  (unwind-protect
+       (cffi:with-foreign-pointer (buffer (max 1 (length octets)))
+         (dotimes (i (length octets))
+           (setf (cffi:mem-ref buffer :uint8 i) (aref octets i)))
+         (loop with done = 0
+               while (< done (length octets))
+               do (let ((n (%write fd (cffi:inc-pointer buffer done) (- (length octets) done))))
+                    (cond ((plusp n) (incf done n))
+                          ((/= (%errno) +eintr+) (error "write failed, errno ~d" (%errno)))))))
+    (fs-close fd)))
+
+(defun fs-spit-fd (fd data)
+  (fs-spit-octets-fd fd (babel:string-to-octets data :encoding :utf-8)))

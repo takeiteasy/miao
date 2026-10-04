@@ -42,11 +42,14 @@ ASDF does not know that, so editing the program means touching this file too."
    (merge-pathnames "worker-program.lisp"
                     (or *compile-file-truename* *load-truename*))))
 
-(defparameter *worker-program* (worker-program)
+(defparameter *worker-program*
+  #-ecl (worker-program)
+  ;; ECL falls into its own REPL when the program returns.
+  #+ecl (format nil "(progn ~a (ext:quit 0))" (worker-program))
   "The child's read/eval/print loop, passed on its command line.")
 
 (defparameter *worker-command* nil
-  "Argv that starts a bare Lisp, or NIL for the host's own SBCL binary. The
+  "Argv that starts a bare Lisp, or NIL for the host's own binary. The
 program is appended as the final argument. Set this to run workers under a
 different binary or with different flags than the host's own invocation.")
 
@@ -58,12 +61,16 @@ different binary or with different flags than the host's own invocation.")
 dynamic space when HEAP is given. A memory-exhausted worker exits rather than
 waiting in the debugger for its deadline."
   (or *worker-command*
-      (append (list (namestring sb-ext:*runtime-pathname*))
-              (when heap
-                (list "--dynamic-space-size" (princ-to-string heap)
-                      "--disable-ldb" "--lose-on-corruption"))
-              (list "--noinform" "--non-interactive" "--no-sysinit" "--no-userinit"
-                    "--eval"))))
+      (append (list (lisp-runtime-path))
+              #+sbcl (append (when heap
+                               (list "--dynamic-space-size" (princ-to-string heap)
+                                     "--disable-ldb" "--lose-on-corruption"))
+                             (list "--noinform" "--non-interactive" "--no-sysinit"
+                                   "--no-userinit" "--eval"))
+              #+ecl (append (list "--norc" "--nodebug")
+                            (when heap
+                              (list "--heap-size" (princ-to-string (* heap 1024 1024))))
+                            (list "--eval")))))
 
 (defvar *boot* (list :boot)
   "Identifies this process image. A worker records the value it started
@@ -127,20 +134,6 @@ pid the first has already reaped."
 takes the same, non-recursive, lock."
   (dolist (worker (bt:with-lock-held (*live-workers-lock*) (copy-list *live-workers*)))
     (kill-worker worker)))
-
-(defun forget-workers ()
-  "Start a new process image's worker bookkeeping: every worker held so far
-reads as stale, and none is signalled. SBCL's own list of child processes
-survives a save too; its entries for these workers go, so a pid a new child
-reuses is never reaped through them."
-  (let ((pids (mapcar (lambda (w) (uiop:process-info-pid (worker-process w)))
-                      *live-workers*)))
-    (sb-thread:with-recursive-lock (sb-impl::*active-processes-lock*)
-      (setf sb-impl::*active-processes*
-            (remove-if (lambda (p) (member (sb-ext:process-pid p) pids))
-                       sb-impl::*active-processes*))))
-  (setf *boot* (list :boot))
-  (bt:with-lock-held (*live-workers-lock*) (setf *live-workers* '())))
 
 (defun worker-eval (worker source timeout-ms &optional cancel)
   "Evaluate SOURCE in WORKER. Returns a tool result; a worker that missed

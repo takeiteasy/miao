@@ -11,6 +11,10 @@
         do (sleep 0.01)
         finally (return value)))
 
+(defun full-gc ()
+  #+sbcl (sb-ext:gc :full t)
+  #+ecl (ext:gc t))
+
 (defun call-with-pool-sizes (sizes body)
   "Run BODY with each tier in SIZES, a plist, capped at its size, starting
 from no idle threads."
