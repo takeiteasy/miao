@@ -6,7 +6,6 @@
                     (#:bt #:bordeaux-threads-2))
   (:export
    #:*version*
-   #:interactive-interrupt
    ;; tool convention
    #:tools #:describe-tool #:invoke-tool
    #:tool-error #:tool-error-p #:tool-trust #:tool-schema

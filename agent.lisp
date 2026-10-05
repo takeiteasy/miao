@@ -246,10 +246,7 @@ there instead. A sub-agent inherits it.")
 
 (defun messages-digest (messages)
   (format nil "~(~{~2,'0x~}~)"
-          (coerce (md5:md5sum-sequence
-                   (babel:string-to-octets (json:stringify (untyped->json messages))
-                                           :encoding :utf-8))
-                  'list)))
+          (coerce (sb-md5:md5sum-string (json:stringify (untyped->json messages))) 'list)))
 
 (defun accept-input (service args &key (record t))
   "Log a :RUN keyed :INPUT-ID in the call log, unless RECORD is false. Answers

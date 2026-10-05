@@ -3,19 +3,6 @@
 (def-suite :miao)
 (in-suite :miao)
 
-;;; An unhandled error in an ECL thread opens a REPL there, which wedges the
-;;; run. Report it with a backtrace and end that thread instead.
-#+ecl
-(let ((main mp:*current-process*))
-  (setf ext:*invoke-debugger-hook*
-        (lambda (condition hook)
-          (declare (ignore hook))
-          (unless (eq mp:*current-process* main)
-            (format *error-output* "~&THREAD ~a: ~a~%" (mp:process-name mp:*current-process*) condition)
-            (ignore-errors (si::tpl-backtrace))
-            (finish-output *error-output*)
-            (mp:exit-process)))))
-
 (defun eventually (function &optional (timeout 2))
   "Poll FUNCTION until it returns true or TIMEOUT seconds pass."
   (loop with deadline = (+ (get-internal-real-time) (* timeout internal-time-units-per-second))
@@ -23,10 +10,6 @@
         until (or value (> (get-internal-real-time) deadline))
         do (sleep 0.01)
         finally (return value)))
-
-(defun full-gc ()
-  #+sbcl (sb-ext:gc :full t)
-  #+ecl (ext:gc t))
 
 (defun call-with-pool-sizes (sizes body)
   "Run BODY with each tier in SIZES, a plist, capped at its size, starting

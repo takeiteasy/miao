@@ -17,15 +17,13 @@
 
 (defun probe-core (core)
   "T if CORE loads and its toplevel runs cleanly under MIAO_IMAGE_PROBE, in a
-throwaway subprocess of this runtime. Cores are SBCL's: NIL elsewhere."
-  #+sbcl
+throwaway subprocess of this runtime."
   (zerop (nth-value 2
           (uiop:run-program
            (list (namestring sb-ext:*runtime-pathname*) "--core" (namestring core)
                  "--noinform" "--non-interactive")
            :environment (list* "MIAO_IMAGE_PROBE=1" (sb-ext:posix-environ))
-           :ignore-error-status t)))
-  #-sbcl (progn core nil))
+           :ignore-error-status t))))
 
 (defun %newest-generation (home)
   (let ((cores (directory (merge-pathnames "*.core" (generations-directory home)))))
@@ -51,5 +49,4 @@ nothing to fall back to."
 
 (defun launch-argv (core args)
   "The argv that runs CORE with ARGS, in the runtime that is running now."
-  #+sbcl (list* (namestring sb-ext:*runtime-pathname*) "--core" (namestring core) args)
-  #-sbcl (error "cores need SBCL; cannot launch ~a with ~s." core args))
+  (list* (namestring sb-ext:*runtime-pathname*) "--core" (namestring core) args))

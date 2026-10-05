@@ -159,8 +159,8 @@ the queue is full."
       (incf (jw-bytes writer) size)
       (unless (jw-thread writer)
         (setf (jw-thread writer)
-              (spawn-thread (lambda () (%journal-writer-loop writer))
-                            :name "miao-journal-writer")))
+              (bt:make-thread (lambda () (%journal-writer-loop writer))
+                              :name "miao-journal-writer")))
       (bt:condition-broadcast (jw-wake writer)))))
 
 (defun journal-drain (path &key timeout)
@@ -219,7 +219,7 @@ writing then is left running. A later entry starts the writer again."
         (bt:with-lock-held ((jw-lock writer))
           (setf (jw-retiring writer) nil))))))
 
-(add-exit-hook 'journal-drain-all)
+(pushnew 'journal-drain-all sb-ext:*exit-hooks*)
 
 (defun journal-append (path run agent parent kind &rest fields)
   "Queue an entry of KIND with FIELDS for PATH and return its id. An entry that

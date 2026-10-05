@@ -29,8 +29,8 @@
                                  :port (usocket:get-local-port socket)
                                  :handler handler)))
     (setf (fake-thread server)
-          (miao::spawn-thread (lambda () (fake-http-loop server))
-                              :name "miao-fake-http"))
+          (bt:make-thread (lambda () (fake-http-loop server))
+                          :name "miao-fake-http"))
     server))
 
 (defun fake-http-url (server)

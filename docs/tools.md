@@ -286,8 +286,8 @@ The source travels as a string, so source that does not read costs one reply
 rather than desynchronising the stream. Each value prints under
 `*print-length*`, `*print-level*` and a character cap; the reply's fourth
 element is `:elided` when any value was cut that way, when the form returned
-more than 100 values (ECL cannot return more than 64), or when their combined
-printed form ran past 4000 characters (later values dropped), `nil` when everything printed in full.
+more than 100 values, or when their combined printed form ran past 4000
+characters (later values dropped), `nil` when everything printed in full.
 
 Output a form prints is capped at 4000 characters the same way, and sets
 `:elided`. `t` and the `*-io*` streams are rebound to that captured output
@@ -317,7 +317,7 @@ inspected:
 past the reply — a caller that hits `:elided` there needs `tool-repl` to look
 further at the value.
 
-A worker runs the host's own Lisp binary. `*worker-command*` overrides the
+A worker runs the host's own SBCL binary. `*worker-command*` overrides the
 invocation. Starting one costs about 33 ms, and an exchange with a running
 one about 0.2 ms, which is why an evaluation gets a fresh process instead
 of a pooled one.

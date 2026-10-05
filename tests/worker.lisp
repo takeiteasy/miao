@@ -51,16 +51,15 @@
   ;; A second kill must not signal a pid the first has already reaped.
   (let ((worker (miao::start-worker))
         (kills 0))
-    (let ((original (fdefinition 'miao::terminate-process-group)))
-      (setf (fdefinition 'miao::terminate-process-group)
-            (lambda (process)
-              (incf kills)
-              (funcall original process)))
-      (unwind-protect
-           (progn (miao::kill-worker worker)
-                  (miao::kill-worker worker)
-                  (is (eql 1 kills)))
-        (setf (fdefinition 'miao::terminate-process-group) original)))))
+    (sb-int:encapsulate 'miao::terminate-process-group 'count-kills
+                        (lambda (function process)
+                          (incf kills)
+                          (funcall function process)))
+    (unwind-protect
+         (progn (miao::kill-worker worker)
+                (miao::kill-worker worker)
+                (is (eql 1 kills)))
+      (sb-int:unencapsulate 'miao::terminate-process-group 'count-kills))))
 
 ;;; --- elision (~takeiteasy/miao#26) --------------------------------------
 
@@ -103,10 +102,8 @@
       (is (null (getf (second result) :values))))))
 
 (test worker-elides-past-100-values
-  (if (< multiple-values-limit 150)
-      (skip "needs MULTIPLE-VALUES-LIMIT of 150 or more")
-      (with-worker (w)
-        (let ((result (miao::worker-eval
-                       w "(apply #'values (loop for i below 150 collect i))" 5000)))
-          (is (= 100 (length (getf (second result) :values))))
-          (is (eq t (getf (second result) :elided)))))))
+  (with-worker (w)
+    (let ((result (miao::worker-eval
+                   w "(apply #'values (loop for i below 150 collect i))" 5000)))
+      (is (= 100 (length (getf (second result) :values))))
+      (is (eq t (getf (second result) :elided))))))

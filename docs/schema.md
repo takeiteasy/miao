@@ -100,9 +100,9 @@ declared type, and carries no coercion of its own.
 
 `schema->json-schema` returns an insertion-ordered JSON object, which jzon
 serialises directly, so a protocol embeds it in a larger request body rather
-than splicing strings. Properties render in declaration order on every Lisp,
-which keeps a request body stable for prompt caching. `json-schema->schema` is its inverse; an unrecognised construct
-is an error, matching the closed set.
+than splicing strings. Properties render in declaration order, which keeps a
+request body stable for prompt caching. `json-schema->schema` is its inverse;
+an unrecognised construct is an error, matching the closed set.
 
 A round trip preserves every specifier, its options and the `required` set,
 except `:required-when`, which stays in the description as text. It does not

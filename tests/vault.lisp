@@ -516,7 +516,7 @@ after the message that triggered it has already returned."
       (is (eq :claimed (miao:vault-claim-pending path id))))))
 
 (test saving-an-image-forgets-the-vault-token
-  #+sbcl (is (member 'miao::%forget-vault-token sb-ext:*save-hooks*))
+  (is (member 'miao::%forget-vault-token sb-ext:*save-hooks*))
   (let ((miao::*vault-token* "abc"))
     (miao::%forget-vault-token)
     (is (null miao::*vault-token*))))

@@ -1,3 +1,6 @@
+#-sbcl
+(error "miao requires SBCL; running on ~a." (lisp-implementation-type))
+
 (defsystem "miao/launcher"
   :description "Core selection for the miao launcher."
   :author "George Watson"
@@ -14,8 +17,8 @@
   :license "GPLv3"
   :version "0.1.0"
   :depends-on ("meow" "meow/logger" "alexandria" "com.inuoe.jzon" "drakma" "flexi-streams"
-               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "cffi" "babel" "md5"
-               "closer-mop" "trivial-arguments" "atomics" "miao/launcher")
+               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "cffi"
+               "miao/launcher")
   :serial t
   :components ((:file "package")
                (:file "posix")
@@ -88,7 +91,7 @@
                ;; Last: SAVE-IMAGE needs CHECKPOINT (checkpoint.lisp),
                ;; M:SUSPEND/M:RESUME, and PROVIDER-API-KEY (provider.lisp)
                ;; to refuse a credentialed mount.
-               #+sbcl (:file "image-generation"))
+               (:file "image-generation"))
   :in-order-to ((test-op (test-op "miao/tests"))))
 
 (defsystem "miao/cli"
@@ -152,7 +155,7 @@
                (:file "hooks")
                (:file "approval")
                (:file "inputs")
-               #+sbcl (:file "image-generation")
+               (:file "image-generation")
                (:file "self"))
   :perform (test-op (o c)
              (unless (symbol-call :fiveam :run! :miao)

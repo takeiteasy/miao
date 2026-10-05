@@ -44,8 +44,6 @@ too.[^runtime] It does not load miao itself.
 
 ## Limitations
 
-- Cores are SBCL's. Under ECL `probe-core` answers false and `launch-argv`
-  signals; run miao in-process instead.
 - A core saved by another SBCL build does not load, so it falls back to
   recovery; rebuild it with `miao install`.
 - The probe starts a second SBCL process per launch.

@@ -137,7 +137,7 @@
 
 ;;; --- the CLOS mutation latch (~takeiteasy/miao#79, #81) --------------------
 ;;;
-;;; RUN-IN-HOST defers a lapsed deadline only while one of the Lisp's own
+;;; RUN-IN-HOST defers a lapsed deadline only while one of SBCL's own
 ;;; loaders is mid-mutation, so a wedged :eql specializer or slow compile
 ;;; is killed whether or not the form mutated something earlier.
 
@@ -145,8 +145,8 @@
   "T once every RUN-IN-HOST worker has actually exited -- polled rather
 than asserted immediately after :TIMEOUT, since ABANDON-SELF-EVAL's
 interrupt still has to land and unwind."
-  (eventually (lambda () (notany (lambda (thread) (equal "miao-self-eval" (bt:thread-name thread)))
-                                 (bt:all-threads)))))
+  (eventually (lambda () (notany (lambda (thread) (equal "miao-self-eval" (sb-thread:thread-name thread)))
+                                 (sb-thread:list-all-threads)))))
 
 (test clos-mutation-hooks-are-installed
   (is-true (miao::clos-mutation-hooks-installed-p)))
@@ -250,7 +250,7 @@ interrupt still has to land and unwind."
   (self :define :package "MIAO-SELF-TEST"
                 :form (format nil "(defclass ~a (standard-class) ())" name))
   (self :define :package "MIAO-SELF-TEST"
-                :form (format nil "(defmethod closer-mop:validate-superclass ((c ~a) (s standard-class)) t)" name))
+                :form (format nil "(defmethod sb-mop:validate-superclass ((c ~a) (s standard-class)) t)" name))
   (self :define :package "MIAO-SELF-TEST"
                 :form (format nil "(defmethod shared-initialize :after ((c ~a) slots &key) (sleep ~a))" name seconds)))
 
@@ -265,12 +265,8 @@ interrupt still has to land and unwind."
                            :form "(defstruct (self-test-wedged-struct (:constructor make-self-test-wedged-struct (&aux (a (self-test-slow-macro))))) a)")))
          (is (equal :timeout (miao:tool-error result))))
        (is-true (no-miao-self-eval-thread-p))
-       ;; ECL expands the constructor's macro before defining the struct, so
-       ;; the wedge is killed with nothing mutated
-       #+ecl (is-false (class-named "SELF-TEST-WEDGED-STRUCT"))
-       #+ecl (is (null (late-outcome-entry)))
-       #-ecl (is-true (eventually #'late-outcome-entry))
-       #-ecl (is (equal '(:error :torn) (getf (late-outcome-entry) :outcome)))))))
+       (is-true (eventually #'late-outcome-entry))
+       (is (equal '(:error :torn) (getf (late-outcome-entry) :outcome)))))))
 
 (test self-eval-a-wedge-in-a-mop-method-is-torn-not-leaked
   (with-self ()
@@ -288,7 +284,7 @@ interrupt still has to land and unwind."
 (test self-eval-a-wedge-in-remove-method-during-a-redefinition-is-torn-not-leaked
   (with-self ()
     (self :define :package "MIAO-SELF-TEST"
-                  :form "(defclass self-test-slow-gf (standard-generic-function) () (:metaclass closer-mop:funcallable-standard-class))")
+                  :form "(defclass self-test-slow-gf (standard-generic-function) () (:metaclass sb-mop:funcallable-standard-class))")
     (self :define :package "MIAO-SELF-TEST"
                   :form "(defgeneric self-test-redefined (x) (:generic-function-class self-test-slow-gf) (:method ((x integer)) 1))")
     (self :define :package "MIAO-SELF-TEST"

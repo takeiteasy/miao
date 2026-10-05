@@ -64,26 +64,14 @@ being the name of the context CONTEXT-PROCESS is."
 closed: a class that cannot say which initargs are credentials records none."
   (handler-case
       (let ((class (find-class class)))
-        (closer-mop:finalize-inheritance class)
-        (secret-initargs (closer-mop:class-prototype class)))
+        (sb-mop:finalize-inheritance class)
+        (secret-initargs (sb-mop:class-prototype class)))
     (error () :all)))
 
-(defvar *unreadable-function-dispatch*
-  (let ((table (copy-pprint-dispatch)))
-    (set-pprint-dispatch 'function
-                         (lambda (stream function)
-                           (declare (ignore stream))
-                           (error 'print-not-readable :object function))
-                         1 table)
-    table)
-  "Refuses a function before it is printed: ECL prints a bytecode closure
-readably as a structure large enough to exhaust the heap, and reads it back.")
-
 (defun %readable-p (value)
-  "Whether VALUE prints and reads back as it would be remounted."
-  (handler-case (let ((*print-readably* t)
-                      (*print-pretty* t)
-                      (*print-pprint-dispatch* *unreadable-function-dispatch*))
+  "Whether VALUE prints and reads back as it would be remounted: SBCL prints
+a function readably as a #. form, which the guarded read then refuses."
+  (handler-case (let ((*print-readably* t))
                   (%read-initargs (%print-initargs value))
                   t)
     (error () nil)))
@@ -184,7 +172,7 @@ cannot bring back."
 (defun generation-id ()
   "A name that sorts by the time it was made, to the microsecond, then a random
 tail so two processes in the same microsecond do not collide."
-  (multiple-value-bind (seconds microseconds) (unix-time-micros)
+  (multiple-value-bind (seconds microseconds) (sb-ext:get-time-of-day)
     (multiple-value-bind (sec min hour day month year)
         (decode-universal-time (+ seconds (encode-universal-time 0 0 0 1 1 1970 0)))
       (format nil "~4,'0d~2,'0d~2,'0d-~2,'0d~2,'0d~2,'0d-~6,'0d-~3,'0d"

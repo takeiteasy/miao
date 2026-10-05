@@ -11,7 +11,7 @@ supervision, and are discovered through the registry.
 `cli/` and `launcher/` ship as example front ends, useful for testing this
 core before a full harness exists.
 
-Runs on SBCL and ECL; [image generations](docs/images.md) are SBCL only.
+Runs on SBCL.
 
 ## Docs
 

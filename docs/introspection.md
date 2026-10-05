@@ -96,10 +96,6 @@ asked at once, so the whole answer takes about a second at most.[^status] A tool
 context — `:children` needs one to walk — answers `(:error "not mounted
 under a context")`.
 
-## Limitations
-
-- On ECL `tool-image` reports no `:file` or `:position` for a method ([#224](https://todo.sr.ht/~takeiteasy/miao/224)).
-
 ## Trust posture
 
 Both tools are `:agent`-trusted: read-only introspection is the point of

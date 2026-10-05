@@ -37,22 +37,6 @@ doesn't actually hold."
 
 ;;; --- saving ---------------------------------------------------------------
 
-(defun forget-workers ()
-  "Start a new process image's worker bookkeeping: every worker held so far
-reads as stale, and none is signalled. SBCL's own list of child processes
-survives a save too; its entries for these workers go, so a pid a new child
-reuses is never reaped through them."
-  (let ((pids (mapcar (lambda (w) (uiop:process-info-pid (worker-process w)))
-                      *live-workers*)))
-    (sb-thread:with-recursive-lock (sb-impl::*active-processes-lock*)
-      (setf sb-impl::*active-processes*
-            (remove-if (lambda (p) (member (sb-ext:process-pid p) pids))
-                       sb-impl::*active-processes*))))
-  (setf *boot* (list :boot))
-  (bt:with-lock-held (*live-workers-lock*) (setf *live-workers* '())))
-
-(pushnew '%forget-vault-token sb-ext:*save-hooks*)
-
 (defun %image-path (generation-path)
   (make-pathname :type "core" :defaults generation-path))
 

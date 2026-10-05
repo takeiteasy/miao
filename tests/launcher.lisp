@@ -17,22 +17,13 @@
 (defmacro with-miao-home ((home) &body body)
   `(call-with-miao-home (lambda (,home) ,@body)))
 
-(defun set-file-times (path universal-time)
-  "PATH's access and modification times, set to UNIVERSAL-TIME."
-  (let ((unix (- universal-time 2208988800)))
-    (cffi:with-foreign-object (times :int64 4)
-      (setf (cffi:mem-aref times :int64 0) unix
-            (cffi:mem-aref times :int64 1) 0
-            (cffi:mem-aref times :int64 2) unix
-            (cffi:mem-aref times :int64 3) 0)
-      (cffi:foreign-funcall "utimes" :string (namestring path) :pointer times :int))))
-
 (defun touch-core (path &optional age)
   "A stand-in core at PATH, AGE seconds in the past."
   (ensure-directories-exist path)
   (alexandria:write-string-into-file "core" path :if-exists :supersede)
   (when age
-    (set-file-times path (- (get-universal-time) age)))
+    (let ((then (- (get-universal-time) age 2208988800)))
+      (sb-posix:utimes (namestring path) then then)))
   path)
 
 (defun accepting (core) (declare (ignore core)) t)
@@ -80,7 +71,6 @@
     (signals error (with-output-to-string (*error-output*)
                      (select home :probe #'rejecting)))))
 
-#+sbcl
 (test launch-argv-runs-the-core-in-this-runtime
   (is (equal (list (namestring sb-ext:*runtime-pathname*) "--core" "/x.core" "--eval" "1")
              (miao/launcher:launch-argv "/x.core" '("--eval" "1")))))
@@ -89,7 +79,6 @@
   (with-miao-home (home)
     (is-false (miao/launcher:probe-core (touch-core (merge-pathnames "junk.core" home))))))
 
-#+sbcl
 (test the-script-reports-a-bad-core-and-a-missing-recovery
   (if (zerop (nth-value 2 (uiop:run-program '("sh" "-c" "command -v ros") :ignore-error-status t)))
       (with-miao-home (home)
@@ -106,7 +95,6 @@
             (is (search "miao install" err)))))
       (skip "ros is not installed")))
 
-#+sbcl
 (test the-script-installs-a-recovery-image-and-runs-the-cli-from-it
   (if (and (zerop (nth-value 2 (uiop:run-program '("sh" "-c" "command -v ros") :ignore-error-status t)))
            (probe-file (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))

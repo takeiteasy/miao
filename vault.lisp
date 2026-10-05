@@ -91,6 +91,8 @@ draws its own.")
 (defun %forget-vault-token ()
   (setf *vault-token* nil))
 
+(pushnew '%forget-vault-token sb-ext:*save-hooks*)
+
 #+linux
 (defun %proc-stat-fields (line)
   "The whitespace-separated fields of /proc/<pid>/stat after its command name."

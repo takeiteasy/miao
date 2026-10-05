@@ -62,8 +62,7 @@
 (defparameter +getpid-form+
   ;; A worker runs the host implementation, so the bare image it starts has
   ;; exactly the internals this one does.
-  #+sbcl "(sb-unix:unix-getpid)"
-  #+ecl "(ext:getpid)")
+  "(sb-unix:unix-getpid)")
 
 (defun unix-process-alive-p (pid)
   (zerop (nth-value 2 (uiop:run-program (list "kill" "-0" (princ-to-string pid))
