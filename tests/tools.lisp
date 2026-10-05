@@ -399,11 +399,11 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (let* ((stop nil)
            (changed nil)
-           (start (namestring (uiop:getcwd)))
+           (start (sb-posix:getcwd))
            (watcher (bt:make-thread
                      (lambda ()
                        (loop until stop
-                             do (unless (string= start (namestring (uiop:getcwd)))
+                             do (unless (string= start (sb-posix:getcwd))
                                   (setf changed t)))))))
       (unwind-protect
            (dotimes (i 200)
@@ -416,14 +416,35 @@ last resort with no dedicated OS mechanism behind it."
         (setf stop t)
         (bt:join-thread watcher))
       (is (not changed))
-      (is (string= start (namestring (uiop:getcwd)))))))
+      (is (string= start (sb-posix:getcwd))))))
 
 (test fs-write-creates-a-file-with-the-usual-mode
   (with-tools
-    (let ((old (miao::posix-umask #o022)))
+    (let ((old (sb-posix:umask #o022)))
       (unwind-protect (tool :tool-fs :op :write :path "m.txt" :data "x")
-        (miao::posix-umask old)))
-    (is (= #o644 (miao::file-mode (concatenate 'string *sandbox* "/m.txt"))))))
+        (sb-posix:umask old)))
+    (is (= #o644 (logand #o777 (sb-posix:stat-mode
+                                (sb-posix:stat (concatenate 'string *sandbox* "/m.txt"))))))))
+
+(test openat-passes-its-mode-through-the-variadic-convention
+  (with-tools
+    (let ((old (sb-posix:umask 0)))
+      (unwind-protect
+           (let ((fd (miao::fs-open-root *sandbox*)))
+             (unwind-protect
+                  (miao::fs-close (miao::fs-open-leaf fd "mode.txt" '(:wronly :creat) #o640))
+               (miao::fs-close fd)))
+        (sb-posix:umask old)))
+    (is (= #o640 (logand #o777 (sb-posix:stat-mode
+                                (sb-posix:stat (concatenate 'string *sandbox* "/mode.txt"))))))))
+
+(test directory-entries-are-read-by-name
+  (with-tools
+    (write-file (concatenate 'string *sandbox* "/héllo.txt") "x")
+    (let ((fd (miao::fs-open-root *sandbox*)))
+      (unwind-protect
+           (is (member "héllo.txt" (miao::fs-list-names fd nil) :test #'string=))
+        (miao::fs-close fd)))))
 
 (defun listing-fixture ()
   (write-file (concatenate 'string *sandbox* "/.hidden") "h")
@@ -950,9 +971,9 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 
 (test gated-eval-lets-a-form-catch-its-own-error
   (with-tools
-    (is (search "CAUGHT"
+    (is (search "not a LIST"
                 (result-value (tool :tool-gated-eval
-                                    :form "(handler-case (car 1) (error () :caught))")
+                                    :form "(handler-case (car 1) (error (e) (princ-to-string e)))")
                               :value)))))
 
 (test gated-eval-keeps-no-state-between-calls

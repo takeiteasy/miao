@@ -412,11 +412,11 @@
 (defmacro with-foreign-log-flock ((path) &body body)
   "BODY run while another file description holds PATH's sidecar flock, as
 another process would."
-  `(let ((fd (miao::%open (format nil "~a.lock" (miao::%log-key ,path))
-                         (logior miao::+o-creat+ miao::+o-rdwr+) #o644)))
+  `(let ((fd (sb-posix:open (format nil "~a.lock" (miao::%log-key ,path))
+                            (logior sb-posix:o-creat sb-posix:o-rdwr) #o644)))
      (unwind-protect
           (progn (miao::%flock-exclusive fd) ,@body)
-       (miao::%close fd))))
+       (sb-posix:close fd))))
 
 (defun blocks-on-foreign-flock-p (path thunk)
   "True when THUNK, run on a thread, waits for PATH's flock and then finishes

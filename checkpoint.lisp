@@ -1,5 +1,7 @@
 (in-package #:miao)
 
+(eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
+
 ;;; Generations (~takeiteasy/miao#11). A checkpoint is one s-expression file
 ;;; recording every named service's own declared state, taken through the
 ;;; SNAPSHOT/RESTORE convention (tool.lisp) shared by every tool, the agent
@@ -238,22 +240,24 @@ worker applies to a submitted form."
       (or (gethash key *log-locks*)
           (setf (gethash key *log-locks*) (bt:make-lock :name key))))))
 
+(defconstant +lock-ex+ 2)
+
 (defun %flock-exclusive (fd)
-  (loop until (zerop (%flock fd +lock-ex+))
-        unless (= (%errno) +eintr+)
-          do (error "flock failed, errno ~d" (%errno))))
+  (loop until (zerop (sb-alien:alien-funcall
+                      (sb-alien:extern-alien "flock" (function sb-alien:int sb-alien:int sb-alien:int))
+                      fd +lock-ex+))
+        unless (= (sb-alien:get-errno) sb-posix:eintr)
+          do (error "flock failed, errno ~d" (sb-alien:get-errno))))
 
 (defun call-with-log-lock (path thunk)
   (bt:with-lock-held ((%log-lock path))
-    (let ((fd (%open (concatenate 'string (%log-key path) ".lock")
-                     (logior +o-creat+ +o-rdwr+) #o644)))
-      (when (minusp fd)
-        (error "cannot open the log lock for ~a, errno ~d" path (%errno)))
+    (let ((fd (sb-posix:open (concatenate 'string (%log-key path) ".lock")
+                             (logior sb-posix:o-creat sb-posix:o-rdwr) #o644)))
       (unwind-protect
-           (progn (%fcntl-setfd fd +fd-cloexec+)
+           (progn (sb-posix:fcntl fd sb-posix:f-setfd 1) ; FD_CLOEXEC
                   (%flock-exclusive fd)
                   (funcall thunk))
-        (%close fd)))))
+        (sb-posix:close fd)))))
 
 (defmacro with-log-lock ((path) &body body)
   "Run BODY holding PATH's in-process lock and its cross-process flock."

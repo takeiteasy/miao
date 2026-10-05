@@ -1615,3 +1615,7 @@ first message of each request as the backend saw it."
     (is (= (miao::%message-size (list :role :assistant :tool-calls (list call)))
            (miao::%message-size (list :role :assistant
                                       :tool-calls (list (list* :schema schema call))))))))
+
+(test the-messages-digest-hashes-utf-8
+  (is (string= "2b2faee6c0473e3a8d938b0fd8621e75"
+               (miao::messages-digest (list (list :role "user" :content "héllo ✓"))))))

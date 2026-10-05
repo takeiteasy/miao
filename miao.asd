@@ -17,11 +17,9 @@
   :license "GPLv3"
   :version "0.1.0"
   :depends-on ("meow" "meow/logger" "alexandria" "com.inuoe.jzon" "drakma" "flexi-streams"
-               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "cffi"
-               "miao/launcher")
+               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "miao/launcher")
   :serial t
   :components ((:file "package")
-               (:file "posix")
                (:file "miao")
                ;; Ahead of worker.lisp and tools/shell.lisp: both launch and
                ;; kill through the process-group helpers declared here.
@@ -118,7 +116,7 @@
                (:file "client")))
 
 (defsystem "miao/tests"
-  :depends-on ("miao" "miao/cli" "miao/ui" "fiveam" "uiop" "usocket" "cffi")
+  :depends-on ("miao" "miao/cli" "miao/ui" "fiveam" "uiop" "usocket")
   :pathname "tests/"
   :serial t
   :components ((:file "package")
@@ -139,8 +137,6 @@
                (:file "worker")
                (:file "gate")
                (:file "tools")
-               ;; After tools: it uses that file's sandbox fixture.
-               (:file "posix")
                (:file "plan")
                (:file "introspect")
                (:file "checkpoint")
