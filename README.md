@@ -1,5 +1,7 @@
 # miao
 
+> **Work in progress.** This project is under development; expect missing features and breaking changes.
+
 **M**odel **I**ntegration **A**nd **O**rchestration
 
 An agent core in Common Lisp, built on
@@ -12,6 +14,21 @@ supervision, and are discovered through the registry.
 core before a full harness exists.
 
 Runs on SBCL.
+
+## Installation
+
+From the takeiteasy Quicklisp dist:
+
+```lisp
+(ql-dist:install-dist "https://takeiteasy.github.io/ql-dist/dist/takeiteasy.txt")
+(ql:quickload :miao)
+```
+
+Or clone into Quicklisp's local-projects:
+
+```sh
+git clone https://github.com/takeiteasy/miao ~/quicklisp/local-projects/miao
+```
 
 ## Docs
 
