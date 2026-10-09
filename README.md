@@ -24,7 +24,7 @@ From the takeiteasy Quicklisp dist, which is served over HTTPS so Quicklisp need
 (ql:quickload :miao)
 ```
 
-Or clone into Quicklisp's local-projects:
+Or clone into Quicklisp's local-projects, with [meow](https://github.com/takeiteasy/meow) and [cl-inference](https://github.com/takeiteasy/cl-inference) beside it ([Getting started](docs/getting-started.md#loading) lists the dependencies):
 
 ```sh
 git clone https://github.com/takeiteasy/miao ~/quicklisp/local-projects/miao
