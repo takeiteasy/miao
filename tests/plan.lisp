@@ -112,7 +112,7 @@
                                                :data (list :ref "r.data")))
                               (list :as "final" :tool "tool-fs"
                                     :args (list :op :read :path "dst.txt"))))))
-      (is (not (miao:tool-error-p result)))
+      (is (not (miao:result-error-p result)))
       (is (equal "hello ref" (getf (getf (plan-results result) :final) :data)))
       (is (equal 4 (getf (second result) :steps))))))
 
@@ -124,27 +124,27 @@
     (let ((result (plan (list (list :tool "tool-shell" :args (list :cmd "true"))
                               (list :as "w" :tool "tool-fs"
                                     :args (list :op :write :path "never.txt" :data "x"))))))
-      (is (search "allow-list" (second (miao:tool-error result))))
+      (is (search "allow-list" (second (miao:result-error result))))
       (is (not (sandbox-file-exists-p "never.txt"))))))
 
 (test plan-refuses-an-operator-trusted-tool-even-when-allowed
   (call-with-plan '(:tool-fs :tool-shell) 16
     (lambda ()
       (let ((result (plan (list (list :tool "tool-shell" :args (list :cmd "true"))))))
-        (is (search "agent-trusted" (second (miao:tool-error result))))))))
+        (is (search "agent-trusted" (second (miao:result-error result))))))))
 
 (test plan-refuses-an-unregistered-tool
   ;; Allowed by name, but nothing is mounted under it.
   (call-with-plan '(:tool-fs :tool-nonexistent) 16
     (lambda ()
       (let ((result (plan (list (list :tool "tool-nonexistent" :args nil)))))
-        (is (search "no tool named" (second (miao:tool-error result))))))))
+        (is (search "no tool named" (second (miao:result-error result))))))))
 
 (test plans-do-not-nest
   (call-with-plan '(:tool-fs :tool-plan) 16
     (lambda ()
       (let ((result (plan (list (list :tool "tool-plan" :args (list :steps nil))))))
-        (is (search "nest" (second (miao:tool-error result))))))))
+        (is (search "nest" (second (miao:result-error result))))))))
 
 (test plan-refuses-a-duplicate-step-name
   (with-plan
@@ -152,7 +152,7 @@
                                     :args (list :op :read :path "a.txt"))
                               (list :as "x" :tool "tool-fs"
                                     :args (list :op :read :path "b.txt"))))))
-      (is (search "duplicate" (second (miao:tool-error result)))))))
+      (is (search "duplicate" (second (miao:result-error result)))))))
 
 (test plan-refuses-a-ref-to-an-unknown-or-later-step
   (with-plan
@@ -160,13 +160,13 @@
                                     :args (list :op :read :path (list :ref "later.data")))
                               (list :as "later" :tool "tool-fs"
                                     :args (list :op :read :path "a.txt"))))))
-      (is (search "unknown or later step" (second (miao:tool-error result)))))))
+      (is (search "unknown or later step" (second (miao:result-error result)))))))
 
 (test plan-refuses-a-malformed-ref
   (with-plan
     (let ((result (plan (list (list :tool "tool-fs"
                                     :args (list :op :read :path (list :ref "no-dot")))))))
-      (is (search "malformed ref" (second (miao:tool-error result)))))))
+      (is (search "malformed ref" (second (miao:result-error result)))))))
 
 (test plan-refuses-more-than-max-steps
   (call-with-plan '(:tool-fs) 1
@@ -175,7 +175,7 @@
                                       :args (list :op :read :path "a.txt"))
                                 (list :as "b" :tool "tool-fs"
                                       :args (list :op :read :path "b.txt"))))))
-        (is (search "exceeds" (second (miao:tool-error result))))))))
+        (is (search "exceeds" (second (miao:result-error result))))))))
 
 ;;; --- a step that fails ends the plan -------------------------------------
 
@@ -186,8 +186,8 @@
                               (list :tool "tool-fs" :args (list :op :bogus))
                               (list :tool "tool-fs"
                                     :args (list :op :write :path "never.txt" :data "x"))))))
-      (is (miao:tool-error-p result))
-      (let ((detail (miao:tool-error result)))
+      (is (miao:result-error-p result))
+      (let ((detail (miao:result-error result)))
         (is (equal 2 (getf detail :step)))
         (is (equal "tool-fs" (getf detail :tool)))
         (is (member :ok (getf detail :results))))
@@ -196,9 +196,9 @@
 ;;; --- the whole-plan deadline, held over every step ----------------------
 
 (defun timed-out-at-step-p (result step)
-  (and (miao:tool-error-p result)
-       (eql step (getf (miao:tool-error result) :step))
-       (eq :timeout (getf (miao:tool-error result) :reason))))
+  (and (miao:result-error-p result)
+       (eql step (getf (miao:result-error result) :step))
+       (eq :timeout (getf (miao:result-error result) :reason))))
 
 (test plan-honours-its-timeout-between-steps
   (call-with-plan '(:tool-fs :tool-sleep) 16
@@ -234,7 +234,7 @@
 being restarted."
   (loop repeat 50
         for result = (plan steps)
-        unless (miao:tool-error-p result) do (return result)
+        unless (miao:result-error-p result) do (return result)
         do (sleep 0.1)))
 
 (test a-step-that-ignores-cancel-is-killed-and-restarted
@@ -280,7 +280,7 @@ being restarted."
                                 (list :as "default" :tool "tool-timeout-echo"
                                       :args nil))
                           5000)))
-        (is (not (miao:tool-error-p result)))
+        (is (not (miao:result-error-p result)))
         (is (<= (getf (getf (plan-results result) :own) :timeout) 5000))
         (is (<= (getf (getf (plan-results result) :default) :timeout) 5000))))
     :extra '(tool-timeout-echo)))
@@ -330,7 +330,7 @@ being restarted."
                                                   (list :tool "tool-fs"
                                                         :args (list :op :write :path "after.txt"
                                                                     :data "x"))))))
-                        (is (eql 2 (getf (miao:tool-error result) :step)))
-                        (is (eq :cancelled (getf (miao:tool-error result) :reason)))
+                        (is (eql 2 (getf (miao:result-error result) :step)))
+                        (is (eq :cancelled (getf (miao:result-error result) :reason)))
                         (is (not (sandbox-file-exists-p "after.txt"))))))
                   :sleep-tool t))

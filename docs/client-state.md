@@ -6,7 +6,7 @@ nothing: a renderer reads the state and never reads events itself.
 
 ```lisp
 (ql:quickload :miao/ui)
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama)
 
 (let ((client (miao/ui:attach :assistant :on-change #'redraw)))
   (miao/ui:run client "hi")

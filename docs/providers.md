@@ -1,9 +1,9 @@
 # Providers
 
-A provider is data: a [protocol](protocols.md) to speak, a base URL, how to
-authenticate, a model catalogue and any quirks. `define-provider` turns that
-declaration into a mountable [meow](https://github.com/takeiteasy/meow) service,
-so a new backend is a few lines rather than a new adapter.
+A provider is data: a protocol to speak, a base URL, how to authenticate, a
+model catalogue and any quirks. `define-provider` is
+[cl-inference/client](https://github.com/takeiteasy/cl-inference/blob/trunk/docs/client.md#providers)'s
+macro, re-exported here. A new backend is a few lines rather than a new adapter.
 
 ```lisp
 (miao:define-provider :ollama
@@ -14,23 +14,23 @@ so a new backend is a few lines rather than a new adapter.
   :summary "Local Ollama, native chat endpoint")
 ```
 
-This defines the service class `provider-ollama`, registered under
-`:provider-ollama` with `:kind :provider` metadata. Mounting binds it to a model:
+The client registers the provider under `:ollama`. Mounting it as a
+[service](protocols.md#mounting-a-backend) binds it to a model:
 
 ```lisp
-(meow:mount *context* 'miao:protocol-ollama)
-(meow:mount *context* 'miao:provider-ollama :model "llama3.2")
-(miao:complete :provider-ollama :messages '((:role :user :content "hello")))
+(meow:mount *context* 'miao:backend-service :name :ollama :model "llama3.2")
+(miao:complete :ollama :messages '((:role :user :content "hello")))
 ```
 
-The protocol it names must be mounted too; a provider that cannot find its
-protocol answers `(:error :unavailable)`.
+A provider whose protocol is not registered answers `(:error :unavailable)`.
+`ensure-mounted` mounts a registered provider by name, and a
+[`init.lisp`](cli.md) that calls `define-provider` makes it a `--model` prefix.
 
 ## The declaration
 
 | Key | Meaning |
 |---|---|
-| `:protocol` | required; the protocol or provider service to delegate to, a literal keyword. A provider over a provider layers both declarations' headers and defaults. |
+| `:protocol` | required; the registered protocol or provider to delegate to. A provider over a provider layers both declarations' headers and defaults. |
 | `:base-url` | required; the API root, http or https |
 | `:auth` | `:none` (the default), `(:bearer :env "VAR")`, `(:header "name" :env "VAR")` |
 | `:models` | the catalogue, for discovery |
@@ -39,40 +39,26 @@ protocol answers `(:error :unavailable)`.
 | `:rewrite-request` / `:rewrite-response` | quirk hooks |
 | `:summary` | one line, for discovery |
 
-Every value is a form evaluated at load time, and the whole declaration is
-checked there: a missing `:base-url`, an auth kind outside the three, a
+Every value is evaluated when the definition loads, and the whole declaration
+is checked there: a missing `:base-url`, an auth kind outside the three, a
 `:defaults` that is not a plist or a key outside the vocabulary is a definition
 error rather than a surprise at the first turn.
 
-The provider name and `:protocol` must be literal keywords, since the class and
-its service dependency are named from them.
-
 `:models` is advertisement, not a gate. The real catalogue is whatever the
-backend has — for Ollama, whatever has been pulled — which only the running
-backend knows.
+backend has, which only the running backend knows.
 
 ## Mount options
 
 `:base-url`, `:model` and `:api-key` override the declaration at mount time, so
 one definition serves a local backend, a remote host and a proxy.
 `:max-in-flight` caps the completions it runs at once, queueing the rest, as
-[a protocol's](protocols.md#concurrency) does:
+[any service's](protocols.md#concurrency) does:
 
 ```lisp
-(meow:mount *context* 'miao:provider-ollama
-            :base-url "http://gpu.lan:11434/v1"
+(meow:mount *context* 'miao:backend-service :name :ollama
+            :base-url "http://gpu.lan:11434"
             :model "qwen2.5-coder")
 ```
-
-## Concurrency
-
-A provider layers each request on its own process, then hands the call to
-its protocol, which answers the caller directly and holds no thread of the
-provider's. A provider with a `:rewrite-response` quirk or a `:max-in-flight`
-cap instead waits on its protocol from a [pooled](protocols.md#worker-pools)
-job, so it can rewrite the reply or count the completion; only then does
-stopping the provider cancel what it has in flight. Otherwise the protocol's
-own stop, or the caller's `:cancel`, does.
 
 ## Credentials
 
@@ -81,16 +67,16 @@ or from an `:api-key` mount option that overrides it. Keys are never read from
 the user config file, which is startup code and should not also be a secret
 store, and never appear in metadata — `:auth` publishes the kind, the header
 name and the variable, nothing more. A [checkpoint](checkpoints.md#credentials)
-leaves `:api-key` out of a generation, so a provider mounted again by a
-rollback takes its key from the variable unless the rollback is given one.
+leaves `:api-key` out of a generation, so a service mounted again by a rollback
+takes its key from the variable unless the rollback is given one.
 
 A provider whose key is absent still mounts, so discovery lists it and the
 failure is legible:
 
 ```lisp
-(getf (miao:describe-provider :provider-example) :status)   ; => :unavailable
-(miao:complete :provider-example :messages '(...))
-;; => (:error (:bad-request "no API key; set EXAMPLE_API_KEY or mount with :api-key"))
+(getf (miao:describe-provider :example) :status)   ; => :unavailable
+(miao:complete :example :messages '(...))
+;; => (:error (:bad-request "no API key; set EXAMPLE_API_KEY or pass :api-key"))
 ```
 
 `(:bad-request ...)` rather than `:unavailable`: a misconfigured provider and an
@@ -102,7 +88,7 @@ A provider layers its data *under* the request, so an explicit key from the
 caller always wins:
 
 ```lisp
-(miao:complete :provider-ollama
+(miao:complete :ollama
   :model "gemma3"            ; beats the mount's :model
   :temperature 0.9           ; beats the declaration's :defaults
   :messages '((:role :user :content "hello")))
@@ -121,25 +107,25 @@ protocol describes.
 ## Discovery
 
 ```lisp
-(miao:providers)                        ; => (:provider-ollama)
-(miao:describe-provider :provider-ollama)
+(miao:providers)                        ; => (:ollama)
+(miao:describe-provider :ollama)
+(miao:definitions :kind :provider)      ; => (:ollama), mounted or not
 ```
 
-`providers` scans registration props for `:kind :provider`, the way `tools` and
-`protocols` scan for theirs.
+`providers` scans registration props for the mounted services of `:kind
+:provider`, the way `tools` and `protocols` scan for theirs.
 
 ## Ollama
 
-`:provider-ollama` is `http://127.0.0.1:11434` with no key, speaking
-[`:protocol-ollama`](protocols.md#the-ollama-protocol) — which makes it the
-backend a development machine can run end to end, counters and options
-included. The OpenAI-compatible `/v1` route stays reachable with no provider
-of its own: `:protocol-openai` takes `:base-url` per request, so one mounted
-service already answers for it.
+`:ollama` is `http://127.0.0.1:11434` with no key, speaking `:protocol-ollama`
+— the backend a development machine can run end to end, counters and options
+included. The OpenAI-compatible `/v1` route has no provider of its own:
+`:protocol-openai` takes `:base-url` per request, so one mounted service
+answers for it.
 
-Set `MIAO_OLLAMA_NATIVE_URL` to run the live tests for this provider, and
-`MIAO_OLLAMA_MODEL` to name the model. (`MIAO_OLLAMA_URL` is the `/v1` URL the
-OpenAI protocol's own live tests use.)
+Set `CL_INFERENCE_OLLAMA_NATIVE_URL` to run the live test for this provider, and
+`CL_INFERENCE_OLLAMA_MODEL` to name the model. The client's own suite uses the
+same variables for its live tests.
 
 ## Limitations
 

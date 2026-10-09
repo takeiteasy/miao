@@ -3,12 +3,14 @@
 ## Loading
 
 miao loads through Quicklisp's local projects, alongside
-[meow](https://github.com/takeiteasy/meow) and its own out-of-dist
-dependency:
+[meow](https://github.com/takeiteasy/meow),
+[cl-inference](https://github.com/takeiteasy/cl-inference) (the model client)
+and its own out-of-dist dependency:
 
 ```sh
 ln -s ~/git/miao ~/quicklisp/local-projects/miao
 ln -s ~/git/meow ~/quicklisp/local-projects/meow
+ln -s ~/git/cl-inference ~/quicklisp/local-projects/cl-inference
 git clone https://github.com/takeiteasy/trivial-high-precision-timer \
     ~/quicklisp/local-projects/trivial-high-precision-timer
 ```
@@ -17,8 +19,9 @@ git clone https://github.com/takeiteasy/trivial-high-precision-timer \
 (ql:quickload :miao)
 ```
 
-Dependencies: `meow`, `alexandria`, [`jzon`](https://github.com/Zulu-Inuoe/jzon)
-for JSON, including the [schema](schema.md) rendering, [`drakma`](https://edicl.github.io/drakma/) with `flexi-streams`,
+Dependencies: `meow`, `cl-inference/client` (the contract, wire protocols,
+providers and [schema](schema.md)), `alexandria`, [`jzon`](https://github.com/Zulu-Inuoe/jzon)
+for JSON, [`drakma`](https://edicl.github.io/drakma/) with `flexi-streams`,
 `usocket`, `puri`, `chunga` and `cl+ssl` for HTTP (`tool-http` opens its own
 connection so its deadline can close it; see [tools](tools.md)), and
 `bordeaux-threads` (bt2 API) for the tool deadlines. meow pulls in
@@ -37,11 +40,11 @@ The [tools](tools.md) mount into a meow context:
 (miao:invoke-tool :tool-shell :cmd "echo hello")
 ```
 
-A [protocol](protocols.md) mounts the same way, and carries its backend in the
-request:
+A [protocol](protocols.md) mounts as a `backend-service`, and carries its
+backend in the request:
 
 ```lisp
-(meow:mount *tools* 'miao:protocol-openai)
+(meow:mount *tools* 'miao:backend-service :name :protocol-openai)
 (miao:complete :protocol-openai
   :base-url "http://127.0.0.1:11434/v1"
   :model "llama3.2"
@@ -51,15 +54,14 @@ request:
 A [provider](providers.md) carries that backend for you:
 
 ```lisp
-(meow:mount *tools* 'miao:protocol-ollama)
-(meow:mount *tools* 'miao:provider-ollama :model "llama3.2")
-(miao:complete :provider-ollama :messages '((:role :user :content "hello")))
+(meow:mount *tools* 'miao:backend-service :name :ollama :model "llama3.2")
+(miao:complete :ollama :messages '((:role :user :content "hello")))
 ```
 
 An [agent](agent.md) runs a turn cycle over a model and its tools:
 
 ```lisp
-(miao:run-agent *tools* :model :provider-ollama :tools '(:tool-shell)
+(miao:run-agent *tools* :model :ollama :tools '(:tool-shell)
                 :messages '((:role :user :content "list the files")))
 ```
 
@@ -95,16 +97,15 @@ The script runs Roswell's SBCL when `ros` is installed, the runtime the
 `MIAO_TEST_LISP=sbcl` or `MIAO_TEST_LISP=ros` chooses.[^runtime]
 
 Tests that make real network requests are skipped unless `MIAO_LIVE_HTTP` is
-set, and the live protocol tests unless `MIAO_OLLAMA_URL` (the `/v1` route) or
-`MIAO_OLLAMA_NATIVE_URL` (native `/api/chat`) is:
+set, and the live Ollama test unless `CL_INFERENCE_OLLAMA_NATIVE_URL` (native
+`/api/chat`) is:
 
 ```sh
 MIAO_LIVE_HTTP=1 tests/test.sh
-MIAO_OLLAMA_URL=http://127.0.0.1:11434/v1 \
-MIAO_OLLAMA_NATIVE_URL=http://127.0.0.1:11434 tests/test.sh
+CL_INFERENCE_OLLAMA_NATIVE_URL=http://127.0.0.1:11434 tests/test.sh
 ```
 
-`MIAO_OLLAMA_MODEL` names the model, and defaults to `llama3.2`. A backend that
+`CL_INFERENCE_OLLAMA_MODEL` names the model, and defaults to `llama3.2`. A backend that
 does not have that model skips the live tests rather than failing them.
 
 [^runtime]: A saved core only loads in the SBCL build that saved it, so the

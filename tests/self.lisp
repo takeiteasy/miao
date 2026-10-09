@@ -59,7 +59,7 @@
                         (list :define :form "(defun miao-self-test::f () 1)")
                         (list :reload :name "stateful-thing")))
       (let ((result (apply #'self call)))
-        (is (equal :forbidden (first (miao:tool-error result))))))))
+        (is (equal :forbidden (first (miao:result-error result))))))))
 
 (test tool-self-log-always-answers-even-disabled
   (with-self (nil)
@@ -103,13 +103,13 @@
   (with-self ()
     (let ((before (length (miao:generations :dir *self-dir*)))
           (result (self :eval :form "(+ 1")))
-      (is (equal :bad-request (first (miao:tool-error result))))
+      (is (equal :bad-request (first (miao:result-error result))))
       (is (= before (length (miao:generations :dir *self-dir*)))))))
 
 (test self-eval-past-its-timeout-times-out-and-recovers
   (with-self ()
     (let ((result (self :eval :form "(sleep 1)" :timeout 50)))
-      (is (equal :timeout (miao:tool-error result))))
+      (is (equal :timeout (miao:result-error result))))
     (is (eq :ok (first (self :eval :form "1"))))))
 
 ;;; --- :define -------------------------------------------------------
@@ -123,7 +123,7 @@
 (test self-define-refuses-a-non-definition-form
   (with-self ()
     (let ((result (self :define :form "(+ 1 2)")))
-      (is (equal :bad-request (first (miao:tool-error result)))))))
+      (is (equal :bad-request (first (miao:result-error result)))))))
 
 (test self-define-redefines-a-class-and-updates-a-live-instance
   (with-self ()
@@ -156,7 +156,7 @@ interrupt still has to land and unwind."
     (self :define :package "MIAO-SELF-TEST" :form "(defgeneric self-test-wedged-eql (x))")
     (let ((result (self :define :package "MIAO-SELF-TEST" :timeout 50
                         :form "(defmethod self-test-wedged-eql ((x (eql (progn (sleep 5) 1)))) :done)")))
-      (is (equal :timeout (miao:tool-error result))))
+      (is (equal :timeout (miao:result-error result))))
     ;; the :eql specializer's own form runs ahead of SBCL's method loader,
     ;; so the interrupt still lands pre-emptively: no method landed, and
     ;; the worker thread that was running it is gone, not leaked
@@ -168,7 +168,7 @@ interrupt still has to land and unwind."
     (self :define :package "MIAO-SELF-TEST" :form "(defgeneric self-test-slow-compile (x))")
     (let ((result (self :define :package "MIAO-SELF-TEST" :timeout 50
                         :form "(defmethod self-test-slow-compile ((x integer)) (macrolet ((slow () (sleep 5) 1)) (slow)))")))
-      (is (equal :timeout (miao:tool-error result))))
+      (is (equal :timeout (miao:result-error result))))
     ;; compiling the method's own lambda -- SLOW's macroexpansion runs
     ;; here -- also runs ahead of the method loader that would latch, so
     ;; this is killed the same way
@@ -178,7 +178,7 @@ interrupt still has to land and unwind."
   (with-self ()
     (let ((result (self :define :package "MIAO-SELF-TEST" :timeout 50
                         :form "(defparameter *self-test-wedged* (progn (sleep 1) :never))")))
-      (is (equal :timeout (miao:tool-error result))))
+      (is (equal :timeout (miao:result-error result))))
     ;; a non-CLOS head (defun, defmacro, defparameter, defvar) never
     ;; latches, so the interrupt still lands mid-eval and the definition
     ;; never completes
@@ -195,7 +195,7 @@ interrupt still has to land and unwind."
   (with-self ()
     (let ((result (self :eval :timeout 50 :package "MIAO-SELF-TEST"
                         :form "(progn (defclass self-test-latched-a () ()) (sleep 0.3) (defclass self-test-latched-b () ()))")))
-      (is (equal :timeout (miao:tool-error result))))
+      (is (equal :timeout (miao:result-error result))))
     ;; the deadline lands after the first DEFCLASS finished: it stays, the
     ;; rest of the form is killed, and the log says so
     (is-true (no-miao-self-eval-thread-p))
@@ -210,7 +210,7 @@ interrupt still has to land and unwind."
     (let ((result (self :eval :timeout 50 :package "MIAO-SELF-TEST"
                         :form "(progn (defclass self-test-first-mutation () ())
                                       (defmethod self-test-second-wedge ((x (eql (progn (sleep 5) 1)))) :done))")))
-      (is (equal :timeout (miao:tool-error result))))
+      (is (equal :timeout (miao:result-error result))))
     (is-true (no-miao-self-eval-thread-p))
     (is-true (class-named "SELF-TEST-FIRST-MUTATION"))
     (signals error (funcall (find-symbol "SELF-TEST-SECOND-WEDGE" "MIAO-SELF-TEST") 1))))
@@ -263,7 +263,7 @@ interrupt still has to land and unwind."
      (lambda ()
        (let ((result (self :eval :timeout 50 :package "MIAO-SELF-TEST"
                            :form "(defstruct (self-test-wedged-struct (:constructor make-self-test-wedged-struct (&aux (a (self-test-slow-macro))))) a)")))
-         (is (equal :timeout (miao:tool-error result))))
+         (is (equal :timeout (miao:result-error result))))
        (is-true (no-miao-self-eval-thread-p))
        (is-true (eventually #'late-outcome-entry))
        (is (equal '(:error :torn) (getf (late-outcome-entry) :outcome)))))))
@@ -276,7 +276,7 @@ interrupt still has to land and unwind."
      (lambda ()
        (let ((result (self :eval :timeout 50 :package "MIAO-SELF-TEST"
                            :form "(defclass self-test-wedged-instance () () (:metaclass self-test-wedged-meta))")))
-         (is (equal :timeout (miao:tool-error result))))
+         (is (equal :timeout (miao:result-error result))))
        (is-true (no-miao-self-eval-thread-p))
        (is-true (eventually #'late-outcome-entry))
        (is (equal '(:error :torn) (getf (late-outcome-entry) :outcome)))))))
@@ -294,7 +294,7 @@ interrupt still has to land and unwind."
      (lambda ()
        (let ((result (self :eval :timeout 50 :package "MIAO-SELF-TEST"
                            :form "(defgeneric self-test-redefined (x) (:generic-function-class self-test-slow-gf) (:method ((x string)) 2))")))
-         (is (equal :timeout (miao:tool-error result))))
+         (is (equal :timeout (miao:result-error result))))
        (is-true (no-miao-self-eval-thread-p))))))
 
 (test self-eval-a-slow-span-inside-its-grace-still-completes
@@ -359,7 +359,7 @@ true, and return its result."
                     (lambda () *self-eval-started*)
                     :eval :package "MIAO-SELF-TEST"
                     :form "(progn (setf miao/tests::*self-eval-started* t) (sleep 5))")))
-      (is (equal :cancelled (miao:tool-error result)))
+      (is (equal :cancelled (miao:result-error result)))
       (is (< (/ (- (get-internal-real-time) started) internal-time-units-per-second) 4))
       (is-true (no-miao-self-eval-thread-p))
       (is (equal '(:error :cancelled) (getf (last-entry :outcome) :outcome))))))
@@ -370,7 +370,7 @@ true, and return its result."
                    (lambda () (class-named "SELF-TEST-CANCEL-A"))
                    :eval :package "MIAO-SELF-TEST"
                    :form "(progn (defclass self-test-cancel-a () ()) (sleep 5))")))
-      (is (equal :cancelled (miao:tool-error result)))
+      (is (equal :cancelled (miao:result-error result)))
       (is-true (eventually #'late-outcome-entry))
       (is (equal '(:error :abandoned) (getf (late-outcome-entry) :outcome))))))
 
@@ -401,7 +401,7 @@ true, and return its result."
   (with-self ()
     (m:mount *self-context* 'slow-stopper)
     (let ((result (self :reload :name "slow-stopper" :timeout 100)))
-      (is (equal :timeout (miao:tool-error result)))
+      (is (equal :timeout (miao:result-error result)))
       (is-true (eventually #'late-outcome-entry 5))
       (is (eq :ok (getf (late-outcome-entry) :outcome)))
       (is-true (m:lookup :slow-stopper)))))
@@ -412,7 +412,7 @@ true, and return its result."
     (m:mount *self-context* 'slow-stopper)
     (let ((result (cancel-self-once (lambda () *slow-stopper-stopping*)
                                     :reload :name "slow-stopper")))
-      (is (equal :cancelled (miao:tool-error result)))
+      (is (equal :cancelled (miao:result-error result)))
       (is (equal '(:error :cancelled) (getf (last-entry :outcome) :outcome)))
       (is-true (eventually #'late-outcome-entry 5))
       (is (eq :ok (getf (late-outcome-entry) :outcome))))))
@@ -420,7 +420,7 @@ true, and return its result."
 (test self-reload-an-unknown-name-is-a-bad-request
   (with-self ()
     (let ((result (self :reload :name "no-such-child")))
-      (is (equal :bad-request (first (miao:tool-error result)))))))
+      (is (equal :bad-request (first (miao:result-error result)))))))
 
 (test self-reload-of-itself-is-an-error-not-a-deadlock
   (with-self ()
@@ -458,5 +458,5 @@ true, and return its result."
     (let ((result (miao:invoke-tool :tool-plan
                                     :steps (list (list :tool "tool-self"
                                                         :args (list :op :eval :form "1"))))))
-      (is (equal :bad-request (first (miao:tool-error result))))
-      (is (search "agent-trusted" (second (miao:tool-error result)))))))
+      (is (equal :bad-request (first (miao:result-error result))))
+      (is (search "agent-trusted" (second (miao:result-error result)))))))

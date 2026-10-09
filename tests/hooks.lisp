@@ -95,7 +95,7 @@ stream, so SSE answers in its place."
 
 ;;; --- before a tool call -------------------------------------------------------
 
-(test a-deny-answers-the-model-with-a-tool-error-and-the-tool-never-runs
+(test a-deny-answers-the-model-with-a-result-error-and-the-tool-never-runs
   (let ((result (hooked-run '(:hook-deny-echo))))
     (is (eq :stop (getf (second result) :stop-reason)))
     (is (search "denied" (tool-text result)))
@@ -272,7 +272,7 @@ stream, so SSE answers in its place."
                      (lambda (*ctx*)
                        (flet ((mount-and-run (name)
                                 (let ((agent (m:mount *ctx* 'miao:agent :name name
-                                                                         :model :provider-test-keyed
+                                                                         :model :test-keyed
                                                                          :hooks (list (pass-before-turn)))))
                                   (m:call agent (list :run :messages '((:role :user :content "go"))))
                                   (is-true (eventually (lambda ()
@@ -290,7 +290,7 @@ stream, so SSE answers in its place."
   (call-with-agent (echo-answer) (list* 'tool-echo +test-hooks+)
                    (lambda (*ctx*)
                      (m:with-process (runner)
-                       (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+                       (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                                 :tools '(:tool-echo) :hooks '(:hook-blocker))))
                          (m:cast child (list :run :messages '((:role :user :content "go"))))
                          (is-true (eventually
@@ -338,7 +338,7 @@ once its first tool call is waiting on a hook."
     (call-with-agent (echo-answer) (append (list 'tool-echo) +test-hooks+)
                      (lambda (*ctx*)
                        (let ((agent (apply #'m:mount *ctx* 'miao:agent :name :hooked
-                                           :model :provider-test-keyed :tools '(:tool-echo)
+                                           :model :test-keyed :tools '(:tool-echo)
                                            :hooks hooks
                                            (and (getf extra :deadline)
                                                 (list :deadline (getf extra :deadline))))))
@@ -403,7 +403,7 @@ once its first tool call is waiting on a hook."
     (with-agent ((scripted (final-reply "moving on") (final-reply "got it"))
                  'tool-again 'hook-deny-all)
       (m:with-process (runner)
-        (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :tools '(:tool-again) :journal path :hooks '(:hook-deny-all)))
                (answer (call-child child (list :run :continue t :resume '("x-0")
                                                     :messages '((:role :user :content "go"))))))
@@ -441,7 +441,7 @@ once its first tool call is waiting on a hook."
       (with-agent ((scripted (final-reply "moving on") (final-reply "got it"))
                    'tool-again-echo 'hook-suffix)
         (m:with-process (runner)
-          (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+          (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                     :tools '(:tool-again-echo) :journal path
                                     :hooks '(:hook-suffix) :log-raw log-raw))
                  (answer (call-child child (list :run :continue t :resume '("x-0")
@@ -468,7 +468,7 @@ once its first tool call is waiting on a hook."
     (with-agent ((scripted (final-reply "moving on") (final-reply "got it"))
                  'tool-again-echo 'hook-suffix 'hook-suffix-skipped 'hook-deny-all)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-again-echo) :journal path :hooks hooks)))
           (call-child child (list :run :continue t :resume '("x-0")
                                        :messages '((:role :user :content "go"))))
@@ -494,7 +494,7 @@ once its first tool call is waiting on a hook."
   (call-with-agent (echo-answer) (list* 'tool-echo +test-hooks+)
                    (lambda (*ctx*)
                      (let ((agent (m:mount *ctx* 'miao:agent :name :hooked
-                                                             :model :provider-test-keyed
+                                                             :model :test-keyed
                                                              :tools '(:tool-echo)
                                                              :hooks '(:hook-blocker))))
                        (m:cast agent (list :run :messages '((:role :user :content "go"))))
@@ -571,7 +571,7 @@ once its first tool call is waiting on a hook."
 (test an-agent-lists-its-hooks-in-its-metadata
   (call-with-agent (final-reply "hi") +test-hooks+
                    (lambda (*ctx*)
-                     (m:mount *ctx* 'miao:agent :name :hooked :model :provider-test-keyed
+                     (m:mount *ctx* 'miao:agent :name :hooked :model :test-keyed
                                                 :hooks '(:hook-record))
                      (is (equal '(:hook-record)
                                 (getf (miao:describe-agent :hooked) :hooks))))))

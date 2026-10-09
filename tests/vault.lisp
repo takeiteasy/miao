@@ -82,7 +82,7 @@ after the message that triggered it has already returned."
                          (final-reply "done")))
                   'tool-echo)
         (m:with-process (runner)
-          (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+          (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                    :tools '(:tool-echo) :vault path)))
             (m:cast child (list :run :messages '((:role :user :content "go"))))
             (m:cast child (list :steer :content "also do this"))
@@ -103,7 +103,7 @@ after the message that triggered it has already returned."
                    (sleep 0.3)
                    (final-reply "done")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :vault path)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed :vault path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           ;; A moment for :RUN's own :STEP to fold the (empty) queue and
           ;; spawn the request, so this steer queues into the turn in flight.
@@ -127,7 +127,7 @@ after the message that triggered it has already returned."
                    (sleep 0.3)
                    (final-reply "done")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :vault path :max-turns 1)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (sleep 0.05)
@@ -148,7 +148,7 @@ after the message that triggered it has already returned."
   (with-vault-path (path)
     (with-agent ((final-reply "done"))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :vault path)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed :vault path)))
           (m:cast child (list :steer :content "queued early"))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -162,7 +162,7 @@ after the message that triggered it has already returned."
 (test with-no-vault-option-steering-records-nothing
   (with-agent ((final-reply "done"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
         (m:cast child (list :steer :content "hi"))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -204,7 +204,7 @@ after the message that triggered it has already returned."
                      (incf n)
                      (final-reply "done")))
         (m:mount *ctx* 'miao:tool-vault :path path)
-        (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :vault path)
+        (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :vault path)
         (let ((id (miao:vault-record path :assistant "restored")))
           (let ((result (vault :op :restore :id id)))
             (is (eq :ok (first result)))
@@ -223,13 +223,13 @@ after the message that triggered it has already returned."
     (with-agent (nil)
       (m:mount *ctx* 'miao:tool-vault :path path)
       (let ((id (miao:vault-record path nil "no agent")))
-        (is (equal :bad-request (first (miao:tool-error (vault :op :restore :id id)))))))))
+        (is (equal :bad-request (first (miao:result-error (vault :op :restore :id id)))))))))
 
 (test tool-vault-restore-rejects-an-unknown-id
   (with-vault-path (path)
     (with-agent (nil)
       (m:mount *ctx* 'miao:tool-vault :path path)
-      (is (equal :bad-request (first (miao:tool-error (vault :op :restore :id "nope"))))))))
+      (is (equal :bad-request (first (miao:result-error (vault :op :restore :id "nope"))))))))
 
 (test tool-vault-discard-marks-an-entry-discarded
   (with-vault-path (path)
@@ -245,7 +245,7 @@ after the message that triggered it has already returned."
       (m:mount *ctx* 'miao:tool-vault :path path)
       (let ((id (miao:vault-record path :assistant "drop me")))
         (vault :op :discard :id id)
-        (is (equal :bad-request (first (miao:tool-error (vault :op :discard :id id)))))))))
+        (is (equal :bad-request (first (miao:result-error (vault :op :discard :id id)))))))))
 
 ;;; --- compaction (~takeiteasy/miao#67) ---------------------------------------
 
@@ -323,7 +323,7 @@ after the message that triggered it has already returned."
       (miao:vault-record path :assistant "a")
       (with-open-file (stream path :direction :output :if-exists :append)
         (write-string "(torn" stream))
-      (is (equal :bad-request (first (miao:tool-error (vault :op :compact))))))))
+      (is (equal :bad-request (first (miao:result-error (vault :op :compact))))))))
 
 ;;; --- atomic discard (~takeiteasy/miao#85) -------------------------------------
 
@@ -389,11 +389,11 @@ after the message that triggered it has already returned."
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
       (m:mount *ctx* 'miao:tool-vault :path path)
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :vault path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :vault path)
       (let ((id (miao:vault-record path :assistant "once")))
         (is (eq :ok (first (vault :op :restore :id id))))
-        (is (eq :bad-request (first (miao:tool-error (vault :op :restore :id id)))))
-        (is (eq :bad-request (first (miao:tool-error (vault :op :discard :id id)))))
+        (is (eq :bad-request (first (miao:result-error (vault :op :restore :id id)))))
+        (is (eq :bad-request (first (miao:result-error (vault :op :discard :id id)))))
         (is (eq :pending (getf (first (miao:vault-entries path)) :status)))
         (is-true (getf (first (miao:vault-entries path)) :claimed))))))
 
@@ -405,7 +405,7 @@ after the message that triggered it has already returned."
                      (incf n)
                      (final-reply "done")))
         (m:mount *ctx* 'miao:tool-vault :path path)
-        (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :vault path)
+        (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :vault path)
         (let ((id (miao:vault-record path :assistant "once")))
           (vault :op :restore :id id)
           (vault :op :restore :id id)
@@ -417,7 +417,7 @@ after the message that triggered it has already returned."
 (test a-queued-steer-is-claimed-until-it-folds
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :vault path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :vault path)
       (m:cast (m:lookup :assistant) '(:steer :content "queued"))
       (is-true (getf (first (wait-for-claimed path)) :claimed))
       (m:call (m:lookup :assistant) (list :run :messages '((:role :user :content "go"))))
@@ -429,7 +429,7 @@ after the message that triggered it has already returned."
   (with-vault-path (path)
     (with-agent (nil)
       (m:mount *ctx* 'miao:tool-vault :path path)
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :vault path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :vault path)
       (m:cast (m:lookup :assistant) '(:steer :content "queued"))
       (is-true (getf (first (wait-for-claimed path)) :claimed))
       (m:call (m:lookup :assistant) (list :restore '(:messages nil :turns 0)))
@@ -440,7 +440,7 @@ after the message that triggered it has already returned."
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
       (m:mount *ctx* 'miao:tool-vault :path path)
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed)
       (let ((id (miao:vault-record path :assistant "hi")))
         (vault :op :restore :id id)
         (m:call (m:lookup :assistant) (list :run :messages '((:role :user :content "go"))))
@@ -465,13 +465,13 @@ after the message that triggered it has already returned."
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
       (m:mount *ctx* 'miao:tool-vault :path path)
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :vault path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :vault path)
       (let ((id (miao:vault-record path :assistant "once")))
         (append-claim path id (foreign-owner))
         (is-true (getf (first (miao:vault-entries path)) :claimed))
         (is (eq :held (miao:vault-claim-pending path id)))
-        (is (eq :bad-request (first (miao:tool-error (vault :op :restore :id id)))))
-        (is (eq :bad-request (first (miao:tool-error (vault :op :discard :id id)))))
+        (is (eq :bad-request (first (miao:result-error (vault :op :restore :id id)))))
+        (is (eq :bad-request (first (miao:result-error (vault :op :discard :id id)))))
         (is (eq :pending (getf (first (miao:vault-entries path)) :status)))))))
 
 (test a-claim-on-another-host-is-always-live

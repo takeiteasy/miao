@@ -235,7 +235,7 @@ and stderr."
       (let* ((registry (make-instance 'm:registry))
              (m:*registry* registry)
              (context (m:start-service (make-instance 'm:context :name :fresh) :registry registry)))
-        (m:mount context 'protocol-echo)
+        (mount-backend context :protocol-echo)
         (unwind-protect
              (let ((out (make-string-output-stream)) (err (make-string-output-stream)))
                (is (null (m:lookup :chat)))

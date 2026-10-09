@@ -189,3 +189,5 @@ way out. Nest it inside the test's backend, which stops the server on exit."
   "An answer a fake handler returns: 200, application/x-ndjson, PAYLOADS."
   (list 200 '("Content-Type" "application/x-ndjson")
         (apply #'ndjson-body payloads)))
+
+(defparameter +non-ascii-text+ (format nil "h~cllo ~c" (code-char #xe9) (code-char #x2713)))

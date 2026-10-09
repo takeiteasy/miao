@@ -199,7 +199,7 @@
   ;; A snapshot is only interesting taken mid-run. The backend is slowed
   ;; down to hold that window open, and the whole context is checkpointed,
   ;; then rolled back, while :running-p is still t on the very same process.
-  ;; protocol-openai is blocked for the run's own 0.3s, so this also shows
+  ;; the provider is blocked for the run's own 0.3s, so this also shows
   ;; CHECKPOINT does not queue behind it.
   (let* ((registry (make-instance 'm:registry))
          (m:*registry* registry)
@@ -209,9 +209,8 @@
                                     (sleep 0.3) (json-response +hello-reply+)))))
     (unwind-protect
          (with-generations-directory (dir)
-           (m:mount context 'miao:protocol-openai)
-           (apply #'m:mount context (first (keyed)) :base-url (fake-http-url server) (rest (keyed)))
-           (m:mount context 'miao:agent :name :assistant :model :provider-test-keyed)
+           (apply #'mount-backend context (first (keyed)) :base-url (fake-http-url server) (rest (keyed)))
+           (m:mount context 'miao:agent :name :assistant :model :test-keyed)
            (m:cast (m:lookup :assistant) (list :run :messages '((:role :user :content "hi"))))
            (let ((mid-run (wait-for-agent-turns :assistant 1 1.0)))
              (is (eql 1 (getf mid-run :turns)))
@@ -245,10 +244,9 @@
                                     (tool-call-reply "c1" "tool-hold" "{}")))))
     (unwind-protect
          (progn
-           (m:mount context 'miao:protocol-openai)
-           (apply #'m:mount context (first (keyed)) :base-url (fake-http-url server) (rest (keyed)))
+           (apply #'mount-backend context (first (keyed)) :base-url (fake-http-url server) (rest (keyed)))
            (m:mount context 'tool-hold)
-           (m:mount context 'miao:agent :name :assistant :model :provider-test-keyed
+           (m:mount context 'miao:agent :name :assistant :model :test-keyed
                                         :tools '(:tool-hold))
            (m:cast (m:lookup :assistant) (list :run :messages '((:role :user :content "go"))))
            (let ((snap (loop repeat 100
@@ -364,12 +362,12 @@
 (test tool-checkpoint-restore-requires-a-path
   (with-checkpoints (dir)
     (is (equal :bad-request
-               (first (miao:tool-error (miao:invoke-tool :tool-checkpoint :op :restore)))))))
+               (first (miao:result-error (miao:invoke-tool :tool-checkpoint :op :restore)))))))
 
 (test tool-checkpoint-restore-rejects-an-unknown-path
   (with-checkpoints (dir)
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (miao:invoke-tool :tool-checkpoint :op :restore
                                         :path "/nonexistent/x.generation")))))))
 
@@ -514,18 +512,17 @@ once it is released."
         (is (= 5 (m:call (m:lookup :hand) '(:get))))))))
 
 (defun mount-keyed-provider (&rest initargs)
-  (unless (m:lookup :protocol-openai) (m:mount *ckpt-context* 'miao:protocol-openai))
-  (apply #'m:mount *ckpt-context* 'miao/tests::provider-test-keyed
+  (apply #'mount-backend *ckpt-context* :test-keyed
          :model "test-model" :base-url "http://127.0.0.1:1" initargs))
 
 (defun provider-key ()
-  (miao::provider-api-key (m:service-of (m:lookup :provider-test-keyed))))
+  (miao::backend-api-key (m:service-of (m:lookup :test-keyed))))
 
 (test a-generation-never-holds-a-credential
   (with-checkpoints (dir)
     (mount-keyed-provider :api-key "sk-very-secret")
     (let* ((path (miao:checkpoint *ckpt-context* :dir dir))
-           (entry (service-entry path :provider-test-keyed)))
+           (entry (service-entry path :test-keyed)))
       (is (null (search "sk-very-secret" (generation-text path))))
       (is (equal '(:api-key) (getf entry :withheld)))
       (is (search ":model" (getf entry :initargs))))))
@@ -534,22 +531,22 @@ once it is released."
   (with-checkpoints (dir)
     (mount-keyed-provider :api-key "sk-very-secret")
     (let ((path (miao:checkpoint *ckpt-context* :dir dir)))
-      (m:unmount *ckpt-context* :provider-test-keyed)
-      (is (equal '(:provider-test-keyed) (getf (rolled-back path) :remounted)))
+      (m:unmount *ckpt-context* :test-keyed)
+      (is (equal '(:test-keyed) (getf (rolled-back path) :remounted)))
       (is (null (provider-key)))
-      (is (equal "test-model" (miao::provider-model
-                               (m:service-of (m:lookup :provider-test-keyed)))))
-      (m:unmount *ckpt-context* :provider-test-keyed)
-      (rolled-back path :initargs '((:provider-test-keyed :api-key "sk-again")))
+      (is (equal "test-model" (miao::backend-model
+                               (m:service-of (m:lookup :test-keyed)))))
+      (m:unmount *ckpt-context* :test-keyed)
+      (rolled-back path :initargs '((:test-keyed :api-key "sk-again")))
       (is (equal "sk-again" (provider-key))))))
 
 (test a-credential-inside-a-declared-child-is-left-out-too
   (multiple-value-bind (kept withheld)
       (miao::%persistable-initargs
-       'm:context '(:name :c :children ((miao/tests::provider-test-keyed
+       'm:context '(:name :c :children ((miao:backend-service :name :test-keyed
                                          :api-key "k" :model "m"))))
-    (is (equal '(:name :c :children ((miao/tests::provider-test-keyed :model "m"))) kept))
-    (is (equal '("provider-test-keyed :api-key") withheld))))
+    (is (equal '(:name :c :children ((miao:backend-service :name :test-keyed :model "m"))) kept))
+    (is (equal '("backend-service :api-key") withheld))))
 
 (test a-value-that-cannot-be-read-back-is-left-out
   (with-checkpoints (dir)
@@ -598,9 +595,8 @@ once it is released."
         (is (= 3 (thing)))))))
 
 (defun mount-inner-with-a-keyed-child ()
-  (unless (m:lookup :protocol-openai) (m:mount *ckpt-context* 'miao:protocol-openai))
   (m:mount *ckpt-context* 'm:context :name :inner
-           :children '((miao/tests::provider-test-keyed
+           :children '((miao:backend-service :name :test-keyed
                         :model "test-model" :base-url "http://127.0.0.1:1"
                         :api-key "sk-nested"))))
 
@@ -609,7 +605,7 @@ once it is released."
     (mount-inner-with-a-keyed-child)
     (let ((path (miao:checkpoint *ckpt-context* :dir dir)))
       (is (null (search "sk-nested" (generation-text path))))
-      (is (equal '("provider-test-keyed :api-key")
+      (is (equal '("backend-service :api-key")
                  (getf (service-entry path :inner) :withheld))))))
 
 (test rollback-initargs-reach-a-child-a-remounted-context-declares
@@ -617,20 +613,20 @@ once it is released."
     (mount-inner-with-a-keyed-child)
     (let ((path (miao:checkpoint *ckpt-context* :dir dir)))
       (m:unmount *ckpt-context* :inner)
-      (let ((result (rolled-back path :initargs '((:provider-test-keyed :api-key "sk-back")))))
+      (let ((result (rolled-back path :initargs '((:test-keyed :api-key "sk-back")))))
         (is (equal '(:inner) (getf result :remounted)))
-        (is (equal '(:provider-test-keyed) (getf result :updated)))
+        (is (equal '(:test-keyed) (getf result :updated)))
         (is (null (getf result :unremounted))))
       (is (equal "sk-back" (provider-key)))
-      (is (equal "test-model" (miao::provider-model
-                               (m:service-of (m:lookup :provider-test-keyed))))
+      (is (equal "test-model" (miao::backend-model
+                               (m:service-of (m:lookup :test-keyed))))
           "the rest of its spec is kept"))))
 
 (test a-declared-child-is-left-alone-without-an-override-or-a-remounted-context
   (with-checkpoints (dir)
     (mount-inner-with-a-keyed-child)
     (let ((path (miao:checkpoint *ckpt-context* :dir dir)))
-      (is (null (getf (rolled-back path :initargs '((:provider-test-keyed :api-key "sk-x")))
+      (is (null (getf (rolled-back path :initargs '((:test-keyed :api-key "sk-x")))
                       :updated))
           "the context was never gone, so its child is not rollback's to update")
       (m:unmount *ckpt-context* :inner)

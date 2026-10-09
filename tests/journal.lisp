@@ -12,7 +12,7 @@ answers REPLIES, and call BODY with it and a recorder on its events."
        (call-with-agent (apply #'scripted ,replies) '(tool-echo)
                         (lambda (*ctx*)
                           (let ((,agent (m:mount *ctx* 'miao:agent :name :j
-                                                 :model :provider-test-keyed :tools '(:tool-echo)
+                                                 :model :test-keyed :tools '(:tool-echo)
                                                  :journal ,path :sink (recorder-sink ,recorder)
                                                  ,@options)))
                             (declare (ignorable ,agent))
@@ -336,7 +336,7 @@ answers REPLIES, and call BODY with it and a recorder on its events."
                                  (streamed-reply "child done") (streamed-reply "done"))
           '(tool-echo)
         (lambda (*ctx*)
-          (let ((agent (m:mount *ctx* 'miao:agent :name :j :model :provider-test-keyed
+          (let ((agent (m:mount *ctx* 'miao:agent :name :j :model :test-keyed
                                                   :tools '(:tool-echo) :sub-agents t :journal path
                                                   :sink (recorder-sink recorder))))
             (run-j agent recorder "go")
@@ -368,7 +368,7 @@ answers REPLIES, and call BODY with it and a recorder on its events."
 
 (test a-run-needs-the-journal-to-fork-from
   (with-agent ((final-reply "ok") 'tool-echo)
-    (m:mount *ctx* 'miao:agent :name :plain :model :provider-test-keyed)
+    (m:mount *ctx* 'miao:agent :name :plain :model :test-keyed)
     (signals error (miao:fork-agent *ctx* :plain :as :f :run "any"))))
 
 (test a-journal-forks-an-agent-that-is-no-longer-mounted
@@ -379,7 +379,7 @@ answers REPLIES, and call BODY with it and a recorder on its events."
       (is (eq :revived (miao:fork-journal *ctx* path :agent :j :as :revived)))
       (is (equal messages (snapshot-messages (m:lookup :revived))))
       (let ((described (m:call (m:lookup :revived) '(:describe))))
-        (is (eq :provider-test-keyed (getf described :model)))
+        (is (eq :test-keyed (getf described :model)))
         (is (eql 5 (getf described :max-turns)))
         (is (equal path (getf described :journal))))
       (is (eq :cut (miao:fork-journal *ctx* path :agent :j :as :cut :turn 1)))

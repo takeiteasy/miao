@@ -55,8 +55,7 @@
 
 (test save-image-refuses-a-credentialed-provider-before-suspending-anything
   (with-image-context (ctx dir)
-    (m:mount ctx 'miao:protocol-openai)
-    (m:mount ctx 'miao/tests::provider-test-image-credentialed :api-key "super-secret")
+    (mount-backend ctx :test-image-credentialed :api-key "super-secret")
     (let ((before (length (miao:generations :dir dir))))
       (signals error (miao:save-image ctx :dir dir))
       ;; refused ahead of CHECKPOINT: no generation was written
@@ -178,7 +177,7 @@
                                 (list (namestring sb-ext:*runtime-pathname*) "--core" core "--noinform"
                                       "--non-interactive" "--eval"
                                       (format nil "(with-open-file (s ~s :direction :output :if-exists :supersede) ~
-                                                    (format s \"~~s\" (miao:tool-error (miao:invoke-tool :tool-repl :id \"a\" :form \"*x*\"))))"
+                                                    (format s \"~~s\" (miao:result-error (miao:invoke-tool :tool-repl :id \"a\" :form \"*x*\"))))"
                                               out-file))
                                 :output :string :error-output :string :ignore-error-status t)
                              (declare (ignore out))
@@ -259,7 +258,7 @@
     (with-image-context (ctx)
       (m:mount ctx 'miao:tool-self :enable '(:eval :define) :require-image t)
       (let ((result (miao:invoke-tool :tool-self :op :eval :form "1")))
-        (is (equal :bad-request (first (miao:tool-error result))))))))
+        (is (equal :bad-request (first (miao:result-error result))))))))
 
 (test require-image-accepts-after-a-clean-image-then-refuses-once-dirty
   (with-self-image-state ("/tmp/pretend.core" nil)
@@ -269,7 +268,7 @@
         (is (eq :ok (first before)))
         ;; that write just made the image stale
         (let ((after (miao:invoke-tool :tool-self :op :eval :form "1")))
-          (is (equal :bad-request (first (miao:tool-error after)))))))))
+          (is (equal :bad-request (first (miao:result-error after)))))))))
 
 (test image-generation-self-define-refuses-a-non-definition-form
   (let ((miao::*last-image* nil) (miao::*self-dirty* nil))

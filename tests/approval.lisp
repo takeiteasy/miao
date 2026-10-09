@@ -27,7 +27,7 @@ and a recorder on its events."
                      (lambda (*ctx*)
                        (apply #'m:mount *ctx* 'miao:hook-approval hook-options)
                        (let ((agent (apply #'m:mount *ctx* 'miao:agent :name :gated
-                                           :model :provider-test-keyed
+                                           :model :test-keyed
                                            :tools '(:tool-op :tool-echo)
                                            :hooks '(:hook-approval)
                                            :sink (recorder-sink recorder)
@@ -94,7 +94,7 @@ and a recorder on its events."
     (is (eq :allow (getf (first (events-of recorder :approval-done)) :answer)))
     (is (equal '(:ok (:text "ran")) (tool-result-of recorder "c1")))))
 
-(test a-denial-reaches-the-model-as-a-tool-error
+(test a-denial-reaches-the-model-as-a-result-error
   (with-approval-agent (agent recorder (list (op-call "c1") (done-reply)))
     (run-gated agent)
     (wait-for-pending 1)

@@ -5,7 +5,7 @@ as a client retrying after a dropped response, answers with the original's
 status and does not run or queue again.
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama
                            :journal t :vault t)
 
 (m:call (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))

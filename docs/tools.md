@@ -91,7 +91,7 @@ Meow intercepts the heads `%update-config`, `%effects` and `%timer-fire` before
 | `(:error detail)` | Anything else. |
 | `(:forbidden msg)` | `tool-fs`: the path escapes the sandbox. `tool-self`: the op is not in `:enable`. |
 
-`tool-error-p` and `tool-error` take a result apart.
+`result-error-p` and `result-error` take a result apart.
 
 `invoke-tool` folds a call that fails below the tool itself -- its process
 already exited, or the call would have deadlocked -- into the same
@@ -113,16 +113,17 @@ itself.
 
 ## Definitions
 
-`define-tool`, `define-protocol` and [`define-provider`](providers.md) record
-each definition by name, so a front end can mount one without a hand-kept list:
+`define-tool` records each tool by name, and the client's protocols and
+[providers](providers.md) count as definitions of their kind, so a front end can
+mount one without a hand-kept list:
 
 ```lisp
-(miao:definitions :kind :provider)              ; => (:provider-ollama)
-(miao:ensure-mounted ctx :provider-ollama :model "llama3.2")
+(miao:definitions :kind :provider)              ; => (:ollama)
+(miao:ensure-mounted ctx :ollama :model "llama3.2")
 ```
 
-`ensure-mounted` mounts a provider's protocol first, and does nothing for a
-name already registered. The initargs apply to the named service only. It
+`ensure-mounted` mounts a tool's dependencies first, mounts a client backend as
+a `backend-service`, and does nothing for a name already registered. The initargs apply to the named service only. It
 signals for a name nothing defines.
 
 ## Invocation

@@ -43,6 +43,8 @@ jobs:
               ~/quicklisp/local-projects/meow
           git clone --depth 1 https://github.com/takeiteasy/trivial-high-precision-timer \
               ~/quicklisp/local-projects/trivial-high-precision-timer
+          git clone --depth 1 https://github.com/takeiteasy/cl-inference \
+              ~/quicklisp/local-projects/cl-inference
 
       - name: Test
         run: tests/test.sh

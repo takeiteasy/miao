@@ -20,10 +20,10 @@
 
 (test worker-dies-with-its-deadline
   (with-worker (w)
-    (is (eq :timeout (miao:tool-error (miao::worker-eval w "(loop)" 500))))
+    (is (eq :timeout (miao:result-error (miao::worker-eval w "(loop)" 500))))
     (is (not (miao::worker-alive-p w)))
     ;; A dead worker answers, rather than blocking a caller that reuses it.
-    (is (eq :unavailable (miao:tool-error (miao::worker-eval w "1" 500))))))
+    (is (eq :unavailable (miao:result-error (miao::worker-eval w "1" 500))))))
 
 (test stale-worker-reads-dead-and-is-never-signalled
   (let* ((worker (miao::start-worker))

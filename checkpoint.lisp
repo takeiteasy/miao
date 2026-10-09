@@ -328,7 +328,7 @@ through this, and always compare equal to each other."
     (let ((base (append (list :name (getf entry :name) :class (getf entry :class))
                         (getf entry :spec))))
       (cond (status (append base (list :unavailable (%unavailable-reason status))))
-            ((tool-error-p reply) (append base (list :state nil)))
+            ((result-error-p reply) (append base (list :state nil)))
             (t (append base (list :state reply)))))))
 
 (defun %entry-names (services key)

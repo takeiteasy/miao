@@ -105,7 +105,7 @@ Left out of `:initargs`, and named in `:withheld`:
 |---|---|
 | a key `secret-initargs` names | the key, `:api-key` |
 | a value that does not print and read back, such as an agent's `:sink` | the key, `:sink` |
-| either of those inside a context's `:children` specs | `"provider-x :api-key"` |
+| either of those inside a context's `:children` specs | `"backend-service :api-key"` |
 | every initarg of a class that cannot be asked | its keys |
 
 A service mounted again without its key takes it from wherever it would
@@ -137,7 +137,7 @@ reported rather than silently accepted:
 ```lisp
 (miao:rollback *ctx* path :remount nil)                 ; restore what is mounted, nothing more
 (miao:rollback *ctx* path
-               :initargs '((:provider-example :api-key "sk-...")))
+               :initargs '((:example :api-key "sk-...")))
 ```
 
 `:remount nil` restores onto what is mounted now. `:initargs` is an alist of

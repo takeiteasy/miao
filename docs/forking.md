@@ -5,7 +5,7 @@ prefix of the original's history and carries on down its own path. The
 original is only read, so it keeps its history and, if running, its run.
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama)
 ;; ... a run has built up a conversation ...
 
 (miao:fork-agent *ctx* :assistant :turn 2 :as :retry)   ; => :retry

@@ -7,7 +7,7 @@ run it was sent to, a crash, or a restart -- not just the next turn. See
 [~takeiteasy/miao#14](https://todo.sr.ht/~takeiteasy/miao/14).
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama :vault t)
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama :vault t)
 (m:mount *ctx* 'miao:tool-vault)
 
 (m:cast (m:lookup :assistant) '(:steer :content "focus on the tests"))

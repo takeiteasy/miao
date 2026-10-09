@@ -239,7 +239,7 @@ there instead. A sub-agent inherits it.")
           (resume-problem service args))
         (let ((keyed (and (getf args :input-id)
                           (accept-input service args :record (not (%running-p service))))))
-          (cond ((tool-error-p keyed) keyed)
+          (cond ((result-error-p keyed) keyed)
                 ((consp keyed) keyed)
                 ((%running-p service) (bad-request "agent is already running"))
                 (t (begin-run service args keyed)))))))
@@ -603,9 +603,9 @@ tools, and get back its final answer."
   (when (eql ref (%step-ref service))
     (setf (%turn-in-flight service) nil)
     (cond
-      ((and (tool-error-p result) (retry-turn-p service result))
+      ((and (result-error-p result) (retry-turn-p service result))
        (schedule-retry service result))
-      ((tool-error-p result)
+      ((result-error-p result)
        (finish-run service result))
       (t
        (let ((reply (second result)))
@@ -636,7 +636,7 @@ tools, and get back its final answer."
 past: a backend that could not be reached, or one that answered 408, 425, 429,
 a 5xx, or a 2xx whose stream or payload broke. A :TIMEOUT is not, since another
 attempt could double a wait the caller bounded."
-  (let ((reason (tool-error result)))
+  (let ((reason (result-error result)))
     (or (eq reason :unavailable)
         (and (consp reason)
              (eq (first reason) :backend-error)
@@ -668,13 +668,13 @@ the step ref before the timer fires -- a cancel, the deadline, a restore, an
 interrupt -- leaves the timer's :RETRY unmatchable."
   (let* ((attempt (incf (%attempt service)))
          (delay (retry-delay (agent-retry-backoff service) attempt
-                             (retry-after (tool-error result))))
+                             (retry-after (result-error result))))
          (ref (%step-ref service))
          (self (m:self)))
     (close-turn-stream service)
     (emit service
                 (turn-retry-event (m:agent-ref service) (%turns service) attempt
-                                  (tool-error result)))
+                                  (result-error result)))
     (setf (%turn-in-flight service) t
           (%retry-pending service)
           (m:after service (/ delay 1000.0d0)
@@ -871,7 +871,7 @@ skipped."
 
 (defun sub-agent-done (service ref result)
   (call-result service (car ref) (cdr ref)
-               (cond ((tool-error-p result) result)
+               (cond ((result-error-p result) result)
                      ((eq :cancelled (getf (second result) :stop-reason)) (fail :cancelled))
                      (t (ok :answer (content-text (getf (second result) :content)))))))
 
@@ -1163,8 +1163,8 @@ log id is skipped. A raw result that is not RESULT goes to the log under
        (loop for (log-id result raw) in results
              when log-id
                collect (list log-id
-                             (cond ((not (tool-error-p result)) :ok)
-                                   ((eq (tool-error result) :interrupted) :interrupted)
+                             (cond ((not (result-error-p result)) :ok)
+                                   ((eq (result-error result) :interrupted) :interrupted)
                                    ((denial-p result) :denied)
                                    (t :error))
                              (%cut-text (render-tool-result result) cap)
@@ -1172,7 +1172,7 @@ log id is skipped. A raw result that is not RESULT goes to the log under
                                   (%cut-text (render-tool-result raw) cap))))))))
 
 (defun denial-p (result)
-  (let ((reason (tool-error result)))
+  (let ((reason (result-error result)))
     (and (consp reason) (eq (first reason) :denied))))
 
 (defun record-outstanding (service outcome)
@@ -1192,8 +1192,8 @@ log id is skipped. A raw result that is not RESULT goes to the log under
   "RESULT, an (:ok plist) or (:error reason), as JSON text -- more legible to
 a model than PRINC-TO-STRING, and jzon is already a dependency."
   (json:stringify
-   (if (tool-error-p result)
-       (json-object "error" (untyped->json (tool-error result)))
+   (if (result-error-p result)
+       (json-object "error" (untyped->json (result-error result)))
        (untyped->json (second result)))))
 
 ;;; --- fitting the conversation to a request --------------------------------
@@ -1599,7 +1599,7 @@ handle's lock, so :RUN-DONE is the last event of the run."
                  (not (member (getf event :type) +loop-event-types+)))
         (bt:with-lock-held ((run-handle-lock handle))
           (when (run-handle-live handle)
-            (emit-event (run-handle-fanout handle)
+            (deliver-event (run-handle-fanout handle)
                         (append event (list :hook hook :ref ref) tags))))))))
 
 ;;; --- the sink -----------------------------------------------------------
@@ -1623,7 +1623,7 @@ journal it."
                             (list :parent (agent-parent-name service))))))
     (journal-event service event)
     (when (%fanout service)
-      (emit-event (%fanout service) event))))
+      (deliver-event (%fanout service) event))))
 
 (defvar *subscribers-lock* (bt:make-lock))
 (defvar *subscribers* (make-hash-table :test 'eq :weakness :key)
@@ -1666,7 +1666,7 @@ SINK itself."
   "Stop EMITTER once it has delivered what it was sent, and kill it if the sink
 has not taken that within *SINK-GRACE*."
   (stop-emitter emitter)
-  (reap-emitter emitter *sink-grace*))
+  (reap-emitter emitter *emitter-grace*))
 
 (defun retire-emitters (service)
   "Retire the emitters SERVICE started, and only those: a child's sink is its
@@ -1756,14 +1756,14 @@ timeout."
         (%call-tokens service) nil
         (%journal-call-ids service) nil)
   (drop-chains service :detached t)
-  (record-input-done service (if (tool-error-p result)
+  (record-input-done service (if (result-error-p result)
                                  :error
                                  (getf (second result) :stop-reason)))
   ;; Invalidates any turn already in flight, so its late TURN-REPLY is
   ;; dropped rather than reopening a run that has already finished.
   (incf (%step-ref service))
-  (let ((reason (if (tool-error-p result)
-                    (tool-error result)
+  (let ((reason (if (result-error-p result)
+                    (result-error result)
                     (getf (second result) :stop-reason))))
     (notify-hooks-run-done service reason)
     (close-run-handle service)

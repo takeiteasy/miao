@@ -161,8 +161,8 @@ cancelled plan stops the step in flight and refuses the rest."
           (let ((result (invoke-step (lisp-tool-name tool-name)
                                      (resolve-refs (getf step :args) results)
                                      cancel left service)))
-            (when (tool-error-p result)
-              (return-from execute-plan (fail-step tool-name (tool-error result))))
+            (when (result-error-p result)
+              (return-from execute-plan (fail-step tool-name (result-error result))))
             (when as
               (setf (gethash as results) (second result))))))
       (ok :results (plan-results-plist results) :steps n))))
@@ -178,7 +178,7 @@ own token. A tool that is no longer registered, such as one restarting, answers
 :UNAVAILABLE. A tool still running +PLAN-KILL-GRACE+ seconds after that is
 killed if SERVICE's context would restart it. That token is cancelled with
 CANCEL."
-  (let ((token (make-cancel-token)))
+  (let ((token (watch-call (make-cancel-token))))
     (when cancel
       (on-cancel cancel (lambda () (cancel token))))
     (multiple-value-bind (process message timeout)

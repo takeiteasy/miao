@@ -12,7 +12,7 @@ hooks an agent runs through `:hooks`:
         :pass)))
 
 (m:mount *ctx* 'hook-no-shell)
-(m:mount *ctx* 'miao:agent :model :provider-ollama
+(m:mount *ctx* 'miao:agent :model :ollama
                            :tools '(:tool-shell :tool-fs)
                            :hooks '(:hook-no-shell))
 ```

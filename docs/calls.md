@@ -4,7 +4,7 @@ Every tool call an agent dispatches is recorded in the [journal](journal.md), so
 its status outlives the agent that dispatched it. Off by default.
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama
                            :tools '(:tool-shell) :journal t)
 
 (miao:call-entries (merge-pathnames ".miao/calls.log" (user-homedir-pathname)))

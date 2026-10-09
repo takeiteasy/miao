@@ -505,12 +505,12 @@ entry, records a write that finished after its caller was told :TIMEOUT."
   (let ((entry (list :at (%now-iso8601) :kind kind :op op
                      :name (and (eq op :reload) parsed)
                      :checkpoint checkpoint
-                     :outcome (if (tool-error-p result) (list :error (tool-error result)) :ok))))
+                     :outcome (if (result-error-p result) (list :error (result-error result)) :ok))))
     (%append-log (self-log-file service) entry)
     (cond ((eq kind :late-outcome)
            (m:log-warn service "tool-self ~(~a~) finished after its timeout: ~s" op (getf entry :outcome)))
-          ((tool-error-p result)
-           (m:log-warn service "tool-self ~(~a~) failed: ~s" op (tool-error result)))
+          ((result-error-p result)
+           (m:log-warn service "tool-self ~(~a~) failed: ~s" op (result-error result)))
           (t (m:log-info service "tool-self ~(~a~) ok" op)))))
 
 (defun op-self-log (path limit)

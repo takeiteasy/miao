@@ -33,10 +33,6 @@ PROTOCOLS, PROVIDERS and AGENTS, one per :KIND."
 busy with a long call cannot hold up the caller."
   (nth-value 1 (%tool-process name :registry registry)))
 
-(defun tool-schema (metadata)
-  "METADATA's parameter schema."
-  (getf metadata :params))
-
 (defconstant +default-tool-timeout+ 30000
   "Milliseconds a tool gives its own work when the caller names no deadline.")
 
@@ -84,6 +80,38 @@ result) instead. Signals when no tool is registered under NAME."
         (multiple-value-call #'%call-result (m:call process message :timeout timeout))
         message)))
 
+;;; Where a tool call is, for a caller deciding whether one that ignored its
+;;; cancel is stuck. Kept beside the token rather than on it: the token is the
+;;; client's, and only calls a plan step dispatches are watched.
+
+(defstruct (call-state (:constructor make-call-state ()))
+  (phase :queued) (settled (bt:make-semaphore)))
+
+(defvar *call-states* (make-hash-table :test 'eq :weakness :key :synchronized t))
+
+(defun watch-call (token)
+  "Track the tool call TOKEN is passed to, so STUCK-P can tell whether it is
+running. Answers TOKEN."
+  (setf (gethash token *call-states*) (make-call-state))
+  token)
+
+(defun call-started (token)
+  (a:when-let ((state (gethash token *call-states*)))
+    (setf (call-state-phase state) :running)))
+
+(defun call-settled (token)
+  (a:when-let ((state (gethash token *call-states*)))
+    (setf (call-state-phase state) :settled)
+    (bt:signal-semaphore (call-state-settled state))))
+
+(defun stuck-p (token grace)
+  "True when the call TOKEN was passed to is running and, GRACE seconds on,
+has still not returned. A call that has not started is not stuck: it sees
+TOKEN cancelled and answers without running."
+  (a:when-let ((state (gethash token *call-states*)))
+    (and (eq (call-state-phase state) :running)
+         (not (bt:wait-on-semaphore (call-state-settled state) :timeout grace)))))
+
 (defun call-cancel-token (args)
   "ARGS' :CANCEL, when it is a cancel token."
   (let ((token (getf args :cancel)))
@@ -95,16 +123,6 @@ result) instead. Signals when no tool is registered under NAME."
 ;;;   (:bad-request msg) | :timeout | :unavailable | (:error detail)
 
 (defun ok (&rest plist) (list :ok plist))
-(defun fail (reason) (list :error reason))
-(defun bad-request (format &rest args)
-  (fail (list :bad-request (apply #'format nil format args))))
-
-(defun tool-error-p (result)
-  (and (consp result) (eq (first result) :error)))
-
-(defun tool-error (result)
-  (when (tool-error-p result) (second result)))
-
 (defun tool-trust (metadata)
   "METADATA's :TRUST, or :AGENT when it names none. :OPERATOR marks a tool
 that only a trusted operator may reach."
@@ -164,12 +182,9 @@ generation file."
                             (if ,problem
                                 (bad-request "~a" ,problem)
                                 (unwind-protect
-                                     (progn (when ,cancel
-                                              (setf (cancel-token-phase ,cancel) :running))
+                                     (progn (when ,cancel (call-started ,cancel))
                                             ,@body)
-                                  (when ,cancel
-                                    (setf (cancel-token-phase ,cancel) :settled)
-                                    (bt:signal-semaphore (cancel-token-settled ,cancel)))))))))
+                                  (when ,cancel (call-settled ,cancel))))))))
            ;; Checkpoints (~takeiteasy/miao#11): every tool answers these
            ;; through SNAPSHOT/RESTORE, which default to NIL, so a tool that
            ;; holds no state worth carrying needs no method of its own.

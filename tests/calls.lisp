@@ -108,7 +108,7 @@
   `(with-vault-path (,path)
      (with-agent (,answer ,@tools)
        (m:with-process (runner)
-         (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+         (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :journal ,path ,@agent-args)))
            ,@body)))))
 
@@ -232,7 +232,7 @@
                          (final-reply "done")))
                   'tool-echo)
         (m:with-process (runner)
-          (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+          (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                    :tools '(:tool-echo))))
             (run-child child)
             (is-true (m:receive :timeout 5)))))
@@ -267,5 +267,5 @@
   (with-vault-path (path)
     (with-agent ((final-reply "x"))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :journal path)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed :journal path)))
           (is (equal path (getf (m:call child '(:describe)) :journal))))))))

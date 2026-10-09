@@ -97,6 +97,9 @@ last resort with no dedicated OS mechanism behind it."
 
 ;;; --- M:CALL failures folded into the result vocabulary (~takeiteasy/miao#106)
 
+(defun coerced (schema args)
+  (miao:coerce-args schema args))
+
 (test call-result-passes-through-a-real-reply
   (is (equal '(:ok (:value "1")) (miao::%call-result '(:ok (:value "1")) nil))))
 
@@ -154,7 +157,7 @@ last resort with no dedicated OS mechanism behind it."
 (test an-unknown-parameter-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (tool :tool-shell :cmd "echo hi" :colour t)))))))
 
 (test a-bare-call-is-coerced-too
@@ -175,7 +178,7 @@ last resort with no dedicated OS mechanism behind it."
 (test unknown-message-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (m:call (m:lookup :tool-shell) '(:nonsense))))))))
 
 ;;; --- fs ---------------------------------------------------------------
@@ -197,7 +200,7 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (tool :tool-fs :op :mkdir :path "keep")
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (tool :tool-fs :op :delete :path "keep")))))))
 
 (test fs-rejects-path-escapes
@@ -205,23 +208,23 @@ last resort with no dedicated OS mechanism behind it."
     (dolist (path '("../outside.txt" "/etc/passwd" "../sandbox-root-evil"
                     "a/../../outside.txt"))
       (is (equal '(:forbidden "path escapes sandbox root")
-                 (miao:tool-error (tool :tool-fs :op :read :path path))))))
+                 (miao:result-error (tool :tool-fs :op :read :path path))))))
 
   ;; The sibling-prefix trick specifically: a directory whose name merely
   ;; starts with the root's name is not inside it.
   (with-tools
     (let ((sibling (concatenate 'string *sandbox* "-evil")))
       (is (equal '(:forbidden "path escapes sandbox root")
-                 (miao:tool-error (tool :tool-fs :op :list :path sibling)))))))
+                 (miao:result-error (tool :tool-fs :op :list :path sibling)))))))
 
 (test fs-requires-a-path
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error (tool :tool-fs :op :read)))))))
+               (first (miao:result-error (tool :tool-fs :op :read)))))))
 
 (test fs-write-without-data-is-refused-before-touching-the-filesystem
   (with-tools
-    (let ((result (miao:tool-error (tool :tool-fs :op :write :path "new/dir/f.txt"))))
+    (let ((result (miao:result-error (tool :tool-fs :op :write :path "new/dir/f.txt"))))
       (is (eq :bad-request (first result)))
       (is (search ":data is required when :op is write" (second result))))
     (is (not (member "new" (result-value (tool :tool-fs :op :list :path ".") :files)
@@ -240,7 +243,7 @@ last resort with no dedicated OS mechanism behind it."
                     (:tool-self (:op :define) ":form")
                     (:tool-self (:op :reload) ":name")))
       (destructuring-bind (name args parameter) case
-        (let ((result (miao:tool-error (apply #'tool name args))))
+        (let ((result (miao:result-error (apply #'tool name args))))
           (is (eq :bad-request (first result)))
           (is (search parameter (second result))))))))
 
@@ -262,7 +265,7 @@ last resort with no dedicated OS mechanism behind it."
            (progn
              (make-symlink outside (concatenate 'string *sandbox* "/link.txt"))
              (is (equal '(:forbidden "path escapes sandbox root")
-                        (miao:tool-error (tool :tool-fs :op :read :path "link.txt")))))
+                        (miao:result-error (tool :tool-fs :op :read :path "link.txt")))))
         (delete-file outside)))))
 
 (test fs-refuses-traversal-through-a-symlinked-directory
@@ -274,7 +277,7 @@ last resort with no dedicated OS mechanism behind it."
            (progn
              (make-symlink outside (concatenate 'string *sandbox* "/linkdir"))
              (is (equal '(:forbidden "path escapes sandbox root")
-                        (miao:tool-error (tool :tool-fs :op :read :path "linkdir/x.txt")))))
+                        (miao:result-error (tool :tool-fs :op :read :path "linkdir/x.txt")))))
         (uiop:delete-directory-tree (uiop:ensure-directory-pathname outside)
                                     :validate t :if-does-not-exist :ignore)))))
 
@@ -283,7 +286,7 @@ last resort with no dedicated OS mechanism behind it."
     (let ((target (format nil "~a-created-by-attack.txt" *sandbox*)))
       (make-symlink target (concatenate 'string *sandbox* "/dangle"))
       (is (equal '(:forbidden "path escapes sandbox root")
-                 (miao:tool-error (tool :tool-fs :op :write :path "dangle" :data "x"))))
+                 (miao:result-error (tool :tool-fs :op :write :path "dangle" :data "x"))))
       (is (not (uiop:file-exists-p target))))))
 
 (test fs-refuses-any-symlink-below-the-root
@@ -295,7 +298,7 @@ last resort with no dedicated OS mechanism behind it."
     (make-symlink (concatenate 'string *sandbox* "/real.txt")
                   (concatenate 'string *sandbox* "/alias.txt"))
     (is (equal '(:forbidden "path escapes sandbox root")
-               (miao:tool-error (tool :tool-fs :op :read :path "alias.txt"))))))
+               (miao:result-error (tool :tool-fs :op :read :path "alias.txt"))))))
 
 (test fs-rmdir-removes-an-empty-directory
   (with-tools
@@ -310,14 +313,14 @@ last resort with no dedicated OS mechanism behind it."
   (with-tools
     (tool :tool-fs :op :write :path "full/a.txt" :data "x")
     (is (equal '(:bad-request "directory not empty")
-               (miao:tool-error (tool :tool-fs :op :rmdir :path "full"))))
+               (miao:result-error (tool :tool-fs :op :rmdir :path "full"))))
     (is (equal "x" (result-value (tool :tool-fs :op :read :path "full/a.txt") :data)))))
 
 (test fs-rmdir-refuses-a-file
   (with-tools
     (tool :tool-fs :op :write :path "f.txt" :data "x")
     (is (equal '(:bad-request "not a directory")
-               (miao:tool-error (tool :tool-fs :op :rmdir :path "f.txt"))))
+               (miao:result-error (tool :tool-fs :op :rmdir :path "f.txt"))))
     (is (equal "x" (result-value (tool :tool-fs :op :read :path "f.txt") :data)))))
 
 (test fs-rmdir-refuses-a-symlink-leaf
@@ -326,18 +329,18 @@ last resort with no dedicated OS mechanism behind it."
     (make-symlink (concatenate 'string *sandbox* "/real")
                   (concatenate 'string *sandbox* "/alias"))
     (is (equal '(:forbidden "path escapes sandbox root")
-               (miao:tool-error (tool :tool-fs :op :rmdir :path "alias"))))
+               (miao:result-error (tool :tool-fs :op :rmdir :path "alias"))))
     (is (eq :ok (first (tool :tool-fs :op :list :path "real"))))))
 
 (test fs-rmdir-refuses-the-root
   (with-tools
-    (is (equal :bad-request (first (miao:tool-error (tool :tool-fs :op :rmdir :path ".")))))
+    (is (equal :bad-request (first (miao:result-error (tool :tool-fs :op :rmdir :path ".")))))
     (is (eq :ok (first (tool :tool-fs :op :list :path "."))))))
 
 (test fs-rmdir-reports-a-missing-path
   (with-tools
     (is (equal '(:error "no such file")
-               (miao:tool-error (tool :tool-fs :op :rmdir :path "nope"))))))
+               (miao:result-error (tool :tool-fs :op :rmdir :path "nope"))))))
 
 (test fs-refuses-to-delete-a-symlink-leaf
   (with-tools
@@ -345,7 +348,7 @@ last resort with no dedicated OS mechanism behind it."
     (make-symlink (concatenate 'string *sandbox* "/real.txt")
                   (concatenate 'string *sandbox* "/alias.txt"))
     (is (equal '(:forbidden "path escapes sandbox root")
-               (miao:tool-error (tool :tool-fs :op :delete :path "alias.txt"))))
+               (miao:result-error (tool :tool-fs :op :delete :path "alias.txt"))))
     (is (equal "hello" (result-value (tool :tool-fs :op :read :path "real.txt") :data)))))
 
 ;;; --- define-tool: readable defaults (~takeiteasy/miao#134) ---------------
@@ -479,7 +482,7 @@ err
 (test shell-enforces-its-timeout-and-stays-alive
   (with-tools
     (let ((started (get-internal-real-time)))
-      (is (eq :timeout (miao:tool-error
+      (is (eq :timeout (miao:result-error
                         (tool :tool-shell :cmd "sleep 30" :timeout 300))))
       (is (< (/ (- (get-internal-real-time) started)
                 internal-time-units-per-second)
@@ -506,7 +509,7 @@ err
 (test shell-rejects-a-missing-command
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error (tool :tool-shell :timeout 100)))))))
+               (first (miao:result-error (tool :tool-shell :timeout 100)))))))
 
 (test invoke-outlives-the-default-call-timeout
   ;; M:CALL defaults to 5s. A tool given a longer deadline must not be cut
@@ -526,7 +529,7 @@ err
           (unwind-protect
                (progn
                  (is (eq :timeout
-                        (miao:tool-error
+                        (miao:result-error
                          (tool :tool-shell
                                :cmd (format nil "sleep 30 & echo $! > ~a; wait" pidfile)
                                :timeout 500))))
@@ -544,7 +547,7 @@ err
         (unwind-protect
              (progn
                (is (eq :timeout
-                      (miao:tool-error
+                      (miao:result-error
                        (tool :tool-shell
                              :cmd (format nil "sleep 30 & echo $! > ~a; wait" pidfile)
                              :timeout 500))))
@@ -590,7 +593,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   ;; fails the write -- must not take the server down for the next request.
   (with-tools
     (with-fake-http (url)
-      (is (miao:tool-error-p (tool :tool-http :url (format nil "~a/crash" url)
+      (is (miao:result-error-p (tool :tool-http :url (format nil "~a/crash" url)
                                    :timeout 2000)))
       (is (eql 200 (result-value (tool :tool-http :url (format nil "~a/echo" url)
                                        :timeout 2000)
@@ -758,14 +761,14 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (tool :tool-fs :op :write :path "k.txt" :data "keep")
     (is (equal :bad-request
-               (first (miao:tool-error (tool :tool-fs :op :write :path "k.txt"
+               (first (miao:result-error (tool :tool-fs :op :write :path "k.txt"
                                                  :encoding :base64 :data "a$b!")))))
     (is (equal "keep" (result-value (tool :tool-fs :op :read :path "k.txt") :data)))))
 
 (test fs-text-read-of-non-utf-8-is-a-bad-request
   (with-tools
     (tool :tool-fs :op :write :path "n.bin" :encoding :base64 :data (base64-of +png-octets+))
-    (is (eq :bad-request (first (miao:tool-error (tool :tool-fs :op :read :path "n.bin")))))
+    (is (eq :bad-request (first (miao:result-error (tool :tool-fs :op :read :path "n.bin")))))
     (is (equal (base64-of +png-octets+)
                (result-value (tool :tool-fs :op :read :path "n.bin" :encoding :base64) :data)))))
 
@@ -812,7 +815,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     ;; An alist has an even length too; it must not pass as one empty header.
     (dolist (headers '((("X-Tag" . "a") ("Y" . "b")) ("X-Tag") (:x-tag 7)))
       (is (equal :bad-request
-                 (first (miao:tool-error
+                 (first (miao:result-error
                          (tool :tool-http :url "http://127.0.0.1:1/x"
                                           :headers headers))))))))
 
@@ -822,7 +825,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (unwind-protect
            (progn
              (is (equal :bad-request
-                        (first (miao:tool-error (tool :tool-http :method "GET")))))
+                        (first (miao:result-error (tool :tool-http :method "GET")))))
              (is (null (fake-http-requests server))))
         (stop-fake-http server)))))
 
@@ -830,7 +833,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (with-fake-http (url)
       (is (eq :timeout
-              (miao:tool-error (tool :tool-http :url (format nil "~a/slow" url)
+              (miao:result-error (tool :tool-http :url (format nil "~a/slow" url)
                                                 :timeout 300)))))))
 
 (test http-unreachable-host-is-unavailable
@@ -839,7 +842,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
            (url (fake-http-url server)))
       (stop-fake-http server)
       (is (eq :unavailable
-              (miao:tool-error (tool :tool-http :url (format nil "~a/echo" url)
+              (miao:result-error (tool :tool-http :url (format nil "~a/echo" url)
                                                 :timeout 5000)))))))
 
 (defun http-threads ()
@@ -860,7 +863,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
                                                      :timeout 600)))))
              (sleep 0.3)
              (is (null (http-threads)))
-             (is (eq :timeout (miao:tool-error (bt:join-thread call))))
+             (is (eq :timeout (miao:result-error (bt:join-thread call))))
              (is (null (http-threads))))
         (setf *stall* nil)))))
 
@@ -871,7 +874,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (unwind-protect
            (dotimes (i 2)
              (is (eq :timeout
-                     (miao:tool-error (tool :tool-http :url (format nil "~a/stall" url)
+                     (miao:result-error (tool :tool-http :url (format nil "~a/stall" url)
                                                        :timeout 300)))))
         (setf *stall* nil))
       (is (eql 200 (result-value (tool :tool-http :url (format nil "~a/echo" url)) :status))))))
@@ -898,11 +901,11 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test eval-reports-a-reader-error-as-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error (tool :tool-eval :form "(+ 1")))))))
+               (first (miao:result-error (tool :tool-eval :form "(+ 1")))))))
 
 (test eval-reports-a-signalled-form-as-an-error
   (with-tools
-    (let ((reason (miao:tool-error (tool :tool-eval :form "(error \"boom\")"))))
+    (let ((reason (miao:result-error (tool :tool-eval :form "(error \"boom\")"))))
       (is (eq :error (first reason)))
       (is (search "boom" (second reason))))))
 
@@ -910,25 +913,25 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   ;; *READ-EVAL* is nil in the worker, so #. never runs.
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (tool :tool-eval :form "'#.(error \"read-eval ran\")")))))))
 
 (test eval-keeps-no-state-between-calls
   (with-tools
     (is (eq :ok (first (tool :tool-eval :form "(defparameter *x* 1)"))))
-    (let ((reason (miao:tool-error (tool :tool-eval :form "*x*"))))
+    (let ((reason (miao:result-error (tool :tool-eval :form "*x*"))))
       (is (eq :error (first reason))))))
 
 (test eval-enforces-its-timeout-and-stays-alive
   (with-tools
-    (is (eq :timeout (miao:tool-error (tool :tool-eval :form "(loop)"
+    (is (eq :timeout (miao:result-error (tool :tool-eval :form "(loop)"
                                                        :timeout 500))))
     (is (equal "4" (result-value (tool :tool-eval :form "(+ 2 2)") :value)))))
 
 (test eval-requires-a-form
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error (tool :tool-eval :timeout 100)))))))
+               (first (miao:result-error (tool :tool-eval :timeout 100)))))))
 
 ;;; --- gated eval --------------------------------------------------------
 
@@ -959,13 +962,13 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test gated-eval-refuses-a-form-as-a-bad-request-before-any-worker-starts
   (with-tools
     (let ((before miao::*live-workers*))
-      (is (eq :bad-request (first (miao:tool-error
+      (is (eq :bad-request (first (miao:result-error
                                    (tool :tool-gated-eval :form "(intern \"X\")")))))
       (is (equal before miao::*live-workers*)))))
 
 (test gated-eval-reports-a-signalled-form-as-an-error
   (with-tools
-    (let ((reason (miao:tool-error (tool :tool-gated-eval :form "(error \"boom ~a\" 1)"))))
+    (let ((reason (miao:result-error (tool :tool-gated-eval :form "(error \"boom ~a\" 1)"))))
       (is (eq :error (first reason)))
       (is (search "boom 1" (second reason))))))
 
@@ -979,11 +982,11 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test gated-eval-keeps-no-state-between-calls
   (with-tools
     (is (eq :ok (first (tool :tool-gated-eval :form "(defparameter x 1)"))))
-    (is (eq :error (first (miao:tool-error (tool :tool-gated-eval :form "x")))))))
+    (is (eq :error (first (miao:result-error (tool :tool-gated-eval :form "x")))))))
 
 (test gated-eval-enforces-its-timeout-and-stays-alive
   (with-tools
-    (is (eq :timeout (miao:tool-error (tool :tool-gated-eval :form "(loop)" :timeout 500))))
+    (is (eq :timeout (miao:result-error (tool :tool-gated-eval :form "(loop)" :timeout 500))))
     (is (equal "4" (result-value (tool :tool-gated-eval :form "(+ 2 2)") :value)))))
 
 (test gated-eval-cannot-forge-a-reply-through-the-terminal
@@ -1007,8 +1010,8 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     (let ((started (get-internal-real-time))
           (result (tool :tool-gated-eval
                         :form "(make-array 1000000000000)" :timeout 20000)))
-      (is (miao:tool-error result))
-      (is (not (eq :timeout (miao:tool-error result))))
+      (is (miao:result-error result))
+      (is (not (eq :timeout (miao:result-error result))))
       (is (< (/ (- (get-internal-real-time) started) internal-time-units-per-second)
              15)))
     (is (equal "4" (result-value (tool :tool-gated-eval :form "(+ 2 2)") :value)))))
@@ -1017,8 +1020,8 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (let ((result (tool :tool-gated-eval
                         :form "(labels ((f (n) (+ 1 (f (1+ n))))) (f 0))" :timeout 20000)))
-      (is (miao:tool-error result))
-      (is (not (eq :timeout (miao:tool-error result)))))))
+      (is (miao:result-error result))
+      (is (not (eq :timeout (miao:result-error result)))))))
 
 ;;; --- repl --------------------------------------------------------------
 
@@ -1031,23 +1034,23 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test repl-sessions-are-isolated
   (with-tools
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
-    (is (eq :error (first (miao:tool-error
+    (is (eq :error (first (miao:result-error
                            (tool :tool-repl :id "b" :form "*x*")))))))
 
 (test repl-pristine-restarts-the-session-empty
   (with-tools
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
-    (is (eq :error (first (miao:tool-error
+    (is (eq :error (first (miao:result-error
                            (tool :tool-repl :id "a" :form "*x*"
                                             :pristine t)))))))
 
 (test repl-timeout-restarts-the-session-empty
   (with-tools
     (tool :tool-repl :id "a" :form "(defparameter *x* 1)")
-    (is (eq :timeout (miao:tool-error (tool :tool-repl :id "a" :form "(loop)"
+    (is (eq :timeout (miao:result-error (tool :tool-repl :id "a" :form "(loop)"
                                                        :timeout 500))))
     ;; The killed worker is forgotten, so the id answers again -- empty.
-    (is (eq :error (first (miao:tool-error
+    (is (eq :error (first (miao:result-error
                            (tool :tool-repl :id "a" :form "*x*")))))))
 
 (test repl-session-from-an-earlier-image-is-reported-lost-then-starts-empty
@@ -1062,8 +1065,8 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
            (progn
              (setf miao::*boot* (list :later-boot))
              (let ((lost (tool :tool-repl :id "a" :form "*x*")))
-               (is (eq :error (first (miao:tool-error lost))))
-               (is (search "relaunch" (second (miao:tool-error lost)))))
+               (is (eq :error (first (miao:result-error lost))))
+               (is (search "relaunch" (second (miao:result-error lost)))))
              (is (unix-process-alive-p old-pid))
              (is (equal "NIL" (result-value (tool :tool-repl :id "a" :form "(boundp '*x*)")
                                             :value)))
@@ -1100,7 +1103,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test repl-requires-a-form
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error (tool :tool-repl :timeout 100)))))))
+               (first (miao:result-error (tool :tool-repl :timeout 100)))))))
 
 ;;; --- repl concurrency (~takeiteasy/miao#27) ------------------------------
 
@@ -1145,7 +1148,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
         (bt:join-thread thread)
         (is (< (- (get-internal-real-time) start)
                (* 2 internal-time-units-per-second))))
-      (is-true (miao:tool-error-p result)))))
+      (is-true (miao:result-error-p result)))))
 
 (test unmounting-tool-repl-refuses-an-eval-queued-behind-the-live-one
   ;; The second call sits in the session's mailbox behind the first, so it
@@ -1166,8 +1169,8 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
         (bt:join-thread second)
         (is (< (- (get-internal-real-time) start)
                (* 2 internal-time-units-per-second))))
-      (is-true (miao:tool-error-p first-result))
-      (is-true (miao:tool-error-p second-result)))))
+      (is-true (miao:result-error-p first-result))
+      (is-true (miao:result-error-p second-result)))))
 
 ;;; --- elision and REPL history (~takeiteasy/miao#26) ---------------------
 
@@ -1187,7 +1190,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test repl-history-is-untouched-by-an-erroring-form
   (with-tools
     (tool :tool-repl :id "a" :form "41")
-    (miao:tool-error (tool :tool-repl :id "a" :form "(error \"boom\")"))
+    (miao:result-error (tool :tool-repl :id "a" :form "(error \"boom\")"))
     (is (equal "41" (result-value (tool :tool-repl :id "a" :form "*") :value)))))
 
 ;;; --- multiple values (~takeiteasy/miao#105) -----------------------------
@@ -1265,7 +1268,7 @@ result and the seconds the call took."
                           (uiop:native-namestring (uiop:temporary-directory)))))
       (ignore-errors (delete-file marker))
       (miao:cancel token)
-      (is (eq :cancelled (miao:tool-error
+      (is (eq :cancelled (miao:result-error
                           (tool :tool-shell :cancel token
                                 :cmd (format nil "touch ~a" marker)))))
       (is (not (probe-file marker))))))
@@ -1283,7 +1286,7 @@ result and the seconds the call took."
       (sleep 0.2)
       (miao:cancel token)
       (bt:join-thread busy)
-      (is (eq :cancelled (miao:tool-error (bt:join-thread queued))))
+      (is (eq :cancelled (miao:result-error (bt:join-thread queued))))
       (is (not (probe-file marker))))))
 
 (test shell-kills-a-cancelled-command-and-its-group
@@ -1294,7 +1297,7 @@ result and the seconds the call took."
            (multiple-value-bind (result seconds)
                (cancelled-call 0.5 :tool-shell
                                :cmd (format nil "sleep 30 & echo $! > ~a; wait" pidfile))
-             (is (eq :cancelled (miao:tool-error result)))
+             (is (eq :cancelled (miao:result-error result)))
              (is (< seconds 5))
              (let ((grandchild (with-open-file (s pidfile) (parse-integer (read-line s)))))
                (is (wait-for-exit grandchild))))
@@ -1309,14 +1312,14 @@ result and the seconds the call took."
       (unwind-protect
            (multiple-value-bind (result seconds)
                (cancelled-call 0.3 :tool-http :url (format nil "~a/stall" url))
-             (is (eq :cancelled (miao:tool-error result)))
+             (is (eq :cancelled (miao:result-error result)))
              (is (< seconds 5)))
         (setf *stall* nil)))))
 
 (test eval-kills-a-cancelled-worker
   (with-tools
     (multiple-value-bind (result seconds) (cancelled-call 0.5 :tool-eval :form "(loop)")
-      (is (eq :cancelled (miao:tool-error result)))
+      (is (eq :cancelled (miao:result-error result)))
       (is (< seconds 5)))))
 
 (test repl-cancel-kills-the-session-worker
@@ -1324,7 +1327,7 @@ result and the seconds the call took."
     (tool :tool-repl :id "c" :form "(defparameter *kept* 1)")
     (multiple-value-bind (result seconds)
         (cancelled-call 0.5 :tool-repl :id "c" :form "(sleep 30)")
-      (is (eq :cancelled (miao:tool-error result)))
+      (is (eq :cancelled (miao:result-error result)))
       (is (< seconds 5)))
     (is (equal "NIL" (result-value (tool :tool-repl :id "c" :form "(boundp '*kept*)")
                                    :value)))))

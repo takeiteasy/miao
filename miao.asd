@@ -17,20 +17,16 @@
   :license "GPLv3"
   :version "0.1.0"
   :depends-on ("meow" "meow/logger" "alexandria" "com.inuoe.jzon" "drakma" "flexi-streams"
-               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "miao/launcher")
+               "usocket" "bordeaux-threads" "uiop" "puri" "chunga" "cl+ssl" "cl-base64" "sb-md5" "miao/launcher" "cl-inference/client")
   :serial t
   :components ((:file "package")
                (:file "miao")
                ;; Ahead of worker.lisp and tools/shell.lisp: both launch and
                ;; kill through the process-group helpers declared here.
                (:file "process")
-               ;; Ahead of tool.lisp, which tests for a token.
-               (:file "cancel")
                ;; Ahead of protocol.lisp and agent.lisp, which submit to it.
                (:file "pool")
-               (:file "schema")
-               ;; Ahead of tool.lisp, provider.lisp and the protocols: their
-               ;; DEFINE- macros record here.
+               ;; Ahead of tool.lisp: its DEFINE- macros record here.
                (:file "definitions")
                (:file "tool")
                ;; Right after tool.lisp: CHECKPOINT and ROLLBACK need only
@@ -70,24 +66,12 @@
                              (:file "calls")))
                (:module "hooks"
                 :components ((:file "approval")))
-               (:module "protocols"
-                :components ((:file "openai")
-                             (:file "ollama")))
-               ;; After the protocols: a provider layers its data onto one,
-               ;; and DEFINE-PROVIDER is a macro, so :serial order is what
-               ;; makes both available to a definition. The shared helpers
-               ;; both protocols use -- name/key conversion, JSON value
-               ;; coercion, the tools array, the deadline-bounded exchange --
-               ;; live in protocol.lisp, ahead of either.
-               (:file "provider")
-               (:module "providers"
-                :components ((:file "ollama")))
-               ;; After providers: the loop reaches a model by name through
+               ;; After protocol.lisp: the loop reaches a model by name through
                ;; COMPLETE, and defaults its tool allow-list from the
                ;; discovered tools, so both must already be defined.
                (:file "agent")
                ;; Last: SAVE-IMAGE needs CHECKPOINT (checkpoint.lisp),
-               ;; M:SUSPEND/M:RESUME, and PROVIDER-API-KEY (provider.lisp)
+               ;; M:SUSPEND/M:RESUME, and BACKEND-API-KEY (protocol.lisp)
                ;; to refuse a credentialed mount.
                (:file "image-generation"))
   :in-order-to ((test-op (test-op "miao/tests"))))
@@ -121,16 +105,13 @@
   :serial t
   :components ((:file "package")
                (:file "suite")
-               (:file "schema")
                (:file "definitions")
                (:file "launcher")
                (:file "smoke")
                (:file "protocol")
                (:file "fake-http")
-               (:file "protocol-openai")
-               (:file "protocol-ollama")
-               (:file "provider")
-               ;; After provider: it runs completions through the echo provider.
+               (:file "backend-service")
+               ;; After backend-service: it runs completions through the echo provider.
                (:file "pool")
                (:file "cli")
                (:file "agent")

@@ -133,7 +133,7 @@ outcome, if given."
     (seed-call path "x-0" :call-id "c9")
     (with-agent ((scripted (final-reply "moving on") (final-reply "got it")) 'tool-again)
       (m:with-process (runner)
-        (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :tools '(:tool-again) :journal path))
                (answer (call-child child (list :run :continue t :resume '("x-0")
                                                     :messages '((:role :user :content "go"))))))
@@ -155,7 +155,7 @@ outcome, if given."
     (seed-call path "sub" :name :agent-task)
     (with-agent ((scripted (final-reply "unused")) 'tool-again 'tool-slow)
       (m:with-process (runner)
-        (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :tools '(:tool-again :tool-slow) :journal path
                                   :sink (recorder-sink recorder)))
                (answer (call-child child (list :resume :ids '("slow" "out" "sub")))))
@@ -175,7 +175,7 @@ outcome, if given."
     (seed-call path "slow" :name :tool-slow)
     (with-agent ((scripted (final-reply "moving on") (final-reply "got it")) 'tool-slow)
       (m:with-process (runner)
-        (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :tools '(:tool-slow) :journal path))
                (answer (call-child child (list :resume :ids '("slow") :force t))))
           (is (= 1 (length (getf (second answer) :resumed))))
@@ -185,7 +185,7 @@ outcome, if given."
 (test resume-needs-a-call-log-and-ids
   (with-agent ((scripted (final-reply "unused")) 'tool-again)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :tools '(:tool-again))))
         (is (search ":journal" (princ-to-string (call-child child '(:resume :ids ("x"))))))
         (is (search ":journal" (princ-to-string (call-child child '(:run :resume ("x"))))))
@@ -193,7 +193,7 @@ outcome, if given."
   (with-vault-path (path)
     (with-agent ((scripted (final-reply "unused")) 'tool-again)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-again) :journal path)))
           (is (search ":messages or :continue"
                       (princ-to-string (call-child child '(:run :resume ("x")))))))))))
@@ -204,7 +204,7 @@ outcome, if given."
     (with-agent ((scripted (tool-call-reply "c1" "tool-slow" "{}") (final-reply "done"))
                  'tool-again 'tool-slow)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-again :tool-slow) :journal path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually (lambda () (= 1 (length (requests))))))
@@ -219,7 +219,7 @@ outcome, if given."
                            (final-reply "got it"))
                  'tool-again-slow)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-again-slow) :tool-grace 100 :journal path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually
@@ -247,7 +247,7 @@ outcome, if given."
     (seed-call path "x-2" :call-id "c7" :done :ok)
     (with-agent ((scripted (final-reply "waiting")) 'tool-again)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-again) :journal path :max-detached 1)))
           (let ((answer (second (call-child child '(:run :continue t :resume ("x-0" "x-1" "x-2")
                                                     :messages ((:role :user :content "go")))))))
@@ -293,7 +293,7 @@ outcome, if given."
     (seed-call path "x-0")
     (with-agent ((scripted (final-reply "moving on") (final-reply "got it")) 'tool-again)
       (m:mount *ctx* 'miao:tool-calls :path path)
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed
                                  :tools '(:tool-again) :journal path)
       (let ((answer (calls-tool :resume :ids '("x-0"))))
         (is (equal '("x-0") (mapcar #'car (getf (second answer) :resumed))))
@@ -312,7 +312,7 @@ outcome, if given."
     (seed-call path "slow" :name :tool-slow)
     (with-agent ((scripted (final-reply "unused")) 'tool-again 'tool-slow)
       (m:mount *ctx* 'miao:tool-calls :path path)
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed
                                  :tools '(:tool-again :tool-slow) :journal path)
       (let ((answer (calls-tool :resume :ids '("slow"))))
         (is (null (getf (second answer) :resumed)))

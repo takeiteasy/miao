@@ -110,7 +110,7 @@
   (let ((n 0))
     (with-vault-path (path)
       (with-agent ((lambda (&rest request) (declare (ignore request)) (incf n) (final-reply "done")))
-        (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :journal path)
+        (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :journal path)
         (is (eq :ok (keyed-run-named :assistant "k")))
         (is-true (wait-for-input-status path :stop))
         (is (equal '(:ok (:duplicate :stop)) (keyed-run-named :assistant "k")))
@@ -134,17 +134,17 @@
 (test a-run-keyed-with-other-messages-is-a-bad-request
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
-      (m:mount *ctx* 'miao:agent :name :assistant :model :provider-test-keyed :journal path)
+      (m:mount *ctx* 'miao:agent :name :assistant :model :test-keyed :journal path)
       (keyed-run-named :assistant "k")
       (is-true (wait-for-input-status path :stop))
       (is (eq :bad-request
-              (first (miao:tool-error (keyed-run-named :assistant "k" "something else"))))))))
+              (first (miao:result-error (keyed-run-named :assistant "k" "something else"))))))))
 
 (test a-keyed-run-with-no-call-log-is-a-bad-request
   (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
-        (is (eq :bad-request (first (miao:tool-error (keyed-run child "k")))))))))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
+        (is (eq :bad-request (first (miao:result-error (keyed-run child "k")))))))))
 
 (test a-fresh-keyed-run-on-a-busy-agent-is-not-recorded
   (let ((n 0))
@@ -156,7 +156,7 @@
                       'tool-gate)
         (:tools '(:tool-gate))
       (keyed-run child "a")
-      (is (eq :bad-request (first (miao:tool-error (keyed-run child "b")))))
+      (is (eq :bad-request (first (miao:result-error (keyed-run child "b")))))
       (is (eql 1 (length (miao:input-entries path))))
       (is-true (m:receive :timeout 5)))))
 
@@ -178,7 +178,7 @@
     (with-vault-path (path)
       (with-agent ((lambda (&rest request) (declare (ignore request)) (incf n) (final-reply "done")))
         (flet ((go-run ()
-                 (miao:run-agent *ctx* :model :provider-test-keyed :journal path
+                 (miao:run-agent *ctx* :model :test-keyed :journal path
                                        :input-id "k"
                                        :messages '((:role :user :content "go")))))
           (is (eq :ok (first (go-run))))
@@ -189,16 +189,16 @@
   (with-vault-path (path)
     (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed :vault path)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed :vault path)))
           (is (eq :ok (m:call child '(:steer :content "x" :input-id "k"))))
           (is (equal '(:ok (:duplicate :pending)) (m:call child '(:steer :content "x" :input-id "k"))))
-          (is (eq :bad-request (first (miao:tool-error
+          (is (eq :bad-request (first (miao:result-error
                                        (m:call child '(:steer :content "y" :input-id "k"))))))
           (is (eql 1 (length (miao:vault-entries path)))))))))
 
 (test a-keyed-steer-with-no-vault-is-a-bad-request
   (with-agent ((lambda (&rest request) (declare (ignore request)) (final-reply "done")))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
         (is (eq :bad-request
-                (first (miao:tool-error (m:call child '(:steer :content "x" :input-id "k"))))))))))
+                (first (miao:result-error (m:call child '(:steer :content "x" :input-id "k"))))))))))

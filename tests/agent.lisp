@@ -106,7 +106,7 @@
 ;;; --- the harness --------------------------------------------------------
 
 (defun call-with-agent (answer tool-classes body)
-  "Like WITH-PROVIDERS, plus the tools TOOL-CLASSES names mounted alongside
+  "Like WITH-BACKENDS, plus the tools TOOL-CLASSES names mounted alongside
 the keyed provider, ready for RUN-AGENT."
   (let* ((registry (make-instance 'm:registry))
          (m:*registry* registry)
@@ -118,10 +118,8 @@ the keyed provider, ready for RUN-AGENT."
     (setf *backend* server)
     (unwind-protect
          (progn
-           (m:mount context 'miao:protocol-openai)
-           (m:mount context 'miao:protocol-ollama)
            (let ((mount (keyed)))
-             (apply #'m:mount context (first mount)
+             (apply #'mount-backend context (first mount)
                     :base-url (fake-http-url server) (rest mount)))
            (dolist (class tool-classes) (m:mount context class))
            (funcall body context))
@@ -134,7 +132,7 @@ the keyed provider, ready for RUN-AGENT."
 (defvar *ctx* nil "The running context, bound by WITH-AGENT.")
 
 (defun agent-turn (&rest extra)
-  (apply #'miao:run-agent *ctx* :model :provider-test-keyed extra))
+  (apply #'miao:run-agent *ctx* :model :test-keyed extra))
 
 (defun requests () (fake-http-requests *backend*))
 
@@ -299,7 +297,7 @@ object)."
                  (sleep 0.3)
                  (final-reply "too late")))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (m:cast child '(:cancel))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -313,7 +311,7 @@ object)."
   (with-agent ((stalled-stream "application/json" "{\"choices\":["))
     (with-hold
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :turn-timeout 30000)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually #'completion-running-p))
@@ -333,7 +331,7 @@ object)."
                        (final-reply "done")))
                 'tool-echo)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-echo))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (m:cast child (list :steer :content "also do this"))
@@ -383,7 +381,7 @@ sink's events, oldest first."
       (unwind-protect
            (m:with-process (runner)
              (let ((child (apply #'m:delegate *ctx* 'miao:agent
-                                 :model :provider-test-keyed
+                                 :model :test-keyed
                                  :sink (recorder-sink recorder)
                                  delegate-args)))
                (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -422,7 +420,7 @@ sink's events, oldest first."
                        (progn (sleep 0.5) (final-reply "too late"))
                        (final-reply "done"))))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually (lambda () (requests))))
           (m:cast child (list :steer :content "change of plan" :interrupt t))
@@ -439,7 +437,7 @@ sink's events, oldest first."
   ;; interrupt: the steer folds into the first turn, and only one is issued.
   (with-agent ((final-reply "done"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (m:cast child (list :steer :content "early" :interrupt t))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -471,7 +469,7 @@ and the seconds from the steer to it."
    answer tool-classes
    (lambda (*ctx*)
      (m:with-process (runner)
-       (let ((child (apply #'m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+       (let ((child (apply #'m:delegate *ctx* 'miao:agent :model :test-keyed
                            delegate-args)))
          (m:cast child (list :run :messages '((:role :user :content "go"))))
          (is-true (eventually (lambda () (funcall ready (m:call child '(:snapshot))))))
@@ -579,7 +577,7 @@ and the seconds from the steer to it."
      '()
      (lambda (*ctx*)
        (m:with-process (runner)
-         (let ((parent (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+         (let ((parent (m:delegate *ctx* 'miao:agent :model :test-keyed
                                    :sub-agents t)))
            (m:cast parent (list :run :messages '((:role :user :content "go"))))
            (let ((sub (other-agent-child *ctx* parent)))
@@ -597,7 +595,7 @@ and the seconds from the steer to it."
   (setf *tool-wait-cancelled* nil)
   (with-agent ((tool-call-reply "c1" "tool-wait" "{}") 'tool-wait)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :tools '(:tool-wait))))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually
@@ -616,7 +614,7 @@ and the seconds from the steer to it."
                'tool-hold)
     (m:with-process (runner)
       (let* ((recorder (make-recorder))
-             (child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+             (child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-hold)
                                 :sink (recorder-sink recorder))))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -647,7 +645,7 @@ and the seconds from the steer to it."
   "Restore a three-message conversation onto a fresh agent, :RUN it with
 RUN-ARGS and return the run's result."
   (m:with-process (runner)
-    (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+    (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                              :system "be brief")))
       (m:call child (list :restore (list :messages (restored-conversation) :turns 3)))
       (m:cast child (list* :run run-args))
@@ -670,7 +668,7 @@ RUN-ARGS and return the run's result."
 (test a-snapshot-keeps-its-messages-when-the-conversation-grows
   (with-agent ((final-reply "ok"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed)))
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed)))
         (m:call child (list :restore (list :messages (restored-conversation) :turns 3)))
         (let* ((snapshot (getf (m:call child (list :snapshot)) :messages))
                (before (copy-tree snapshot)))
@@ -730,7 +728,7 @@ RUN-ARGS and return the run's result."
     (is (equal before messages))))
 
 (defun mount-source-agent (&rest initargs)
-  (apply #'m:mount *ctx* 'miao:agent :name :source :model :provider-test-keyed initargs)
+  (apply #'m:mount *ctx* 'miao:agent :name :source :model :test-keyed initargs)
   (m:call (m:lookup :source)
           (list :restore (list :messages (tooled-conversation) :turns 2))))
 
@@ -764,7 +762,7 @@ RUN-ARGS and return the run's result."
 
 (test forking-a-running-agent-closes-its-unanswered-calls
   (with-agent ((tool-call-reply "c1" "tool-hold" "{}") 'tool-hold)
-    (m:mount *ctx* 'miao:agent :name :source :model :provider-test-keyed
+    (m:mount *ctx* 'miao:agent :name :source :model :test-keyed
                                :tools '(:tool-hold))
     (m:cast (m:lookup :source) (list :run :messages '((:role :user :content "go"))))
     (is-true (eventually
@@ -787,7 +785,7 @@ RUN-ARGS and return the run's result."
 (test a-system-prompt-is-not-sent-twice
   (with-agent ((final-reply "ok"))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                                  :system "be brief")))
         (m:cast child (list :run :messages (restored-conversation)))
         (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -819,10 +817,10 @@ RUN-ARGS and return the run's result."
            (result (agent-turn :messages '((:role :user :content "hi"))
                                :sink (recorder-sink recorder)))
            (events (recorded-events recorder)))
-      (is (eq :backend-error (first (miao:tool-error result))))
+      (is (eq :backend-error (first (miao:result-error result))))
       (is (equal '(:run-start :turn :done :run-done)
                  (mapcar (lambda (e) (getf e :type)) events)))
-      (is (miao:tool-error-p (getf (third events) :reason))))))
+      (is (miao:result-error-p (getf (third events) :reason))))))
 
 ;;; A function sink is called from one emitter per agent, a sub-agent's
 ;;; events included, one event at a time, so a sink that blocks never holds up
@@ -857,12 +855,12 @@ RUN-ARGS and return the run's result."
 
 (test a-blocking-sink-holds-up-neither-the-run-nor-cancel
   (let ((stuck (bt:make-semaphore))
-        (grace miao::*sink-grace*))
-    (setf miao::*sink-grace* 0.3)
+        (grace miao::*emitter-grace*))
+    (setf miao::*emitter-grace* 0.3)
     (unwind-protect
          (with-agent ((sse-tool-call "c1" "tool-wait" "{}") 'tool-wait)
            (m:with-process (runner)
-             (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+             (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                       :tools '(:tool-wait)
                                       :sink (lambda (event)
                                               (declare (ignore event))
@@ -876,7 +874,7 @@ RUN-ARGS and return the run's result."
                  (is-true received)
                  (is (eq :cancelled (getf (second (fourth message)) :stop-reason))))
                (is-true (eventually #'sinks-idle-p 5)))))
-      (setf miao::*sink-grace* grace)
+      (setf miao::*emitter-grace* grace)
       (bt:signal-semaphore stuck :count 100))))
 
 (test a-cancelled-turn-streams-nothing-after-run-done
@@ -885,7 +883,7 @@ RUN-ARGS and return the run's result."
     (with-agent ((interruptible-backend release))
       (unwind-protect
            (m:with-process (runner)
-             (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+             (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                       :sink (recorder-sink recorder))))
                (m:cast child (list :run :messages '((:role :user :content "go"))))
                (is-true (eventually (lambda () (recorder-has recorder :text-delta))))
@@ -901,7 +899,7 @@ RUN-ARGS and return the run's result."
     (with-agent ((interruptible-backend release))
       (unwind-protect
            (m:with-process (runner)
-             (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+             (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                       :sink (recorder-sink recorder))))
                (m:cast child (list :run :messages '((:role :user :content "go"))))
                (is-true (eventually (lambda () (recorder-has recorder :text-delta))))
@@ -957,7 +955,7 @@ test's."
                        ;; before its own turn would otherwise finish it.
                        (progn (sleep 0.5) (final-reply "recovered")))))
       (m:with-process (runner)
-        (let ((parent (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((parent (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :sub-agents t)))
           (m:cast parent (list :run :messages '((:role :user :content "go"))))
           (let ((sub (other-agent-child *ctx* parent)))
@@ -978,17 +976,17 @@ test's."
 
 (test a-mounted-agent-is-discoverable-and-describes-itself
   (with-agent ((final-reply "hi"))
-    (m:mount *ctx* 'miao:agent :name :agent-under-test :model :provider-test-keyed)
+    (m:mount *ctx* 'miao:agent :name :agent-under-test :model :test-keyed)
     (is (member :agent-under-test (miao:agents) :test #'equal))
     (let ((metadata (miao:describe-agent :agent-under-test)))
       (is (eq :agent (getf metadata :kind)))
-      (is (eq :provider-test-keyed (getf metadata :model))))))
+      (is (eq :test-keyed (getf metadata :model))))))
 ;;; --- addressable sub-agents (~takeiteasy/miao#121) ----------------------
 
 (defun named-parent-with-slow-child (&key vault)
   "A mounted :BOSS that delegates one task whose child is slow, so it is live
 for a while. Returns the process once the child is registered."
-  (let ((parent (m:mount *ctx* 'miao:agent :name :boss :model :provider-test-keyed
+  (let ((parent (m:mount *ctx* 'miao:agent :name :boss :model :test-keyed
                                            :sub-agents t :vault vault)))
     (m:cast parent (list :run :messages '((:role :user :content "go"))))
     (is-true (eventually (lambda () (miao:sub-agents :boss))))
@@ -1014,14 +1012,14 @@ for a while. Returns the process once the child is registered."
 
 (test a-sub-agent-name-skips-one-a-live-agent-holds
   (with-agent ((slow-child-answer 0.5))
-    (m:mount *ctx* 'miao:agent :name :boss/1 :model :provider-test-keyed)
+    (m:mount *ctx* 'miao:agent :name :boss/1 :model :test-keyed)
     (named-parent-with-slow-child)
     (is (equal '(:boss/2) (miao:sub-agents :boss)))))
 
 (test a-sub-agent-of-an-unnamed-parent-stays-unnamed
   (with-agent ((slow-child-answer 0.5))
     (m:with-process (runner)
-      (let ((parent (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((parent (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :sub-agents t)))
         (m:cast parent (list :run :messages '((:role :user :content "go"))))
         (is-true (other-agent-child *ctx* parent))
@@ -1107,7 +1105,7 @@ for a while. Returns the process once the child is registered."
 (test cancel-closes-queued-calls
   (with-agent (#'wait-then-echo 'tool-wait 'tool-echo)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :tools '(:tool-wait :tool-echo) :max-parallel-tools 1)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually (lambda () (in-tool-phase-p (m:call child '(:snapshot))))))
@@ -1122,7 +1120,7 @@ for a while. Returns the process once the child is registered."
 (test a-snapshot-closes-queued-calls-as-interrupted
   (with-agent (#'wait-then-echo 'tool-wait 'tool-echo)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :tools '(:tool-wait :tool-echo) :max-parallel-tools 1)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually (lambda () (in-tool-phase-p (m:call child '(:snapshot))))))
@@ -1209,9 +1207,9 @@ for a while. Returns the process once the child is registered."
 (miao::define-tool-handler tool-nested (service args)
   args
   (let ((result (miao:run-agent (m:service-process (m:service-context service))
-                                :model :provider-test-keyed :tools '(:tool-echo)
+                                :model :test-keyed :tools '(:tool-echo)
                                 :messages '((:role :user :content "inner")))))
-    (if (miao::tool-error-p result)
+    (if (miao::result-error-p result)
         result
         (miao::ok :answer (miao:content-text (getf (second result) :content))))))
 
@@ -1257,21 +1255,21 @@ for a while. Returns the process once the child is registered."
   (with-agent ((fails-then 10 503 nil))
     (let ((result (agent-turn :messages '((:role :user :content "go"))
                               :turn-retries 2 :retry-backoff 5)))
-      (is (eq :backend-error (first (miao:tool-error result))))
-      (is (= 503 (second (miao:tool-error result))))
+      (is (eq :backend-error (first (miao:result-error result))))
+      (is (= 503 (second (miao:result-error result))))
       (is (= 3 (length (requests)))))))
 
 (test a-failure-a-retry-cannot-fix-is-not-retried
   (with-agent ((fails-then 10 400 nil))
     (let ((result (agent-turn :messages '((:role :user :content "go"))
                               :turn-retries 2 :retry-backoff 5)))
-      (is (eq :backend-error (first (miao:tool-error result))))
+      (is (eq :backend-error (first (miao:result-error result))))
       (is (= 1 (length (requests)))))))
 
 (test a-turn-is-not-retried-by-default
   (with-agent ((fails-then 10 500 nil))
     (let ((result (agent-turn :messages '((:role :user :content "go")))))
-      (is (eq :backend-error (first (miao:tool-error result))))
+      (is (eq :backend-error (first (miao:result-error result))))
       (is (= 1 (length (requests)))))))
 
 (test retryable-p-takes-the-transient-shapes-only
@@ -1322,7 +1320,7 @@ for a while. Returns the process once the child is registered."
   (let ((recorder (make-recorder)))
     (with-agent ((fails-then 10 500 nil))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :turn-retries 2 :retry-backoff 300
                                  :sink (recorder-sink recorder))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -1338,7 +1336,7 @@ for a while. Returns the process once the child is registered."
   (let ((recorder (make-recorder)))
     (with-agent ((fails-then 1 500 (streamed-reply "ok")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :turn-retries 2 :retry-backoff 300
                                  :sink (recorder-sink recorder))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -1356,7 +1354,7 @@ for a while. Returns the process once the child is registered."
   (let ((recorder (make-recorder)))
     (with-agent ((fails-then 1 500 (streamed-reply "ok")))
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :turn-retries 2 :retry-backoff 5000
                                  :sink (recorder-sink recorder))))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
@@ -1564,7 +1562,7 @@ first message of each request as the backend saw it."
 (test the-ratio-is-in-the-metadata
   (with-agent ((chatty-backend))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :chars-per-token 9/2)))
         (is (= 9/2 (getf (m:call child '(:describe)) :chars-per-token)))))))
 
@@ -1605,7 +1603,7 @@ first message of each request as the backend saw it."
 (test the-context-budget-is-in-the-metadata
   (with-agent ((chatty-backend))
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :max-context 1234)))
         (is (= 1234 (getf (m:call child '(:describe)) :max-context)))))))
 

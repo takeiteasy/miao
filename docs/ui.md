@@ -11,7 +11,7 @@ hears back as events. Nothing else crosses the line.
 [Client state](client-state.md) folds these events for a front end to draw.
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama)
 (m:call (m:lookup :assistant) (list :subscribe #'draw-event))
 (m:cast (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))))
 ```

@@ -5,7 +5,7 @@ exactly, and the events the loop emitted. The conversation at the end of any
 run reads back from it.
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama :journal t)
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama :journal t)
 
 (miao:journal-conversation "~/.miao/journal.log" :agent :assistant)
 ;; => ((:role :user :content "hi") (:role :assistant :content "hello")), 1

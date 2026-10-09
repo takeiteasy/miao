@@ -158,7 +158,7 @@ answered as an error."
   "ANSWER, a hook's reply to PHASE, as (values :pass), (values :rewrite value),
 (values :deny reason) or (values :failed reason)."
   (cond ((eq answer :pass) :pass)
-        ((tool-error-p answer) (values :failed (tool-error answer)))
+        ((result-error-p answer) (values :failed (result-error answer)))
         ((and (consp answer) (eq (first answer) :rewrite) (consp (cdr answer)))
          (if (%valid-subject-p phase (second answer))
              (values :rewrite (second answer))

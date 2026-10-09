@@ -15,11 +15,10 @@ one.
 ## Running one
 
 ```lisp
-(m:mount *ctx* 'miao:protocol-ollama)
-(m:mount *ctx* 'miao:provider-ollama :model "llama3.2")
+(m:mount *ctx* 'miao:backend-service :name :ollama :model "llama3.2")
 (m:mount *ctx* 'miao:tool-shell)
 
-(miao:run-agent *ctx* :model :provider-ollama :tools '(:tool-shell)
+(miao:run-agent *ctx* :model :ollama :tools '(:tool-shell)
                 :messages '((:role :user :content "How many .lisp files are here?")))
 ```
 
@@ -31,7 +30,7 @@ A mounted, named agent works the same way any tool or provider does, driven
 by messages instead:
 
 ```lisp
-(m:mount *ctx* 'miao:agent :name :assistant :model :provider-ollama)
+(m:mount *ctx* 'miao:agent :name :assistant :model :ollama)
 (m:cast (m:lookup :assistant) '(:run :messages ((:role :user :content "hi"))))
 ```
 
@@ -77,7 +76,7 @@ when its run ends, so use `run-agent` for a one-shot run.[^conversation]
 site names them explicitly:
 
 ```lisp
-(m:mount *ctx* 'miao:agent :model :provider-ollama :tools '(:tool-shell))
+(m:mount *ctx* 'miao:agent :model :ollama :tools '(:tool-shell))
 ```
 
 Once named, an operator tool runs unasked. The [approval hook](approvals.md)
@@ -185,7 +184,7 @@ past `:tool-grace`, or at once when its tool's [metadata](tools.md) says
 | The run ends | a call still detached is [cancelled](#cancelling-tool-calls), emitted as `(:error :interrupted)` and logged `:interrupted` |
 
 ```lisp
-(m:mount *ctx* 'miao:agent :model :provider-ollama :tools '(:tool-shell)
+(m:mount *ctx* 'miao:agent :model :ollama :tools '(:tool-shell)
                            :tool-grace 5000)
 ```
 

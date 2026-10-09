@@ -2,7 +2,9 @@
 
 A tool's `:params` is a typed schema. It is canonical in both directions: it
 renders to the JSON Schema a model needs for tool calling, and imports from one
-an external tool arrives with. One validator, one coercion path.
+an external tool arrives with. One validator, one coercion path. The schema
+is [cl-inference/client](https://github.com/takeiteasy/cl-inference/blob/trunk/docs/client.md#schemas)'s;
+miao re-exports it, and `define-tool` checks its `:params` with it.
 
 ```lisp
 :params '((:cmd     string                     :doc "command string to run")
@@ -99,7 +101,7 @@ declared type, and carries no coercion of its own.
 ```
 
 `schema->json-schema` returns an insertion-ordered JSON object, which jzon
-serialises directly, so a protocol embeds it in a larger request body rather
+serialises directly, so a backend embeds it in a larger request body rather
 than splicing strings. Properties render in declaration order, which keeps a
 request body stable for prompt caching. `json-schema->schema` is its inverse;
 an unrecognised construct is an error, matching the closed set.

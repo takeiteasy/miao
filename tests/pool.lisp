@@ -41,10 +41,10 @@
     (call-with-echo-provider
      (lambda (context)
        (let* ((agent (in-thread (lambda ()
-                                  (miao:run-agent context :model :provider-test-echo
+                                  (miao:run-agent context :model :test-echo
                                                           :tools '()
                                                           :messages '((:role :user :content "hi"))))))
-              (results (concurrently 3 (lambda () (turn :provider-test-echo :delay 0.1)))))
+              (results (concurrently 3 (lambda () (turn :test-echo :delay 0.1)))))
          (is (every (lambda (result) (eq :ok (first result))) results))
          (is (eq :stop (getf (second (bt:join-thread agent)) :stop-reason))))))))
 
@@ -76,7 +76,7 @@
     (let ((result (miao:complete :protocol-router :target :protocol-router
                                  :messages '((:role :user :content "hi"))
                                  :timeout 5000)))
-      (is (eq :bad-request (first (miao:tool-error result)))))))
+      (is (eq :bad-request (first (miao:result-error result)))))))
 
 (test withdrawing-is-exact
   (let* ((pool (miao::%make-pool :test 1))
@@ -168,7 +168,7 @@
              (let ((stuck (in-thread (lambda ()
                                        (apply #'miao:complete :protocol-echo
                                               (hello :stall 1.5 :timeout 300))))))
-               (is (eq :timeout (miao:tool-error (bt:join-thread stuck))))
+               (is (eq :timeout (miao:result-error (bt:join-thread stuck))))
                (is (< (elapsed-since start) 1.2))
                (is (eq :ok (first (apply #'miao:complete :protocol-echo (hello)))))
                (sleep 1.3)
@@ -218,11 +218,11 @@
               miao::*pool-max-abandoned* 1)
         (unwind-protect
              (progn
-               (is (eq :timeout (miao:tool-error
+               (is (eq :timeout (miao:result-error
                                  (apply #'miao:complete :protocol-echo
                                         (hello :stall 1.2 :timeout 200)))))
                (is-true (eventually (lambda () (= 1 (getf (miao:pool-stats 0) :stuck)))))
-               (is (eq :unavailable (miao:tool-error
+               (is (eq :unavailable (miao:result-error
                                      (apply #'miao:complete :protocol-echo (hello)))))
                (is-true (eventually (lambda () (zerop (getf (miao:pool-stats 0) :stuck))) 3))
                (is (eq :ok (first (apply #'miao:complete :protocol-echo (hello))))))

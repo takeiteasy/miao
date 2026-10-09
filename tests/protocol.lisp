@@ -1,29 +1,26 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The protocol convention exercised through the real registry and service
-;;; stack, against an echo protocol that implements the contract and nothing
+;;; The completion path exercised through the real registry and service
+;;; stack, against an echo backend that implements the contract and nothing
 ;;; else: discovery by registration props, pre-flight checking on both the
 ;;; COMPLETE and the bare M:CALL paths, content normalisation, and the
 ;;; streaming vocabulary.
 
-(m:defservice protocol-echo (miao:completion-host) ()
-  (:name :protocol-echo))
-
-(defmethod m:metadata ((service protocol-echo))
-  (list :kind :protocol
-        :name :protocol-echo
-        :summary "Echo the last user message"
-        :params '((:temperature number :doc "sampling temperature"))))
+(defclass echo-backend (ci:protocol-backend) ()
+  (:default-initargs
+   :name :protocol-echo
+   :summary "Echo the last user message"
+   :params '((:temperature number :doc "sampling temperature"))))
 
 (defun echo-hold (request)
   "Park until REQUEST's cancel token fires."
   (loop until (miao:cancelled-p (getf request :cancel)) do (sleep 0.01))
-  (list :error :cancelled))
+  (miao:fail :cancelled))
 
 (defvar *echo-runs* 0 "How many completions the echo protocol has begun.")
 
-(miao:define-protocol-handler protocol-echo (service request)
+(defmethod ci:backend-complete ((backend echo-backend) request)
   (incf *echo-runs*)
   (when (getf request :delay) (sleep (getf request :delay)))
   (when (getf request :stall)
@@ -32,19 +29,22 @@
   (if (getf request :hold)
       (echo-hold request)
       (let* ((ref (getf request :ref))
+             (sink (getf request :stream))
              (text (miao:content-text
                     (getf (car (last (getf request :messages))) :content))))
-        (when (getf request :stream)
-          (miao:emit-event (getf request :stream) (miao:text-delta ref text))
-          (miao:emit-event (getf request :stream) (miao:text-delta ref "!"))
-          (miao:emit-event (getf request :stream) (miao:done ref :stop)))
+        (when sink
+          (funcall sink (miao:text-delta ref text))
+          (funcall sink (miao:text-delta ref "!")))
         (list :ok (list :role :assistant
                         :content (miao:normalize-content
                                   (concatenate 'string text "!"))
                         :tool-calls nil
                         :done t
-                        :meta (list :echoed (length (getf request :messages))
+                        :meta (list :finish-reason :stop
+                                    :echoed (length (getf request :messages))
                                     :timeout (getf request :timeout)))))))
+
+(ci:register-backend (make-instance 'echo-backend))
 
 (defvar *protocol-context* nil)
 
@@ -55,7 +55,7 @@
                                    :registry registry)))
     (setf *protocol-context* context)
     (unwind-protect
-         (progn (apply #'m:mount context 'protocol-echo mount-args)
+         (progn (apply #'m:mount context 'miao:backend-service :name :protocol-echo mount-args)
                 (funcall body))
       (m:stop context))))
 
@@ -111,7 +111,7 @@
 ;;; --- pre-flight -------------------------------------------------------
 
 (defun bad-request-p (result)
-  (let ((reason (miao:tool-error result)))
+  (let ((reason (miao:result-error result)))
     (and (consp reason) (eq :bad-request (first reason)))))
 
 (test a-malformed-request-never-reaches-the-protocol
@@ -164,25 +164,9 @@
       (is (equal "hello" (getf (first events) :text)))
       (is (eq :stop (getf (third events) :reason))))))
 
-(test streaming-to-a-process-sink
-  (with-protocol
-    (let* ((collected '())
-           (done (bt:make-semaphore))
-           (sink (m:spawn (lambda ()
-                            (loop for event = (m:receive :timeout 5)
-                                  while event
-                                  do (push event collected)
-                                  until (eq :done (getf event :type))
-                                  finally (bt:signal-semaphore done)))
-                          :name "protocol-sink")))
-      (apply #'miao:complete :protocol-echo (hello :ref 7 :stream sink))
-      (is (bt:wait-on-semaphore done :timeout 5))
-      (is (= 3 (length collected)))
-      (is (eq :done (getf (first collected) :type))))))
-
 (test a-null-sink-drops-events
   (is (equal '(:type :done :ref nil :reason nil)
-             (miao:emit-event nil (miao:done nil)))))
+             (miao:deliver-event nil (miao:done nil)))))
 
 
 ;;; --- concurrency ------------------------------------------------------
@@ -227,13 +211,13 @@
         (is (eq :protocol (getf (miao:describe-protocol :protocol-echo) :kind)))
         (is (< (elapsed-since start) 0.5)))
       (miao:cancel token)
-      (is (eq :cancelled (miao:tool-error (bt:join-thread thread)))))))
+      (is (eq :cancelled (miao:result-error (bt:join-thread thread)))))))
 
 (test a-worker-that-signals-answers-its-caller
   (with-protocol
     (let ((start (get-internal-real-time))
           (result (apply #'miao:complete :protocol-echo (hello :boom t))))
-      (is (miao:tool-error-p result))
+      (is (miao:result-error-p result))
       (is (< (elapsed-since start) 2)))))
 
 (test stopping-a-service-cancels-what-it-has-in-flight
@@ -245,7 +229,7 @@
            (start (get-internal-real-time)))
       (sleep 0.1)
       (m:unmount *protocol-context* :protocol-echo)
-      (is (eq :cancelled (miao:tool-error (bt:join-thread thread))))
+      (is (eq :cancelled (miao:result-error (bt:join-thread thread))))
       (is (< (elapsed-since start) 3)))))
 
 ;;; --- the in-flight cap -------------------------------------------------
@@ -281,11 +265,11 @@
         (sleep 0.1)
         (let ((start (get-internal-real-time)))
           (miao:cancel token)
-          (is (eq :cancelled (miao:tool-error (bt:join-thread queued))))
+          (is (eq :cancelled (miao:result-error (bt:join-thread queued))))
           (is (< (elapsed-since start) 0.5)))
         (is (= runs *echo-runs*))
         (miao:cancel held-token)
-        (is (eq :cancelled (miao:tool-error (bt:join-thread held))))))))
+        (is (eq :cancelled (miao:result-error (bt:join-thread held))))))))
 
 (test queued-time-counts-against-the-timeout
   (with-capped-protocol (1)
@@ -294,7 +278,7 @@
       (sleep 0.1)
       (let ((start (get-internal-real-time))
             (result (apply #'miao:complete :protocol-echo (hello :timeout 200))))
-        (is (eq :timeout (miao:tool-error result)))
+        (is (eq :timeout (miao:result-error result)))
         (is (< (elapsed-since start) 0.45)))
       (is (eq :ok (first (bt:join-thread busy)))))))
 
@@ -335,8 +319,8 @@
            (start (get-internal-real-time)))
       (sleep 0.1)
       (m:unmount *protocol-context* :protocol-echo)
-      (is (eq :cancelled (miao:tool-error (bt:join-thread held))))
-      (is (eq :cancelled (miao:tool-error (bt:join-thread queued))))
+      (is (eq :cancelled (miao:result-error (bt:join-thread held))))
+      (is (eq :cancelled (miao:result-error (bt:join-thread queued))))
       (is (< (elapsed-since start) 3)))))
 
 (test a-queued-job-that-signals-still-answers
@@ -346,7 +330,7 @@
           (start (get-internal-real-time)))
       (sleep 0.05)
       (let ((result (apply #'miao:complete :protocol-echo (hello :boom t))))
-        (is (equal '(:error "boom") (miao:tool-error result)))
+        (is (equal '(:error "boom") (miao:result-error result)))
         (is (< (elapsed-since start) 1)))
       (bt:join-thread busy))))
 
@@ -375,112 +359,3 @@
 
 (test max-in-flight-must-be-a-positive-integer
   (signals error (call-with-protocol (lambda ()) :max-in-flight 0)))
-
-;;; --- results ----------------------------------------------------------
-
-(test backend-error-is-its-own-shape
-  (let ((result (miao:backend-error 429 "rate limited")))
-    (is (miao:tool-error-p result))
-    (is (equal '(:backend-error 429 "rate limited") (miao:tool-error result)))))
-
-(test backend-error-carries-a-retry-after-only-when-given
-  (is (equal '(:backend-error 429 "slow" :retry-after 2000)
-             (miao:tool-error (miao:backend-error 429 "slow" :retry-after 2000)))))
-
-(test retry-after-ms-reads-the-headers
-  (flet ((wait (&rest headers) (miao::retry-after-ms headers)))
-    (is (= 2000 (wait '(:retry-after . "2"))))
-    (is (= 1500 (wait '(:retry-after . "1.5"))))
-    (is (= 1500 (wait '(:retry-after-ms . "1500"))))
-    (is (= 250 (wait '(:retry-after-ms . "250") '(:retry-after . "9"))))
-    (is (null (wait)))
-    (is (null (wait '(:retry-after . "soon"))))
-    (is (null (wait '(:retry-after . "-3"))))
-    (is (null (wait '(:retry-after . ""))))
-    (is (= 0 (wait '(:retry-after . "Wed, 21 Oct 2015 07:28:00 GMT"))))))
-
-(test retry-after-ms-reads-an-http-date
-  (let ((date (miao::http-date-universal-time "Wed, 21 Oct 2026 07:28:00 GMT")))
-    (is (= (encode-universal-time 0 28 7 21 10 2026 0) date))
-    (is (null (miao::http-date-universal-time "21 Oct 2026")))
-    (is (null (miao::http-date-universal-time "Wed, 21 Foo 2026 07:28:00 GMT")))
-    (is (null (miao::http-date-universal-time "Wed, 21 Oct 2026 07:28:00 PST")))))
-
-(test tool-call-deltas-carry-argument-fragments
-  (let ((event (miao:tool-call-delta :r :id "c1" :name :tool-shell
-                                        :arguments "{\"cmd\"")))
-    (is (eq :tool-call-delta (getf event :type)))
-    (is (equal "c1" (getf event :id)))
-    (is (equal "{\"cmd\"" (getf event :arguments)))))
-
-;;; --- cancel tokens --------------------------------------------------------
-
-(test a-cancel-token-runs-its-actions-once
-  (let ((token (miao:make-cancel-token))
-        (runs 0))
-    (miao::on-cancel token (lambda () (incf runs)))
-    (is-false (miao:cancelled-p token))
-    (is-true (miao:cancel token))
-    (is-false (miao:cancel token))
-    (is-true (miao:cancelled-p token))
-    (is (= 1 runs))))
-
-(test cancel-answers-true-the-first-time-with-no-actions
-  (let ((token (miao:make-cancel-token)))
-    (is-true (miao:cancel token))
-    (is-false (miao:cancel token))))
-
-(test an-action-registered-after-cancel-runs-at-once
-  (let ((token (miao:make-cancel-token))
-        (runs 0))
-    (miao:cancel token)
-    (miao::on-cancel token (lambda () (incf runs)))
-    (is (= 1 runs))))
-
-;;; --- the exchange's deadline -------------------------------------------------
-
-(test an-exchange-runs-on-the-calling-thread
-  (is (equal (list (bt:current-thread) nil)
-             (multiple-value-list
-              (miao::call-with-deadline 1000 (lambda (connect)
-                                               (declare (ignore connect))
-                                               (bt:current-thread)))))))
-
-(test the-deadline-unwinds-an-exchange-that-does-not-return
-  (let ((start (get-internal-real-time)))
-    (is (equal '(nil :timeout)
-               (multiple-value-list
-                (miao::call-with-deadline 200 (lambda (connect)
-                                                (declare (ignore connect))
-                                                (sleep 10))))))
-    (is (< (elapsed-since start) 2))))
-
-(test a-cancel-unwinds-an-exchange-that-does-not-return
-  (let ((token (miao:make-cancel-token))
-        (start (get-internal-real-time)))
-    (bt:make-thread (lambda () (sleep 0.2) (miao:cancel token)))
-    (is (equal '(nil :cancelled)
-               (multiple-value-list
-                (miao::call-with-deadline 10000 (lambda (connect)
-                                                  (declare (ignore connect))
-                                                  (sleep 10))
-                                          :cancel token))))
-    (is (< (elapsed-since start) 2))))
-
-(test a-finished-exchange-ignores-a-later-cancel-and-deadline
-  (let ((token (miao:make-cancel-token)))
-    (is (equal '(:done nil)
-               (multiple-value-list
-                (miao::call-with-deadline 300 (lambda (connect)
-                                                (declare (ignore connect))
-                                                :done)
-                                          :cancel token))))
-    (miao:cancel token)
-    ;; Past the deadline too: neither may reach this thread.
-    (sleep 0.5)
-    (is (equal '(:next nil)
-               (multiple-value-list
-                (miao::call-with-deadline 1000 (lambda (connect)
-                                                 (declare (ignore connect))
-                                                 (sleep 0.3)
-                                                 :next)))))))

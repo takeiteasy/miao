@@ -127,12 +127,11 @@ for one cut short by :max-turns or :timeout, 1 for anything else."
   "Mount the provider and tools OPTIONS name on CONTEXT. Answers the
 provider's service name, the tool names and the system prompt."
   (multiple-value-bind (provider model) (split-model (getf options :model))
-    (let ((provider-name (named "provider-" provider))
+    (let ((provider-name (named "" provider))
           (tools (mapcar (lambda (name) (named "" name)) (getf options :tools))))
       (unless (member provider-name (miao:definitions :kind :provider))
         (usage-error "no provider ~s; defined: ~{~(~a~)~^, ~}" provider
-                     (mapcar (lambda (name) (subseq (string name) (length "provider-")))
-                             (miao:definitions :kind :provider))))
+                     (miao:definitions :kind :provider)))
       (dolist (tool tools)
         (unless (member tool (miao:definitions :kind :tool))
           (usage-error "no tool ~(~a~); defined: ~{~(~a~)~^, ~}" tool (miao:definitions :kind :tool))))

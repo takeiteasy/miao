@@ -11,6 +11,10 @@
         do (sleep 0.01)
         finally (return value)))
 
+(defun mount-backend (context name &rest initargs)
+  "Mount the client backend NAME under CONTEXT as a service of its own name."
+  (apply #'m:mount context 'miao:backend-service :name name initargs))
+
 (defun call-with-pool-sizes (sizes body)
   "Run BODY with each tier in SIZES, a plist, capped at its size, starting
 from no idle threads."

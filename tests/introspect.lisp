@@ -31,14 +31,14 @@ travels in a TOOL-IMAGE reply.")
 (test image-describe-an-unknown-symbol-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (tool :tool-image :op :describe
                                         :symbol "totally-unknown-symbol-xyz"
                                         :package "miao")))))))
 
 (test image-describe-requires-symbol
   (with-tools
-    (is (equal :bad-request (first (miao:tool-error (tool :tool-image :op :describe)))))))
+    (is (equal :bad-request (first (miao:result-error (tool :tool-image :op :describe)))))))
 
 (test image-apropos-finds-and-caps-results
   (with-tools
@@ -52,7 +52,7 @@ travels in a TOOL-IMAGE reply.")
 
 (test image-apropos-requires-pattern
   (with-tools
-    (is (equal :bad-request (first (miao:tool-error (tool :tool-image :op :apropos)))))))
+    (is (equal :bad-request (first (miao:result-error (tool :tool-image :op :apropos)))))))
 
 (test image-documentation-reads-a-docstring
   (with-tools
@@ -173,12 +173,12 @@ travels in a TOOL-IMAGE reply.")
 (test services-describe-an-unregistered-name-is-a-bad-request
   (with-tools
     (is (equal :bad-request
-               (first (miao:tool-error
+               (first (miao:result-error
                        (tool :tool-services :op :describe :name "does-not-exist")))))))
 
 (test services-describe-requires-name
   (with-tools
-    (is (equal :bad-request (first (miao:tool-error (tool :tool-services :op :describe)))))))
+    (is (equal :bad-request (first (miao:result-error (tool :tool-services :op :describe)))))))
 
 (test services-describe-reports-props-and-effects
   (with-tools

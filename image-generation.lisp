@@ -31,7 +31,7 @@ doesn't actually hold."
         (problem
          (error "could not check ~(~a~) for an :api-key before taking an image (~a); refusing rather than risk writing one to disk"
                 (getf entry :name) problem))
-        ((and (typep service 'provider) (provider-api-key service))
+        ((and (typep service 'backend-service) (backend-api-key service))
          (error "~(~a~) is mounted with :api-key; SAVE-IMAGE refuses to write a credential to disk. Unmount it, or mount from the environment variable instead."
                 (getf entry :name)))))))
 
@@ -195,7 +195,7 @@ reports through tool-self."
                           :checkpoint (namestring checkpoint-path) :previous-source previous
                           :image image-path)
                     (list :at (%now-iso8601) :kind :outcome :op :define
-                          :outcome (if (tool-error-p result) (list :error (tool-error result)) :ok)))))
+                          :outcome (if (result-error-p result) (list :error (result-error result)) :ok)))))
     (%append-log log entry)))
 
 ;;; --- launching --------------------------------------------------------

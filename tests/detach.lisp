@@ -40,7 +40,7 @@ repeating."
                          (final-reply "got it"))
                'tool-slow)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-slow) :tool-grace 100))
              (result (run-detached child)))
         (is (eq :stop (getf (second result) :stop-reason)))
@@ -58,7 +58,7 @@ repeating."
                          (final-reply "got it"))
                'tool-bg)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-bg)))
              (result (run-detached child)))
         (is (= 3 (getf (second result) :turns)))
@@ -69,7 +69,7 @@ repeating."
                          (final-reply "done"))
                'tool-echo)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-echo) :tool-grace 5000))
              (result (run-detached child)))
         (is (= 2 (getf (second result) :turns)))
@@ -91,7 +91,7 @@ repeating."
                  'tool-slow)
       (m:with-process (runner)
         (let* ((recorder (make-recorder))
-               (child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+               (child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                   :tools '(:tool-slow) :tool-grace 100
                                   :sink (recorder-sink recorder))))
           (run-detached child)
@@ -108,7 +108,7 @@ repeating."
                            (final-reply "waiting"))
                  'tool-wait)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-wait) :tool-grace 100 :journal path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually
@@ -126,7 +126,7 @@ repeating."
                          (final-reply "waiting"))
                'tool-wait)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :tools '(:tool-wait) :tool-grace 100)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually
@@ -147,7 +147,7 @@ repeating."
                            (final-reply "got it"))
                  'tool-slow)
       (m:with-process (runner)
-        (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+        (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                  :tools '(:tool-slow) :tool-grace 100 :journal path)))
           (m:cast child (list :run :messages '((:role :user :content "go"))))
           (is-true (eventually (lambda () (= 2 (length (requests))))))
@@ -163,7 +163,7 @@ repeating."
                          (final-reply "steered"))
                'tool-wait)
     (m:with-process (runner)
-      (let ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                :tools '(:tool-wait) :tool-grace 100)))
         (m:cast child (list :run :messages '((:role :user :content "go"))))
         (is-true (eventually (lambda () (= 2 (length (requests))))))
@@ -179,7 +179,7 @@ repeating."
                          (final-reply "got both"))
                'tool-gate 'tool-gate-b)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-gate :tool-gate-b) :tool-grace 50))
              (result (run-detached child))
              (turns (getf (second result) :turns)))
@@ -221,7 +221,7 @@ repeating."
                          (final-reply "got it"))
                'tool-unbounded)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-unbounded)))
              (result (run-detached child 15)))
         (is (= 3 (getf (second result) :turns)))
@@ -234,7 +234,7 @@ repeating."
                          (final-reply "done"))
                'tool-unbounded-attached)
     (m:with-process (runner)
-      (let* ((child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+      (let* ((child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-unbounded-attached)))
              (result (run-detached child 15)))
         (is (= 2 (getf (second result) :turns)))
@@ -259,7 +259,7 @@ repeating."
                  'tool-slow 'tool-wait)
     (m:with-process (runner)
       (let* ((recorder (make-recorder))
-             (child (m:delegate *ctx* 'miao:agent :model :provider-test-keyed
+             (child (m:delegate *ctx* 'miao:agent :model :test-keyed
                                 :tools '(:tool-slow :tool-wait) :tool-grace 100
                                 :max-detached 1 :sink (recorder-sink recorder))))
         (m:cast child (list :run :messages '((:role :user :content "go"))))

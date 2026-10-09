@@ -6,7 +6,7 @@ reaches the model as the call's error, and a hook that fails stops the call.
 
 ```lisp
 (m:mount *ctx* 'miao:hook-approval)
-(m:mount *ctx* 'miao:agent :model :provider-ollama
+(m:mount *ctx* 'miao:agent :model :ollama
                            :tools '(:tool-shell)
                            :hooks '(:hook-approval)
                            :sink #'draw-event)
