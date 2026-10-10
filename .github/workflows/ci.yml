@@ -39,11 +39,11 @@ jobs:
 
       - name: Install dependencies outside Quicklisp
         run: |
-          git clone --depth 1 https://github.com/takeiteasy/meow \
+          git clone --depth 1 https://github.com/communal-software/meow \
               ~/quicklisp/local-projects/meow
-          git clone --depth 1 https://github.com/takeiteasy/trivial-high-precision-timer \
+          git clone --depth 1 https://github.com/communal-software/trivial-high-precision-timer \
               ~/quicklisp/local-projects/trivial-high-precision-timer
-          git clone --depth 1 https://github.com/takeiteasy/cl-inference \
+          git clone --depth 1 https://github.com/communal-software/cl-inference \
               ~/quicklisp/local-projects/cl-inference
 
       - name: Test

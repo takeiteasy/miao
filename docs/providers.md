@@ -2,7 +2,7 @@
 
 A provider is data: a protocol to speak, a base URL, how to authenticate, a
 model catalogue and any quirks. `define-provider` is
-[cl-inference/client](https://github.com/takeiteasy/cl-inference/blob/trunk/docs/client.md#providers)'s
+[cl-inference/client](https://github.com/communal-software/cl-inference/blob/trunk/docs/client.md#providers)'s
 macro, re-exported here. A new backend is a few lines rather than a new adapter.
 
 ```lisp

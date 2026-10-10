@@ -1,6 +1,6 @@
 # The agent loop
 
-An agent is a [meow](https://github.com/takeiteasy/meow) agent (`M:AGENT`)
+An agent is a [meow](https://github.com/communal-software/meow) agent (`M:AGENT`)
 that sends a conversation to a bound [model](providers.md), dispatches the
 tool calls that come back through [`invoke-tool`](tools.md), feeds the
 results in and goes round again. It registers under `:kind :agent`, the same

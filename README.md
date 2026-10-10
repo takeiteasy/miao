@@ -5,7 +5,7 @@
 **M**odel **I**ntegration **A**nd **O**rchestration
 
 An agent core in Common Lisp, built on
-[meow](https://github.com/takeiteasy/meow), for others to build agent
+[meow](https://github.com/communal-software/meow), for others to build agent
 harnesses on. Tools, model adapters and the agent loop are meow services
 under one root context, so they mount in any order, restart under
 supervision, and are discovered through the registry.
@@ -17,17 +17,17 @@ Runs on SBCL.
 
 ## Installation
 
-From the takeiteasy Quicklisp dist, which is served over HTTPS so Quicklisp needs [ql-https](https://github.com/takeiteasy/ql-dist#install):
+From the takeiteasy Quicklisp dist, which is served over HTTPS so Quicklisp needs [ql-https](https://github.com/communal-software/ql-dist#install):
 
 ```lisp
 (ql-dist:install-dist "https://takeiteasy.github.io/ql-dist/dist/takeiteasy.txt")
 (ql:quickload :miao)
 ```
 
-Or clone into Quicklisp's local-projects, with [meow](https://github.com/takeiteasy/meow) and [cl-inference](https://github.com/takeiteasy/cl-inference) beside it ([Getting started](docs/getting-started.md#loading) lists the dependencies):
+Or clone into Quicklisp's local-projects, with [meow](https://github.com/communal-software/meow) and [cl-inference](https://github.com/communal-software/cl-inference) beside it ([Getting started](docs/getting-started.md#loading) lists the dependencies):
 
 ```sh
-git clone https://github.com/takeiteasy/miao ~/quicklisp/local-projects/miao
+git clone https://github.com/communal-software/miao ~/quicklisp/local-projects/miao
 ```
 
 ## Docs

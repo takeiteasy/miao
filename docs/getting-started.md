@@ -3,15 +3,15 @@
 ## Loading
 
 miao loads through Quicklisp's local projects, alongside
-[meow](https://github.com/takeiteasy/meow),
-[cl-inference](https://github.com/takeiteasy/cl-inference) (the model client)
+[meow](https://github.com/communal-software/meow),
+[cl-inference](https://github.com/communal-software/cl-inference) (the model client)
 and its own out-of-dist dependency:
 
 ```sh
 ln -s ~/git/miao ~/quicklisp/local-projects/miao
 ln -s ~/git/meow ~/quicklisp/local-projects/meow
 ln -s ~/git/cl-inference ~/quicklisp/local-projects/cl-inference
-git clone https://github.com/takeiteasy/trivial-high-precision-timer \
+git clone https://github.com/communal-software/trivial-high-precision-timer \
     ~/quicklisp/local-projects/trivial-high-precision-timer
 ```
 

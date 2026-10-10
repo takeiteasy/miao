@@ -2,8 +2,8 @@
 
 A completion is one turn against a model backend. The contract, the wire
 protocols and the [providers](providers.md) live in
-[cl-inference/client](https://github.com/takeiteasy/cl-inference/blob/trunk/docs/client.md).
-miao mounts each backend as a [meow](https://github.com/takeiteasy/meow)
+[cl-inference/client](https://github.com/communal-software/cl-inference/blob/trunk/docs/client.md).
+miao mounts each backend as a [meow](https://github.com/communal-software/meow)
 service, runs its completions on shared worker pools, and delivers streamed
 events to a sink.
 
@@ -43,7 +43,7 @@ The service answers two messages:
 
 ## The request
 
-`complete` takes the client's [request](https://github.com/takeiteasy/cl-inference/blob/trunk/docs/client.md#request):
+`complete` takes the client's [request](https://github.com/communal-software/cl-inference/blob/trunk/docs/client.md#request):
 
 ```lisp
 (miao:complete :protocol-openai

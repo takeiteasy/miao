@@ -2,7 +2,7 @@
 
 Two `:agent`-trusted, always-on, read-only tools over the running image:
 `tool-image` for the CL image, `tool-services` for the
-[meow](https://github.com/takeiteasy/meow) supervision tree it runs under.
+[meow](https://github.com/communal-software/meow) supervision tree it runs under.
 
 ```lisp
 (m:mount context 'miao:tool-image)

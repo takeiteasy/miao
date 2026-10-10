@@ -122,7 +122,7 @@ only way back to the old definition. The log is an append-only
 s-expression file (`:log`, default `~/.miao/self.log`), read the same
 guarded way a generation is: `*read-eval*` nil, so a log can never run code
 merely by being read back. Each entry also reaches [meow's
-logger](https://github.com/takeiteasy/meow/blob/trunk/docs/logger.md) when
+logger](https://github.com/communal-software/meow/blob/trunk/docs/logger.md) when
 one is mounted, at `:info` or `:warn`.
 
 ## `self-define` and `:require-image`

@@ -3,7 +3,7 @@
 A tool's `:params` is a typed schema. It is canonical in both directions: it
 renders to the JSON Schema a model needs for tool calling, and imports from one
 an external tool arrives with. One validator, one coercion path. The schema
-is [cl-inference/client](https://github.com/takeiteasy/cl-inference/blob/trunk/docs/client.md#schemas)'s;
+is [cl-inference/client](https://github.com/communal-software/cl-inference/blob/trunk/docs/client.md#schemas)'s;
 miao re-exports it, and `define-tool` checks its `:params` with it.
 
 ```lisp

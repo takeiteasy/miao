@@ -19,7 +19,7 @@ can undo code, not only declared state.
    credential off it is the same line [providers](providers.md#credentials)
    and [`tool-image`](introspection.md) already hold for published state.
 3. Takes a declared-state [checkpoint](checkpoints.md) of `context`.
-4. [`m:suspend`](https://github.com/takeiteasy/meow/blob/trunk/docs/suspend.md)s
+4. [`m:suspend`](https://github.com/communal-software/meow/blob/trunk/docs/suspend.md)s
    `context`'s whole tree, then waits up to `timeout` seconds for any
    thread outside that tree to exit on its own -- a just-stopped
    context's thread still mid-unwind, say
@@ -28,7 +28,7 @@ can undo code, not only declared state.
    `fork(2)` both need this one alone.
 5. Forks. The child `save-lisp-and-die`s a `.core` next to the
    checkpoint's `.generation`; the parent waits for it and
-   [resumes](https://github.com/takeiteasy/meow/blob/trunk/docs/suspend.md)
+   [resumes](https://github.com/communal-software/meow/blob/trunk/docs/suspend.md)
    the suspended tree.
 
 The calling process is unaffected either way: every service is suspended

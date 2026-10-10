@@ -147,7 +147,7 @@ A context mounted again mounts its declared `:children` itself, so those are
 not mounted a second time; only what was mounted onto it by hand is. Such a
 child comes back without a credential the generation left out. `:initargs`
 naming one is applied to it with
-[`m:update`](https://github.com/takeiteasy/meow/blob/trunk/docs/update.md),
+[`m:update`](https://github.com/communal-software/meow/blob/trunk/docs/update.md),
 which reloads it, and it is listed under `:updated`. A service that was never
 gone is not updated.
 A version 1 generation records no mount, so a service it names that has gone

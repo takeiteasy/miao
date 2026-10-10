@@ -1,6 +1,6 @@
 # Tools
 
-A tool is a [meow](https://github.com/takeiteasy/meow) service that follows one
+A tool is a [meow](https://github.com/communal-software/meow) service that follows one
 extra convention, so any caller — including the agent loop — can discover,
 describe and invoke every tool the same way.
 

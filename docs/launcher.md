@@ -17,7 +17,7 @@ miao chats                          # the saved chats, see [chat.md](chat.md#sav
 ## Installing
 
 ```sh
-ros install takeiteasy/miao         # puts miao on ~/.roswell/bin
+ros install communal-software/miao         # puts miao on ~/.roswell/bin
 ln -s ~/git/miao/miao.ros ~/.local/bin/miao   # or from a checkout
 ```
 
