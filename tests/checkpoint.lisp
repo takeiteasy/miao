@@ -6,7 +6,7 @@
         for found = (search needle haystack :start2 start)
         while found count t))
 
-;;; Checkpoints and rollback (~takeiteasy/miao#11): SNAPSHOT/RESTORE across
+;;; Checkpoints and rollback: SNAPSHOT/RESTORE across
 ;;; the shared convention, the generation file on disk, drift reporting, the
 ;;; agent's own state trimming, and TOOL-CHECKPOINT.
 
@@ -371,7 +371,7 @@
                        (miao:invoke-tool :tool-checkpoint :op :restore
                                         :path "/nonexistent/x.generation")))))))
 
-;;; --- per-path log locks (~takeiteasy/miao#65) -----------------------------
+;;; --- per-path log locks -----------------------------
 
 (test one-file-under-two-spellings-shares-a-lock
   (with-generations-directory (dir)
@@ -405,7 +405,7 @@
       (is (equal '((:kind :x)) (miao::%read-log path)))
       (is (null (nth-value 1 (miao::%read-log path)))))))
 
-;;; --- cross-process log lock (~takeiteasy/miao#84) --------------------------
+;;; --- cross-process log lock --------------------------
 
 (defmacro with-foreign-log-flock ((path) &body body)
   "BODY run while another file description holds PATH's sidecar flock, as
@@ -440,7 +440,7 @@ once it is released."
       (miao::%append-log path '(:kind :x))
       (is-true (probe-file (format nil "~a.lock" (miao::%log-key path)))))))
 
-;;; --- remounting (~takeiteasy/miao#49) -------------------------------------
+;;; --- remounting -------------------------------------
 
 (defun rolled-back (path &rest args)
   (second (apply #'miao:rollback *ckpt-context* path args)))

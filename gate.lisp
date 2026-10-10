@@ -1,6 +1,6 @@
 (in-package #:miao)
 
-;;; The allowlist gate for untrusted Lisp (~takeiteasy/miao#44). GATE-CHECK
+;;; The allowlist gate for untrusted Lisp. GATE-CHECK
 ;;; reads a form with its own reader, never the CL reader, so nothing is
 ;;; interned and no reader macro runs on the host. It then prints the form
 ;;; back as canonical text, which is what a worker evaluates.

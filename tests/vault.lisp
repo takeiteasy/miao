@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The vault (~takeiteasy/miao#14): the log's own record/consume/fold API,
+;;; The vault: the log's own record/consume/fold API,
 ;;; AGENT's use of it through :VAULT and :STEER, and TOOL-VAULT.
 
 (defun make-vault-log-path ()
@@ -247,7 +247,7 @@ after the message that triggered it has already returned."
         (vault :op :discard :id id)
         (is (equal :bad-request (first (miao:result-error (vault :op :discard :id id)))))))))
 
-;;; --- compaction (~takeiteasy/miao#67) ---------------------------------------
+;;; --- compaction ---------------------------------------
 
 (defun append-raw-vault-line (path form)
   (with-open-file (stream path :direction :output :if-exists :append :if-does-not-exist :create)
@@ -325,7 +325,7 @@ after the message that triggered it has already returned."
         (write-string "(torn" stream))
       (is (equal :bad-request (first (miao:result-error (vault :op :compact))))))))
 
-;;; --- atomic discard (~takeiteasy/miao#85) -------------------------------------
+;;; --- atomic discard -------------------------------------
 
 (test vault-consume-pending-answers-the-existing-status
   (with-vault-path (path)
@@ -348,7 +348,7 @@ after the message that triggered it has already returned."
       (is (eql 1 (count :consumed results)))
       (is (eql 2 (length (miao::%read-log path)))))))
 
-;;; --- cross-process lock (~takeiteasy/miao#84) ---------------------------------
+;;; --- cross-process lock ---------------------------------
 
 (test vault-compact-waits-for-a-lock-held-by-another-process
   (with-vault-path (path)
@@ -362,7 +362,7 @@ after the message that triggered it has already returned."
                 path (lambda () (miao:vault-consume-pending path id :discarded))))
       (is (eq :discarded (getf (first (miao:vault-entries path)) :status))))))
 
-;;; --- single-delivery restore (~takeiteasy/miao#87) ----------------------------
+;;; --- single-delivery restore ----------------------------
 
 (defun wait-for-claimed (path &optional (deadline 3.0))
   (loop repeat (ceiling deadline 0.05)
@@ -446,7 +446,7 @@ after the message that triggered it has already returned."
         (m:call (m:lookup :assistant) (list :run :messages '((:role :user :content "go"))))
         (is (eq :folded (getf (first (wait-for-vault-status path :folded)) :status)))))))
 
-;;; --- claims across processes (~takeiteasy/miao#88) ------------------------------
+;;; --- claims across processes ------------------------------
 
 (defun foreign-owner (&key (pid 1) (host (machine-instance)) start)
   (list* :pid pid :host host :token "another-image" (and start (list :start start))))

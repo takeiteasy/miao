@@ -89,11 +89,11 @@ result a hook rewrote, as the model and the tool first had them.")
 to COMPLETE, e.g. :TEMPERATURE.")
    (vault :initarg :vault :initform nil :reader agent-vault
           :documentation "NIL (the default): steering is in-memory only. T:
-record to the default vault log (~takeiteasy/miao#14). A string or
+record to the default vault log. A string or
 pathname: record there instead.")
    (journal :initarg :journal :initform nil :reader agent-journal
             :documentation "NIL (the default): runs are not journaled. T:
-journal to the default log (~takeiteasy/miao#119). A string or pathname: journal
+journal to the default log. A string or pathname: journal
 there instead. A sub-agent inherits it.")
    ;; Run state, reset by START-RUN.
    ;; Newest first, so adding one is O(1); CONVERSATION reads it in order.
@@ -223,7 +223,7 @@ there instead. A sub-agent inherits it.")
     (:reply (destructuring-bind (tag value status) (rest message)
               (route-reply service tag (%call-result value status))))
     ;; Reports from a delegated sub-agent, routed into HANDLE by the meow fix
-    ;; for ~takeiteasy/meow#59.
+    ;; for meow “A service parent never sees an agent's :agent-done / :agent-down”.
     (:agent-done (sub-agent-done service (second message) (fourth message)))
     (:agent-down (sub-agent-down service (second message) (third message)))
     (:snapshot (snapshot service))
@@ -508,7 +508,7 @@ status). A call that cannot be sent is answered at once.
 UNBOUNDED sends it with no meow timeout and answers the seconds it would have
 had, for the caller to time only while the call is attached: a detached call
 outlasts it. TODO: a tool that ignores cancel and never answers leaves its
-meow pending call alive for good, as call-async cannot withdraw it (#188)."
+meow pending call alive for good, as call-async cannot withdraw it (#39)."
   (multiple-value-bind (process message timeout)
       (handler-case (funcall prepare name args :registry (m:service-registry service))
         (error (e) (values nil (fail (list :error (princ-to-string e))))))
@@ -823,7 +823,7 @@ tool's own process, not this agent -- so the reserved call is dispatched
 here, directly on this agent's own process, which is what M:DELEGATE reads
 its parent from. The child inherits this agent's model and allow-list but
 not :SUB-AGENTS, so delegation does not nest by default; which models and
-tool sets a child may be given is ~takeiteasy/miao#22's policy, not this
+tool sets a child may be given is #3's policy, not this
 ticket's. The child's ref pairs the step ref with the call id, for the same
 reason DISPATCH-TOOL's reply does, and cancelling the call cancels the child.
 It is registered as <parent>/<n>, so a steer or cancel reaches it by name; a
@@ -983,7 +983,7 @@ issued twice."
                       (tool-result-event (m:agent-ref service) (cdr (car entry))
                                          (fail :interrupted))))))))
 
-;;; --- resuming calls (~takeiteasy/miao#77) ---------------------------------
+;;; --- resuming calls ---------------------------------
 
 ;;; A call the call log holds as :LOST, :ABANDONED or :INTERRUPTED is run again
 ;;; as a new call, which joins %DETACHED, so its result lands as a detached
@@ -1110,7 +1110,7 @@ or an :INTERRUPTED error where none has arrived."
         (%call-tokens service) nil
         (%journal-call-ids service) nil))
 
-;;; --- the journal (~takeiteasy/miao#119) -------------------------------------
+;;; --- the journal -------------------------------------
 
 (defun journal-of (service)
   (%journal-path (agent-journal service)))
@@ -1138,7 +1138,7 @@ a run that does not continue one replaces."
     (record-journal service :messages :reset (not continuing)
                     :messages (if continuing (getf args :messages) (reverse (%messages service))))))
 
-;;; --- the call records (~takeiteasy/miao#73) ---------------------------------
+;;; --- the call records ---------------------------------
 
 (defun journal-call-id (service id)
   (cdr (assoc id (%journal-call-ids service) :test #'equal)))
@@ -1252,7 +1252,7 @@ A :SYSTEM message is in none."
 
 ;; TODO: the oldest turns are dropped outright and only a note stands in for
 ;; them; summarise the dropped span instead, under the policy of the
-;; orchestrator DSL (~takeiteasy/miao#139).
+;; orchestrator DSL (#10).
 (defun fit-conversation (messages &key max-context max-tool-result
                                     (chars-per-token 1) (margin 1) (reserved 0))
   "MESSAGES as a request should carry them, a record of what was changed, or
@@ -1338,7 +1338,7 @@ one that reads implausibly, leaves the last ratio."
   (record-journal service :message :message message)
   (push message (%messages service)))
 
-;;; --- interceptor hooks (~takeiteasy/miao#117) -----------------------------
+;;; --- interceptor hooks -----------------------------
 
 ;;; A hook is a service the agent calls with M:CALL-ASYNC, as it does a tool, so
 ;;; HANDLE never waits on one: the answer comes back as a (:REPLY (:HOOK ref
@@ -1829,7 +1829,7 @@ timeout."
   "Delegate an agent on CONTEXT (a mounted context's process), run it to
 completion and return its result. The one place miao reaches the loop
 synchronously: a plain process is the parent, since a service parent needs
-the meow fix a mounted agent does not (~takeiteasy/meow#59, already applied
+the meow fix a mounted agent does not (meow “A service parent never sees an agent's :agent-done / :agent-down”, already applied
 here but not assumed of the caller's own services). With :INPUT-ID, which
 needs :JOURNAL, a redelivered run returns (:OK (:DUPLICATE status)) rather
 than running again."
@@ -1850,7 +1850,7 @@ than running again."
                      ((eq (first message) :agent-done) (fourth message))
                      (t (fail (list :error (third message))))))))))))
 
-;;; --- checkpoints (~takeiteasy/miao#11) ----------------------------------
+;;; --- checkpoints ----------------------------------
 
 ;;; The turn and tool calls in flight are replies a restore cannot bring
 ;;; back, so only their ids are recorded, under :IN-FLIGHT, for
@@ -1910,7 +1910,7 @@ ones included, for a caller to resume."
   (incf (%step-ref service))
   t)
 
-;;; --- forking (~takeiteasy/miao#74) ----------------------------------------
+;;; --- forking ----------------------------------------
 
 ;;; A conversation is append-only, so a prefix of it is a conversation of its
 ;;; own. A fork keeps a prefix and continues it as a separate agent; the source

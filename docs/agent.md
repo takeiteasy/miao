@@ -367,13 +367,13 @@ it carries its name (see [the vault](vault.md)). `agents` lists
 live children too, and a [checkpoint](checkpoints.md) leaves them out.
 
 Reaching the parent's `handle` from a delegated child needs
-[`~takeiteasy/meow#59`](https://todo.sr.ht/~takeiteasy/meow/59): meow's
+meow “A service parent never sees an agent's :agent-done / :agent-down”: meow's
 `%dispatch` dropped a service parent's `:agent-done`/`:agent-down` before
 that fix, so a mounted or delegated `miao:agent` on an unpatched meow will
 never see a sub-agent finish.
 
 Which models and tool sets a child may be given beyond inheriting the
-parent's is [`~takeiteasy/miao#22`](https://todo.sr.ht/~takeiteasy/miao/22)'s
+parent's is [#3](https://github.com/communal-software/miao/issues/3)'s
 policy (the orchestrator DSL), not this loop's.
 
 ## Checkpoints
@@ -396,19 +396,19 @@ leaving the original alone -- see [forking](forking.md).
 ## Limitations
 
 - A request over `:max-context` drops old turns rather than summarising them
-  ([#139](https://todo.sr.ht/~takeiteasy/miao/139)).
+  ([#10](https://github.com/communal-software/miao/issues/10)).
 - A streamed turn on an OpenAI-style backend reports no prompt-token count,
   so it does not recalibrate the ratio
-  ([#142](https://todo.sr.ht/~takeiteasy/miao/142)).
+  (“Ask an OpenAI-style backend for usage on a streamed turn”).
 - A detached call still ends with its run, so work longer than the run's
   `:deadline` has no home; that needs a job a tool hands back and the agent
-  polls ([#189](https://todo.sr.ht/~takeiteasy/miao/189)).
+  polls ([#40](https://github.com/communal-software/miao/issues/40)).
 - A tool that ignores a cancel and never answers keeps its call pending for
-  good ([#188](https://todo.sr.ht/~takeiteasy/miao/188)).
+  good ([#39](https://github.com/communal-software/miao/issues/39)).
 - A restored agent runs a call detached when it was checkpointed again rather
-  than reattaching to it ([#185](https://todo.sr.ht/~takeiteasy/miao/185)).
+  than reattaching to it ([#36](https://github.com/communal-software/miao/issues/36)).
 - The first turn is measured at the default ratio; an exact count before it
-  needs a tokenizer ([#143](https://todo.sr.ht/~takeiteasy/miao/143)).
+  needs a tokenizer ([#11](https://github.com/communal-software/miao/issues/11)).
 
 [^ratio]: The ratio is per agent, not per content type: code and JSON
     tokenise worse than prose, which the 10% margin absorbs. A reading under 1

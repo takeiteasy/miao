@@ -683,7 +683,7 @@ RUN-ARGS and return the run's result."
     (is (not (search "earlier answer" (getf (first (requests)) :body))))
     (is (search "fresh" (getf (first (requests)) :body)))))
 
-;;; --- forking (~takeiteasy/miao#74) ------------------------------------
+;;; --- forking ------------------------------------
 
 (defun tooled-conversation ()
   "system, user, an assistant turn with a call and its result, user, assistant."
@@ -961,7 +961,7 @@ test's."
           (let ((sub (other-agent-child *ctx* parent)))
             (is-true sub)
             ;; UNMOUNT stops the sub-agent for :shutdown, which is the
-            ;; :agent-down path -- the one raw shape ~takeiteasy/meow#59's
+            ;; :agent-down path -- the one raw shape meow “A service parent never sees an agent's :agent-done / :agent-down”'s
             ;; fallback exists for.
             (m:unmount *ctx* sub)
             (multiple-value-bind (message received) (m:receive :timeout 5)
@@ -981,7 +981,7 @@ test's."
     (let ((metadata (miao:describe-agent :agent-under-test)))
       (is (eq :agent (getf metadata :kind)))
       (is (eq :test-keyed (getf metadata :model))))))
-;;; --- addressable sub-agents (~takeiteasy/miao#121) ----------------------
+;;; --- addressable sub-agents ----------------------
 
 (defun named-parent-with-slow-child (&key vault)
   "A mounted :BOSS that delegates one task whose child is slow, so it is live
@@ -1230,7 +1230,7 @@ for a while. Returns the process once the child is registered."
         (is (search "inner done" (first (tool-message-texts result))))
         (is (< (elapsed-since start) 10))))))
 
-;;; --- retrying a turn (~takeiteasy/miao#42) --------------------------------
+;;; --- retrying a turn --------------------------------
 
 (defun error-reply (status)
   (list status '("Content-Type" "application/json") "{\"error\":\"nope\"}"))
@@ -1366,7 +1366,7 @@ for a while. Returns the process once the child is registered."
             (is (= 1 (getf (second (fourth message)) :turns))))
           (is (search "change of plan" (getf (second (requests)) :body))))))))
 
-;;; --- capping a tool result (~takeiteasy/miao#40) --------------------------
+;;; --- capping a tool result --------------------------
 
 (defun long-text-backend ()
   (let ((n 0))
@@ -1422,7 +1422,7 @@ for a while. Returns the process once the child is registered."
     (is (equal "{\"a\":1}" (miao::%cut-text text 100)))
     (is (equal "{\"a\":1}" (miao::%cut-text text 7)))))
 
-;;; --- fitting the conversation (~takeiteasy/miao#39) ----------------------
+;;; --- fitting the conversation ----------------------
 
 (defun msg (role text &rest more) (list* :role role :content text more))
 

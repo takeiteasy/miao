@@ -68,9 +68,9 @@ to the same file.
 
 - A fork lives in memory. It is [checkpointed](checkpoints.md) like any
   agent, but the branches of a conversation are not kept as a tree
-  ([#177](https://todo.sr.ht/~takeiteasy/miao/177)).
+  ([#32](https://github.com/communal-software/miao/issues/32)).
 - A model cannot fork; there is no agent message or tool for it
-  ([#178](https://todo.sr.ht/~takeiteasy/miao/178)).
+  ([#33](https://github.com/communal-software/miao/issues/33)).
 
 [^mount]: Same class, options and restart policy, so `:sink`, `:vault` and
     `:journal` are shared with the original: a fork's events reach the same

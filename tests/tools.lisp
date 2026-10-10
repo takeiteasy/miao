@@ -95,7 +95,7 @@ last resort with no dedicated OS mechanism behind it."
         do (sleep interval))
   (not (funcall predicate)))
 
-;;; --- M:CALL failures folded into the result vocabulary (~takeiteasy/miao#106)
+;;; --- M:CALL failures folded into the result vocabulary
 
 (defun coerced (schema args)
   (miao:coerce-args schema args))
@@ -247,7 +247,7 @@ last resort with no dedicated OS mechanism behind it."
           (is (eq :bad-request (first result)))
           (is (search parameter (second result))))))))
 
-;;; --- fs: symlinks (~takeiteasy/miao#15) --------------------------------
+;;; --- fs: symlinks --------------------------------
 
 (defun make-symlink (target link)
   (uiop:run-program (list "ln" "-s" target link) :output nil :error-output nil))
@@ -290,7 +290,7 @@ last resort with no dedicated OS mechanism behind it."
       (is (not (uiop:file-exists-p target))))))
 
 (test fs-refuses-any-symlink-below-the-root
-  ;; ~takeiteasy/miao#52: the atomic walk refuses every symlink below the
+  ;; “tool-fs sandbox has a resolve-then-open TOCTOU window”: the atomic walk refuses every symlink below the
   ;; root outright, rather than resolving an in-root one and re-checking
   ;; it -- there is no path-based re-check left to race.
   (with-tools
@@ -351,7 +351,7 @@ last resort with no dedicated OS mechanism behind it."
                (miao:result-error (tool :tool-fs :op :delete :path "alias.txt"))))
     (is (equal "hello" (result-value (tool :tool-fs :op :read :path "real.txt") :data)))))
 
-;;; --- define-tool: readable defaults (~takeiteasy/miao#134) ---------------
+;;; --- define-tool: readable defaults ---------------
 
 (defun define-tool-with-defaults (&rest default-forms)
   (eval `(miao:define-tool :tool-default-probe
@@ -369,7 +369,7 @@ last resort with no dedicated OS mechanism behind it."
 (test define-tool-accepts-a-default-that-reads-back
   (finishes (define-tool-with-defaults 3 :a "s" t 'miao::+default-tool-timeout+)))
 
-;;; A tool built without define-tool is checked when it is mounted (#156).
+;;; A tool built without define-tool is checked when it is mounted ().
 
 (defun define-hand-written-tool (default-form)
   (eval `(progn
@@ -396,7 +396,7 @@ last resort with no dedicated OS mechanism behind it."
                (miao::param-options (first (miao:tool-schema
                                             (miao:describe-tool :tool-hand-probe))))))))
 
-;;; --- fs: fd-relative walk (~takeiteasy/miao#59) -------------------------
+;;; --- fs: fd-relative walk -------------------------
 
 (test fs-walk-never-changes-the-process-cwd
   (with-tools
@@ -519,7 +519,7 @@ err
                              :exit)))))
 
 (test shell-kills-a-backgrounded-descendant-on-timeout
-  ;; ~takeiteasy/miao#16: the deadline used to signal the direct `sh` child
+  ;; “tool-shell: kill the process group on timeout”: the deadline used to signal the direct `sh` child
   ;; only, so a backgrounded grandchild outlived it.
   (if (not (process-group-containment-available-p))
       (skip "no process-group mechanism on this host")
@@ -538,7 +538,7 @@ err
             (ignore-errors (delete-file pidfile)))))))
 
 (test shell-kills-a-backgrounded-descendant-under-the-tree-fallback
-  ;; ~takeiteasy/miao#54: with no OS grouping mechanism at all, containment
+  ;; “Process-group containment falls back to a leader-only kill with no perl”: with no OS grouping mechanism at all, containment
   ;; falls back to walking and killing the descendant tree by hand.
   (let ((miao::*process-group-strategy* :tree))
     (with-tools
@@ -735,7 +735,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   (with-tools
     (is (equal "" (http-body-of (list :octets 200 '("Content-Type" "image/png") (octets)))))))
 
-;;; --- fs: base64 bytes (~takeiteasy/miao#155) -----------------------------
+;;; --- fs: base64 bytes -----------------------------
 
 (defun base64-of (octets)
   (cl-base64:usb8-array-to-base64-string octets))
@@ -882,7 +882,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
 (test http-https-round-trip
   ;; Off by default: CI must not depend on the network. Exercises the
   ;; SSL-wrapped stream PERFORM-REQUEST builds for :STREAM
-  ;; (~takeiteasy/miao#17), which drakma never attaches on its own.
+  ;;, which drakma never attaches on its own.
   (if (uiop:getenv "MIAO_LIVE_HTTP")
       (with-tools
         (is (eql 404 (result-value
@@ -1090,7 +1090,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (is (wait-for-exit pid)))))
 
 (test worker-leads-its-own-process-group
-  ;; ~takeiteasy/miao#16 also covers workers: a form that backgrounds a
+  ;; “tool-shell: kill the process group on timeout” also covers workers: a form that backgrounds a
   ;; process must be signalled along with the worker at kill time, which
   ;; needs the worker itself to lead its own group.
   (if (not (process-group-containment-available-p))
@@ -1105,7 +1105,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     (is (equal :bad-request
                (first (miao:result-error (tool :tool-repl :timeout 100)))))))
 
-;;; --- repl concurrency (~takeiteasy/miao#27) ------------------------------
+;;; --- repl concurrency ------------------------------
 
 (test repl-sessions-run-concurrently
   ;; A long eval on one id must not block another, or the tool's own
@@ -1136,7 +1136,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
   ;; Whichever settles the caller's cell first -- the session replying
   ;; (:error :unavailable), or tool-repl's own process exiting under it as
   ;; an ordinary M:CALL failure, folded by INVOKE-TOOL into the same shape
-  ;; (~takeiteasy/miao#106) -- the caller must not be left waiting out its
+  ;; -- the caller must not be left waiting out its
   ;; full timeout, and either way sees a proper (:error ...) result.
   (with-tools
     (let* ((result nil)
@@ -1172,7 +1172,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (is-true (miao:result-error-p first-result))
       (is-true (miao:result-error-p second-result)))))
 
-;;; --- elision and REPL history (~takeiteasy/miao#26) ---------------------
+;;; --- elision and REPL history ---------------------
 
 (test repl-history-reaches-an-elided-value
   (with-tools
@@ -1193,7 +1193,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
     (miao:result-error (tool :tool-repl :id "a" :form "(error \"boom\")"))
     (is (equal "41" (result-value (tool :tool-repl :id "a" :form "*") :value)))))
 
-;;; --- multiple values (~takeiteasy/miao#105) -----------------------------
+;;; --- multiple values -----------------------------
 
 (test repl-form-returning-several-values-carries-them-all
   (with-tools
@@ -1216,7 +1216,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (is (eq t (result-value result :elided)))
       (is (equal "1" (first (result-value result :values)))))))
 
-;;; --- idle reaping (~takeiteasy/miao#104) --------------------------------
+;;; --- idle reaping --------------------------------
 
 (test idle-tool-repl-reaps-an-unused-id
   (with-tools
@@ -1250,7 +1250,7 @@ cleared again so STOP-FAKE-HTTP's join does not wait on it.")
       (is (equal (princ-to-string pid)
                  (result-value (tool :tool-repl :id "a" :form +getpid-form+) :value))))))
 
-;;; --- cancelling a call (~takeiteasy/miao#111) --------------------------
+;;; --- cancelling a call --------------------------
 
 (defun cancelled-call (seconds name &rest args)
   "Invoke NAME with ARGS and a cancel token cancelled SECONDS in. Answers the

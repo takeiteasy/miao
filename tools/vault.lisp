@@ -1,6 +1,6 @@
 (in-package #:miao)
 
-;;; The vault tool (~takeiteasy/miao#14): list, restore, discard and compact entries
+;;; The vault tool: list, restore, discard and compact entries
 ;;; in the steering message log vault.lisp keeps. Restoring casts a :STEER
 ;;; straight at the named agent (agent.lisp), passing the entry's own id
 ;;; back as :VAULT-ID so ISSUE-TURN marks it consumed rather than this tool

@@ -1,15 +1,15 @@
 (in-package #:miao)
 
-;;; The DSL gate for untrusted input (~takeiteasy/miao#6). A plan may only
+;;; The DSL gate for untrusted input. A plan may only
 ;;; express a sequence of declared tool calls with typed arguments, never a
 ;;; form: there is no EVAL and no host-side reader, so the audit surface is
 ;;; this interpreter plus each named tool's own schema.
 ;;;
 ;;; This gates *what a plan may call*, not arbitrary evaluation: tool-eval
-;;; and tool-repl stay :trust :operator, untouched. The other shape #6
+;;; and tool-repl stay :trust :operator, untouched. The other shape “Constrained DSL gate for untrusted eval”
 ;;; named -- an allowlist over raw Lisp, so tool-eval itself could be
 ;;; reached -- is not this ticket's; tracked as a follow-up in
-;;; ~takeiteasy/miao#44.
+;;; “The raw-Lisp allowlist gate for untrusted eval”.
 ;;;
 ;;; A step:
 ;;;
@@ -31,9 +31,9 @@
 ;;; :timeout bounds the whole plan, each step included: a step's own :timeout
 ;;; is clamped to the time left, the wait on it ends when that lapses, and
 ;;; its cancel token is then cancelled. A tool that honours neither is killed
-;;; a grace period later, and its supervisor restarts it (~takeiteasy/miao#145)
+;;; a grace period later, and its supervisor restarts it
 ;;; -- unless it would not be restarted, in which case it is left running
-;;; (~takeiteasy/miao#147).
+;;;.
 
 (define-tool :tool-plan
     (:trust :agent
@@ -212,7 +212,7 @@ under that context, would be gone for good."
 (defun clamp-timeout (name args left-ms)
   "ARGS with :TIMEOUT held to LEFT-MS, when NAME declares one and ARGS' is
 absent or a number. Anything else is left for coercion to refuse."
-  ;; TODO: TOOL-METADATA here looks in the global registry, not the plan's (#215).
+  ;; TODO: TOOL-METADATA here looks in the global registry, not the plan's ().
   (let ((own (getf args :timeout +default-tool-timeout+)))
     (if (and (find :timeout (tool-schema (tool-metadata name)) :key #'param-name)
              (realp own))

@@ -2,7 +2,7 @@
 
 ;;; Read-only introspection over the meow supervision tree this tool is
 ;;; itself mounted under: the registry, the mount tree and a service's
-;;; published state. See ~takeiteasy/miao#10.
+;;; published state..
 ;;;
 ;;; Every answer is built from what METADATA already publishes and what
 ;;; M:CHILDREN already reports -- both key-free by construction, so this
@@ -33,7 +33,7 @@
 ;;;   - %CONTEXT-CALL waits with :TIMEOUT NIL and signals on a non-:OK
 ;;;     status, so a context in trouble raises rather than hangs this call.
 ;;;   - a nested call from inside a service's own startup can still be
-;;;     mis-settled as a deadlock (~takeiteasy/meow#58).
+;;;     mis-settled as a deadlock (communal-software/meow#13).
 
 (defun op-registry (service kind)
   (let ((registry (m:service-registry service)))

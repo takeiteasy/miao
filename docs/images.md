@@ -23,7 +23,7 @@ can undo code, not only declared state.
    `context`'s whole tree, then waits up to `timeout` seconds for any
    thread outside that tree to exit on its own -- a just-stopped
    context's thread still mid-unwind, say
-   ([#72](https://todo.sr.ht/~takeiteasy/miao/72)). Past `timeout`,
+   (“SAVE-IMAGE's integration test segfaults CI's SBCL (2.2.9.debian); works on a current one”). Past `timeout`,
    refuses, naming the threads still running: `save-lisp-and-die` and
    `fork(2)` both need this one alone.
 5. Forks. The child `save-lisp-and-die`s a `.core` next to the

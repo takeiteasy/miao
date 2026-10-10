@@ -2,11 +2,11 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
 
-;;; Image generations (~takeiteasy/miao#48): a generation (checkpoint.lisp)
+;;; Image generations: a generation (checkpoint.lisp)
 ;;; that also carries the running image itself, so a rollback -- unlike a
 ;;; declared-state-only one -- can undo code, not just state. SAVE-IMAGE
 ;;; forks, suspends nothing on the calling thread's own account (M:SUSPEND,
-;;; meow#64) so every other thread is gone, then has the child
+;;; meow “Suspend and resume a context tree's threads, keeping instances and mailboxes”) so every other thread is gone, then has the child
 ;;; SAVE-LISP-AND-DIE while the parent resumes and carries on. RELAUNCH
 ;;; re-execs into a saved core; miao.ros is the launcher and
 ;;; recovery side.
@@ -56,7 +56,7 @@ a core loads without actually reviving its services."
       (t (forget-workers)
          (forget-pools)
          ;; TODO: reads meow's internal suspension-entries; upgrade path is
-         ;; a public accessor. Tracked in ~takeiteasy/meow#69.
+         ;; a public accessor. Tracked in communal-software/meow#17.
          (dolist (entry (meow::suspension-entries suspension))
            (when (typep (second entry) 'agent)
              (reclaim-steer-claims (second entry))))
@@ -90,7 +90,7 @@ leaving a truncated core, is never mistaken for one that finished."
 internal-real-time reading) passes. FORK's own check backs this up --
 newborn threads it can see that LIST-ALL-THREADS still hides -- but this
 turns the common case (a just-stopped context's thread still mid-unwind,
-~takeiteasy/miao#72) into a bounded wait instead of an outright refusal.
+“SAVE-IMAGE's integration test segfaults CI's SBCL (2.2.9.debian); works on a current one”) into a bounded wait instead of an outright refusal.
 Signals, naming every other thread by name, if any are still running once
 DEADLINE passes."
   (loop for others = (remove sb-thread:*current-thread* (sb-thread:list-all-threads))
@@ -125,7 +125,7 @@ PROVIDER holds an :API-KEY.
 
 TIMEOUT (seconds, default 5) bounds both M:SUSPEND and the wait for any
 thread outside CONTEXT's tree to exit on its own -- a just-stopped
-context's thread still mid-unwind (~takeiteasy/miao#72), say. Past that,
+context's thread still mid-unwind, say. Past that,
 SAVE-IMAGE refuses rather than let FORK's own single-threaded check do it
 less informatively.
 
@@ -154,7 +154,7 @@ because of a stray thread."
     (setf *last-image* (%canonical-path core-path) *self-dirty* nil)
     (values *last-image* (%canonical-path generation-path))))
 
-;;; --- SELF-DEFINE (~takeiteasy/miao#63) ---------------------------------
+;;; --- SELF-DEFINE ---------------------------------
 ;;;
 ;;; tool-self's :define, even checkpointed, can only be undone back to
 ;;; declared state -- never the redefinition itself. SELF-DEFINE closes
@@ -226,7 +226,7 @@ signals an error on failure, execv's usual contract."
 loads (MIAO/LAUNCHER:PROBE-CORE), killing this process's workers and running shell
 commands first so none outlives it as an orphan. A generation's core is code-exact -- unlike
 declared-state ROLLBACK, this is the manual way tool-self's :DEFINE
-writes can actually be undone (~takeiteasy/miao#63) until an operator
+writes can actually be undone until an operator
 does it. Never returns on success."
   (unless (probe-file core) (error "no such core: ~a" core))
   (unless (miao/launcher:probe-core core) (error "~a did not load cleanly; refusing to relaunch into it" core))

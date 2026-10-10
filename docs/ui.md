@@ -118,9 +118,9 @@ events, each once and in order. The replay covers the current run only.[^replay]
 
 - A run's events other than streamed text and tool-call fragments are all held
   until it ends, for a mid-run subscriber's replay
-  ([#220](https://todo.sr.ht/~takeiteasy/miao/220)).
+  ([#50](https://github.com/communal-software/miao/issues/50)).
 - A subscriber that attaches to an idle agent is not sent the conversation it
-  holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
+  holds ([#43](https://github.com/communal-software/miao/issues/43)).
 - The client has no command that targets a sub-agent. One is reached by name
   with `m:cast`, and `miao:sub-agents` lists a run's live children
   ([agent.md](agent.md#sub-agents)).

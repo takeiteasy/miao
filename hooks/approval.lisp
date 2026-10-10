@@ -1,6 +1,6 @@
 (in-package #:miao)
 
-;;; The operator approval hook (~takeiteasy/miao#118). A before-tool-call hook
+;;; The operator approval hook. A before-tool-call hook
 ;;; that holds a call until the operator answers it. It is a service written
 ;;; out by hand rather than with DEFINE-HOOK, which answers from its body and so
 ;;; cannot defer a reply. See docs/approvals.md.

@@ -61,7 +61,7 @@
                 (is (eql 1 kills)))
       (sb-int:unencapsulate 'miao::terminate-process-group 'count-kills))))
 
-;;; --- elision (~takeiteasy/miao#26) --------------------------------------
+;;; --- elision --------------------------------------
 
 (test a-small-value-is-not-elided
   (with-worker (w)
@@ -87,7 +87,7 @@
       (is (equal "..." (getf (second result) :out)))
       (is (null (getf (second result) :elided))))))
 
-;;; --- multiple values (~takeiteasy/miao#105) -----------------------------
+;;; --- multiple values -----------------------------
 
 (test worker-keeps-every-value-a-form-returns
   (with-worker (w)

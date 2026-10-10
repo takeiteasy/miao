@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The call log (~takeiteasy/miao#73): the log's own accept/running/done/fold
+;;; The call log: the log's own accept/running/done/fold
 ;;; API, and AGENT's use of it through :JOURNAL.
 
 (defun call-statuses (path)

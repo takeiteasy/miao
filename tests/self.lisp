@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; TOOL-SELF (~takeiteasy/miao#12): the write ops refused unless :ENABLE
+;;; TOOL-SELF: the write ops refused unless :ENABLE
 ;;; names them, the checkpoint-then-log sequence around each write, and
 ;;; :EVAL, :DEFINE and :RELOAD themselves.
 ;;;
@@ -135,7 +135,7 @@
             :form "(defclass thing () ((x :initform 1 :accessor thing-x) (y :initform 2 :accessor thing-y)))")
       (is (= 2 (funcall (find-symbol "THING-Y" "MIAO-SELF-TEST") instance))))))
 
-;;; --- the CLOS mutation latch (~takeiteasy/miao#79, #81) --------------------
+;;; --- the CLOS mutation latch --------------------
 ;;;
 ;;; RUN-IN-HOST defers a lapsed deadline only while one of SBCL's own
 ;;; loaders is mid-mutation, so a wedged :eql specializer or slow compile

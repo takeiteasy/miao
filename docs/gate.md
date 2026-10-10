@@ -15,7 +15,7 @@ so a model can call it.
 ```
 
 A refused form answers `:bad-request` and starts no worker. State does not
-survive a call; `tool-repl` has no gated form ([#162](https://todo.sr.ht/~takeiteasy/miao/162)).
+survive a call; `tool-repl` has no gated form ([#18](https://github.com/communal-software/miao/issues/18)).
 
 This gate is for untrusted input. The operator's own code is not gated, and
 [`tool-plan`](plan.md) is the other gate: it limits what a plan may *call*,
@@ -105,16 +105,16 @@ had to exit, and never waits in the debugger for its deadline. A
 ## Limitations
 
 - No `tool-repl` form
-  ([#162](https://todo.sr.ht/~takeiteasy/miao/162)).
+  ([#18](https://github.com/communal-software/miao/issues/18)).
 - `format` and `error` need a literal control string; `warn`, `signal`,
   `cerror` and `assert` are refused
-  ([#163](https://todo.sr.ht/~takeiteasy/miao/163)).
+  ([#19](https://github.com/communal-software/miao/issues/19)).
 - No `declare` or `the`
-  ([#164](https://todo.sr.ht/~takeiteasy/miao/164)).
+  ([#20](https://github.com/communal-software/miao/issues/20)).
 - No backquote, `defmacro`, CLOS, `catch` or `throw`
-  ([#165](https://todo.sr.ht/~takeiteasy/miao/165)).
+  ([#21](https://github.com/communal-software/miao/issues/21)).
 - No condition accessors or restarts
-  ([#166](https://todo.sr.ht/~takeiteasy/miao/166)).
+  ([#22](https://github.com/communal-software/miao/issues/22)).
 
 [^invariant]: Adding an allowlist entry means asking whether it returns a
     symbol the form did not contain, as `type-of`, `class-of`, `intern` and

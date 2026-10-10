@@ -2,12 +2,12 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-posix))
 
-;;; Generations (~takeiteasy/miao#11). A checkpoint is one s-expression file
+;;; Generations. A checkpoint is one s-expression file
 ;;; recording every named service's own declared state, taken through the
 ;;; SNAPSHOT/RESTORE convention (tool.lisp) shared by every tool, the agent
 ;;; and a provider. Rollback restores that state onto the services mounted
 ;;; now, first remounting one unmounted since the checkpoint from what the
-;;; generation recorded of how it was mounted (~takeiteasy/miao#49).
+;;; generation recorded of how it was mounted.
 ;;;
 ;;; That record is where a provider's :api-key would otherwise end up on disk
 ;;; (providers.md's credentials line, held the same way in tools/image.lisp),
@@ -17,9 +17,9 @@
 ;;; and a remount takes it back from ROLLBACK's :INITARGS.
 ;;;
 ;;; Image generations -- SAVE-LISP-AND-DIE, relaunch-and-restore, an
-;;; install-time recovery image (~takeiteasy/miao#48) -- live in
+;;; install-time recovery image -- live in
 ;;; image-generation.lisp instead, layered on this file's declared-state
-;;; generation and M:SUSPEND/M:RESUME (meow#64): SAVE-IMAGE takes one of
+;;; generation and M:SUSPEND/M:RESUME (meow “Suspend and resume a context tree's threads, keeping instances and mailboxes”): SAVE-IMAGE takes one of
 ;;; these first, then writes a sibling .core alongside it.
 ;;;
 ;;; The agent's own SNAPSHOT/RESTORE methods live at the end of agent.lisp,
@@ -211,7 +211,7 @@ worker applies to a submitted form."
 ;;; --- shared append-only logs --------------------------------------------
 
 ;;; TOOL-SELF's log (tools/self.lisp) and the vault (vault.lisp,
-;;; ~takeiteasy/miao#14) are both one append-only s-expression file, read
+;;; “Vault: steering message log”) are both one append-only s-expression file, read
 ;;; back the same guarded way a generation is. Shared here rather than
 ;;; duplicated.
 ;;;
@@ -361,7 +361,7 @@ of the services snapshotted mid-work and of those unavailable."
             (%entry-names services :unavailable))))
 
 (defun %generation-image (path)
-  "PATH's sibling .core (~takeiteasy/miao#48's SAVE-IMAGE writes one
+  "PATH's sibling .core (“SBCL image generations and the recovery image”'s SAVE-IMAGE writes one
 alongside its generation, same basename), or nil."
   (let ((core (make-pathname :type "core" :defaults path)))
     (and (probe-file core) (namestring (%canonical-path core)))))
@@ -371,7 +371,7 @@ alongside its generation, same basename), or nil."
 :services :interrupted :unavailable :image), :services naming the services
 it covers rather than their state, :interrupted and :unavailable the ones
 snapshotted mid-work or not at all. :IMAGE is the generation's sibling .core, or nil if none was
-taken (SAVE-IMAGE, ~takeiteasy/miao#48)."
+taken (SAVE-IMAGE)."
   (sort (loop for path in (ignore-errors
                             (uiop:directory-files (uiop:ensure-directory-pathname dir)
                                                   "*.generation"))

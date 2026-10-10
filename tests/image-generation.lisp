@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; Image generations (~takeiteasy/miao#48): the refusals SAVE-IMAGE makes
+;;; Image generations: the refusals SAVE-IMAGE makes
 ;;; before ever suspending anything, GENERATIONS' :image field, and a real
 ;;; end-to-end save/relaunch in a subprocess.
 
@@ -34,7 +34,7 @@
     (unwind-protect (funcall body context dir)
       ;; M:STOP-AND-WAIT, not M:STOP: a plain STOP only sends the request,
       ;; so the next test's own SAVE-IMAGE could still see this context's
-      ;; thread mid-unwind and refuse (~takeiteasy/miao#72).
+      ;; thread mid-unwind and refuse.
       (m:stop-and-wait context))))
 
 (defmacro with-image-context ((context &optional (dir-var (gensym))) &body body)
@@ -64,7 +64,7 @@
 (test relaunch-of-a-missing-core-is-refused
   (signals error (miao:relaunch "/no/such/file.core")))
 
-;;; --- a stray thread outside the tree (~takeiteasy/miao#72) ---------------
+;;; --- a stray thread outside the tree ---------------
 
 (test save-image-refuses-and-resumes-when-a-stray-thread-outlives-its-timeout
   (with-image-context (ctx dir)
@@ -191,7 +191,7 @@
         (setf m:*registry* saved-registry)))))
 
 ;;; A saved core draws its own vault token and claims its agents' queued
-;;; steers again as itself (~takeiteasy/miao#91).
+;;; steers again as itself.
 
 (test relaunched-core-claims-its-queued-steers-under-its-own-token
   (with-generations-directory (dir)
@@ -232,7 +232,7 @@
                  (m:stop-and-wait ctx)))
           (setf m:*registry* saved-registry))))))
 
-;;; --- SELF-DEFINE and :require-image (~takeiteasy/miao#63) ---------------
+;;; --- SELF-DEFINE and :require-image ---------------
 ;;;
 ;;; *LAST-IMAGE* and *SELF-DIRTY* (tools/self.lisp) are process-wide, not
 ;;; per mount, so every test here LETs them rather than touching the

@@ -1,9 +1,9 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; Resuming a call (~takeiteasy/miao#77): a logged call that ended :LOST,
+;;; Resuming a call: a logged call that ended :LOST,
 ;;; :ABANDONED or :INTERRUPTED is run again on request, and TOOL-CALLS
-;;; (~takeiteasy/miao#179) lists, compacts and resumes them.
+;;; lists, compacts and resumes them.
 
 (m:defservice tool-again () () (:name :tool-again))
 

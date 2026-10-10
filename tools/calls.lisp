@@ -1,7 +1,7 @@
 (in-package #:miao)
 
-;;; The call log tool (~takeiteasy/miao#179): list and compact the call records the journal
-;;; keeps, and resume (~takeiteasy/miao#77) the calls in it that a crash or restore
+;;; The call log tool: list and compact the call records the journal
+;;; keeps, and resume the calls in it that a crash or restore
 ;;; cut short by sending :RESUME to the agent that dispatched them.
 ;;;
 ;;; :trust :operator: resuming runs a tool again, and listing shows what its

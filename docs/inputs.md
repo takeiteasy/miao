@@ -62,9 +62,9 @@ steer; it skips the check.
 - An id is remembered until compaction drops it: 7 days after the input
   finished ([`*journal-max-age*`](calls.md#api),
   [`*vault-max-age*`](vault.md#compaction)). A later redelivery is new
-  ([#182](https://todo.sr.ht/~takeiteasy/miao/182)).
+  ([#35](https://github.com/communal-software/miao/issues/35)).
 - A `:lost` input is reported, not re-run
-  ([#77](https://todo.sr.ht/~takeiteasy/miao/77)).
+  (“Resume an in-flight tool call after a crash”).
 
 [^scope]: One id covers one log file. A `:run` and a `:steer` are in different
     logs, so the same string may key one of each.

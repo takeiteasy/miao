@@ -83,14 +83,14 @@ variable as in a new chat.
 ## Limitations
 
 - A line that reads as Lisp is sent as a prompt
-  ([#204](https://todo.sr.ht/~takeiteasy/miao/204)).
+  ([#44](https://github.com/communal-software/miao/issues/44)).
 - The chat draws the [text the provider streams](protocols.md#streaming), so an
   answer that is not streamed is not shown
-  ([#205](https://todo.sr.ht/~takeiteasy/miao/205)).
+  ([#45](https://github.com/communal-software/miao/issues/45)).
 - The options of a resumed chat cannot be changed
-  ([#207](https://todo.sr.ht/~takeiteasy/miao/207)).
+  ([#46](https://github.com/communal-software/miao/issues/46)).
 - Saved chats are never deleted or pruned
-  ([#208](https://todo.sr.ht/~takeiteasy/miao/208)).
+  ([#47](https://github.com/communal-software/miao/issues/47)).
 
 [^save]: `journal.log` and `options.sexp`. The options are `--model`, `--tools`,
     `--max-turns` and the system prompt's text, so a deleted `--system-file`

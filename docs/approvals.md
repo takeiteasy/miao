@@ -56,6 +56,6 @@ The `:approval-done` of an answer comes before the call's `:tool-call`.
 ## Limitations
 
 - No front end asks yet: the [chat](chat.md) does not prompt
-  ([#213](https://todo.sr.ht/~takeiteasy/miao/213)) and
+  ([#48](https://github.com/communal-software/miao/issues/48)) and
   [client state](client-state.md) does not fold approvals
-  ([#199](https://todo.sr.ht/~takeiteasy/miao/199)).
+  ([#41](https://github.com/communal-software/miao/issues/41)).

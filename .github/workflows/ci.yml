@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install SBCL
-        # Apt's SBCL is too old to save-lisp-and-die reliably (#72,
+        # Apt's SBCL is too old to save-lisp-and-die reliably (“SAVE-IMAGE's integration test segfaults CI's SBCL (2.2.9.debian); works on a current one”,
         # segfaults inside its own C runtime); install a current upstream
         # binary release instead.
         run: |

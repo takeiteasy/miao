@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; Detached tool calls (~takeiteasy/miao#76): a call past :TOOL-GRACE, or to a
+;;; Detached tool calls: a call past :TOOL-GRACE, or to a
 ;;; :BACKGROUND tool, is answered with a stub so the turn goes on, and its
 ;;; result folds in later.
 
@@ -189,7 +189,7 @@ repeating."
         (is (search "tool call c2" (request-body turns)))))))
 
 ;;; A call's meow timeout is the tool's :TIMEOUT plus 5s. The agent times a call
-;;; itself, only while it is attached (~takeiteasy/miao#183).
+;;; itself, only while it is attached.
 
 (m:defservice tool-unbounded () () (:name :tool-unbounded))
 
@@ -240,7 +240,7 @@ repeating."
         (is (= 2 (getf (second result) :turns)))
         (is (search "{\\\"error\\\":\\\"timeout\\\"}" (request-body 2)))))))
 
-;;; :MAX-DETACHED (~takeiteasy/miao#184): a call past the cap stays attached
+;;; :MAX-DETACHED: a call past the cap stays attached
 ;;; and detaches when a slot frees.
 
 (test a-call-past-max-detached-detaches-when-a-slot-frees

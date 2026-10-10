@@ -6,7 +6,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute) (require :sb-introspect))
 
 ;;; Read-only introspection over the live CL image: describe, apropos,
-;;; documentation and source locations. See ~takeiteasy/miao#10.
+;;; documentation and source locations..
 ;;;
 ;;; Never a value, never a slot. A provider's API key lives in a slot
 ;;; (provider.lisp), and PROVIDER.LISP:93 keeps it out of published

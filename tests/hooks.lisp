@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; Interceptor hooks (~takeiteasy/miao#117): the three phases, how a chain
+;;; Interceptor hooks: the three phases, how a chain
 ;;; combines hooks, what a failed hook does, and that nothing a hook guards can
 ;;; be reached around.
 
@@ -307,7 +307,7 @@ stream, so SSE answers in its place."
                                     1.5))))
                          (sleep 3.2))))))
 
-;;; --- told to stop (~takeiteasy/miao#210) -----------------------------------------------------
+;;; --- told to stop -----------------------------------------------------
 
 (defvar *hook-told* nil "How each :HOOK-WAIT call ended, newest first.")
 
@@ -586,7 +586,7 @@ once its first tool call is waiting on a hook."
   (is (eq :failed (miao::interpret-hook-answer :before-turn nil)))
   (is (eq :failed (miao::interpret-hook-answer :after-tool-result '(:rewrite 5)))))
 
-;;; --- told a run ended (~takeiteasy/miao#212) ---------------------------------------------------------
+;;; --- told a run ended ---------------------------------------------------------
 
 (defun sub-agent-answer ()
   (let ((n 0))

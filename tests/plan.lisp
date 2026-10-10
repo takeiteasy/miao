@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; TOOL-PLAN, the DSL gate (~takeiteasy/miao#6): checking a whole plan
+;;; TOOL-PLAN, the DSL gate: checking a whole plan
 ;;; before any step runs, threading a value through :REF, and the reasons a
 ;;; step or a whole plan is refused.
 

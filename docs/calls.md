@@ -150,13 +150,13 @@ uses), read once at mount time.
 ## Limitations
 
 - A call that finishes after its agent exited is `:abandoned` with no result
-  ([#180](https://todo.sr.ht/~takeiteasy/miao/180)).
+  ([#34](https://github.com/communal-software/miao/issues/34)).
 - A resumed call runs again from the start; nothing reattaches to one still
-  running ([#185](https://todo.sr.ht/~takeiteasy/miao/185)).
+  running ([#36](https://github.com/communal-software/miao/issues/36)).
 - A sub-agent call cannot be resumed
-  ([#186](https://todo.sr.ht/~takeiteasy/miao/186)).
+  ([#37](https://github.com/communal-software/miao/issues/37)).
 - A call with large arguments cannot be resumed
-  ([#187](https://todo.sr.ht/~takeiteasy/miao/187)).
+  ([#38](https://github.com/communal-software/miao/issues/38)).
 
 [^liveness]: The dispatching process is judged as a vault
     [claim](vault.md#claims) is: alive while this image, another host, or a

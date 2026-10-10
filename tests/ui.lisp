@@ -2,7 +2,7 @@
 (in-suite :miao)
 
 ;;; miao/ui: the fold of events into client state, and the client that
-;;; attaches to a named agent (~takeiteasy/miao#167).
+;;; attaches to a named agent.
 
 (defun ev (type &rest keys)
   (list* :type type :ref nil keys))

@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The allowlist gate on its own (~takeiteasy/miao#44): what it reads, what
+;;; The allowlist gate on its own: what it reads, what
 ;;; it refuses and the canonical text it hands a worker. Nothing here starts
 ;;; a worker; see the gated-eval tests in tools.lisp for that.
 

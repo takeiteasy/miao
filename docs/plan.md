@@ -1,6 +1,6 @@
 # The plan gate
 
-`tool-plan` (~takeiteasy/miao#6) is the DSL gate for *untrusted* input: a
+`tool-plan` (“Constrained DSL gate for untrusted eval”) is the DSL gate for *untrusted* input: a
 language of tool calls, so untrusted input may only express a composition of
 declared tools with typed arguments, never a form. There is no `eval` and no
 host-side reader; the audit surface is the interpreter plus each named
@@ -108,4 +108,4 @@ context, since it would not come back.
 
 - A `:temporary` or unsupervised tool that ignores its cancel token keeps
   running after the plan returns
-  ([#147](https://todo.sr.ht/~takeiteasy/miao/147)).
+  (“tool-plan does not restart a killed step tool that is :temporary or unsupervised”).

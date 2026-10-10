@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; TOOL-IMAGE and TOOL-SERVICES (~takeiteasy/miao#10). Both mount already,
+;;; TOOL-IMAGE and TOOL-SERVICES. Both mount already,
 ;;; via WITH-TOOLS (tests/tools.lisp).
 
 ;;; --- tool-image ----------------------------------------------------

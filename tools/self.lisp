@@ -1,6 +1,6 @@
 (in-package #:miao)
 
-;;; Self-modification (~takeiteasy/miao#12): evaluate in the host image,
+;;; Self-modification: evaluate in the host image,
 ;;; redefine functions and classes, and reload a mounted child -- the three
 ;;; things tool-eval, tool-repl and a worker can never reach, since a worker
 ;;; loads nothing and shares no state with the running harness.
@@ -10,7 +10,7 @@
 ;;; answered, since it only reads back what a write already did. This
 ;;; records operator intent and gives an audit trail -- it is not a sandbox.
 ;;; A :form can still redefine TOOL-TRUST or RESOLVE-TOOLS, since it runs in
-;;; the host image with no DSL between it and CL:EVAL; the plan gate (#6)
+;;; the host image with no DSL between it and CL:EVAL; the plan gate ()
 ;;; constrains a *model's* reach, not an operator's.
 ;;;
 ;;; A write takes a checkpoint first (checkpoint.lisp) and logs an intent
@@ -63,7 +63,7 @@ here; :LOG always answers.")
              (log-path :initarg :log :initform nil :reader self-log-path)
              (require-image :initarg :require-image :initform nil :reader self-require-image-p
                             :documentation "T refuses :eval and :define
-unless an image generation (~takeiteasy/miao#48) has been taken and
+unless an image generation has been taken and
 nothing has written since (*LAST-IMAGE*, *SELF-DIRTY*) -- SELF-DEFINE is
 then the only way an operator can still redefine anything, and every
 :define stays code-exact, undoable by relaunching that image."))
@@ -93,7 +93,7 @@ then the only way an operator can still redefine anything, and every
 taken before any tool-self write, but with a write since, is stale: it
 would roll back to before the write tool-self is about to make, not to
 before this one."
-  (cond ((null *last-image*) "take an image generation first (~takeiteasy/miao#48)")
+  (cond ((null *last-image*) "take an image generation first")
         (*self-dirty* "the last image generation is stale -- take another first")))
 
 (defun self-log-file (service)
@@ -172,9 +172,9 @@ exist is a problem, never created on the operator's behalf."
   "PARSED's defined name's current SYMBOL-SOURCE (tools/image.lisp), for
 :DEFINE only, so a log entry that redefines something still points at where
 it used to live. Declared-state ROLLBACK never restores code
-(~takeiteasy/miao#48); an ordinary tool-self :define therefore has no way
+; an ordinary tool-self :define therefore has no way
 back but this pointer -- SELF-DEFINE (image-generation.lisp,
-~takeiteasy/miao#63) is the code-exact one, an image generation taken
+“tool-self's checkpoint cannot undo a redefinition”) is the code-exact one, an image generation taken
 immediately before the write."
   (when (and (eq op :define) (second parsed) (symbolp (second parsed)))
     (symbol-source (second parsed))))
@@ -225,7 +225,7 @@ immediately before the write."
         (bad-request "no child named ~(~a~)" name))
     (error (e) (fail (list :error (princ-to-string e))))))
 
-;;; --- CLOS mutation latch (~takeiteasy/miao#79, #81) --------------------
+;;; --- CLOS mutation latch --------------------
 ;;;
 ;;; SBCL's own PCL/DEFSTRUCT loaders are hooked to say exactly when a form's
 ;;; evaluation is inside a class, method, generic-function or struct
@@ -456,7 +456,7 @@ visible on the helper thread."
   "VALUE printed under the same caps and elision check
 WORKER-PROGRAM.LISP's RENDER applies to a worker value, so a large or
 circular host value cannot flood the reply the way an uncapped one could
-(~takeiteasy/miao#26), and a caller sees when it did. Elided when the
+, and a caller sees when it did. Elided when the
 character cap cut the string outright, or when printing one step wider
 would print more of it -- that second pass only runs when the first
 output looks cut, so a value under both limits prints once."
@@ -475,7 +475,7 @@ output looks cut, so a value under both limits prints once."
   "Every one of VALUES rendered under RENDER-SELF-VALUE's own cap; more
 than 100 values, or a combined printed form past 4000 characters, drops
 the remainder and sets ELIDED -- the same guard
-~takeiteasy/miao#105 gave the worker side's own RENDER-VALUES."
+“worker-eval and tool-repl drop multiple values” gave the worker side's own RENDER-VALUES."
   (let* ((many (> (length values) 100))
          (values (if many (subseq values 0 100) values))
          (elided many) (total 0) (rendered '()))

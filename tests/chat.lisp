@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; `miao chat` (~takeiteasy/miao#99): the session against the echo provider,
+;;; `miao chat`: the session against the echo provider,
 ;;; and its pieces against a stalling backend.
 
 (defun chat-session (lines &rest args)
@@ -162,7 +162,7 @@ and stderr."
                (is (eq :exit (miao/cli::handle-interrupt client)))))
         (setf (car release) t)))))
 
-;;; --- saving and resuming (#100) --------------------------------------------
+;;; --- saving and resuming () --------------------------------------------
 
 (test a-chat-is-saved-and-listed
   (with-protocol

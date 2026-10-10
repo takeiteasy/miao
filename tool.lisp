@@ -128,7 +128,7 @@ TOKEN cancelled and answers without running."
 that only a trusted operator may reach."
   (getf metadata :trust :agent))
 
-;;; --- checkpoints (~takeiteasy/miao#11) --------------------------------
+;;; --- checkpoints --------------------------------
 
 ;;; Declared here, ahead of DEFINE-TOOL-HANDLER below, which every tool's
 ;;; :SNAPSHOT/:RESTORE case calls. See checkpoint.lisp for the generation
@@ -185,7 +185,7 @@ generation file."
                                      (progn (when ,cancel (call-started ,cancel))
                                             ,@body)
                                   (when ,cancel (call-settled ,cancel))))))))
-           ;; Checkpoints (~takeiteasy/miao#11): every tool answers these
+           ;; Checkpoints: every tool answers these
            ;; through SNAPSHOT/RESTORE, which default to NIL, so a tool that
            ;; holds no state worth carrying needs no method of its own.
            (:snapshot (snapshot ,service))

@@ -4,7 +4,7 @@
 a form in the host, redefine a function or class, or reload a mounted
 child. Everything else -- `tool-eval`, `tool-repl`, a worker -- runs in a
 throwaway process that loads nothing and shares no state with the harness.
-See [~takeiteasy/miao#12](https://todo.sr.ht/~takeiteasy/miao/12).
+See “Self-modification tools (gated)”.
 
 ```lisp
 (m:mount *ctx* 'miao:tool-self :enable '(:eval :define :reload))
@@ -117,7 +117,7 @@ received `:timeout` adds a third entry,
 ([introspection](introspection.md)) as it stood before the write --
 a `:file`/`:position`, or the old `:form` when it was itself defined in the
 image -- rollback restores declared service state, never code
-([#48](https://todo.sr.ht/~takeiteasy/miao/48)), so this pointer is the
+(“SBCL image generations and the recovery image”), so this pointer is the
 only way back to the old definition. The log is an append-only
 s-expression file (`:log`, default `~/.miao/self.log`), read the same
 guarded way a generation is: `*read-eval*` nil, so a log can never run code
@@ -151,7 +151,7 @@ written since:
 ```lisp
 (m:mount *ctx* 'miao:tool-self :enable '(:eval :define) :require-image t)
 (miao:invoke-tool :tool-self :op :eval :form "1")
-;; => (:error (:bad-request "take an image generation first (~takeiteasy/miao#48)"))
+;; => (:error (:bad-request "take an image generation first (“SBCL image generations and the recovery image”)"))
 ```
 
 With it set, `self-define` becomes the only way to still redefine

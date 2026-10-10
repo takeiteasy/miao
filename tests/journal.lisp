@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The run journal (~takeiteasy/miao#119): what an agent writes to it, and the
+;;; The run journal: what an agent writes to it, and the
 ;;; conversation read back from it.
 
 (defmacro with-journaled-agent ((agent recorder path replies &rest options) &body body)

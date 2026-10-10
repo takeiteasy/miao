@@ -132,4 +132,4 @@ same variables for its live tests.
 - `:defaults` keys the protocol does not advertise are dropped on the wire
   rather than refused, since a protocol takes only what it knows.
 - Auth is BYOK. OAuth and other interactive flows are
-  [#24](https://todo.sr.ht/~takeiteasy/miao/24).
+  [#5](https://github.com/communal-software/miao/issues/5).

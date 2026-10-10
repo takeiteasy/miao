@@ -83,11 +83,11 @@ node whose call started it.[^tree]
 ## Limitations
 
 - A client that attaches to an idle agent starts with an empty transcript, not
-  the conversation the agent holds ([#203](https://todo.sr.ht/~takeiteasy/miao/203)).
+  the conversation the agent holds ([#43](https://github.com/communal-software/miao/issues/43)).
 - Sub-agent nodes are found by call id, and cannot be steered or cancelled
-  ([#200](https://todo.sr.ht/~takeiteasy/miao/200)).
+  ([#42](https://github.com/communal-software/miao/issues/42)).
 - There is no state for operator approvals
-  ([#199](https://todo.sr.ht/~takeiteasy/miao/199)).
+  ([#41](https://github.com/communal-software/miao/issues/41)).
 
 [^text]: Streamed text is kept as chunks and joined by `entry-text`, so a long
     answer does not copy itself on every delta.

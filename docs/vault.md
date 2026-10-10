@@ -4,7 +4,7 @@ An append-only s-expression log of [steering](agent.md#messages) messages,
 each marked consumed once it has been folded into a run or discarded. It
 backs an agent's own in-memory steer queue, so a steer survives past the
 run it was sent to, a crash, or a restart -- not just the next turn. See
-[~takeiteasy/miao#14](https://todo.sr.ht/~takeiteasy/miao/14).
+“Vault: steering message log”.
 
 ```lisp
 (m:mount *ctx* 'miao:agent :name :assistant :model :ollama :vault t)

@@ -1,6 +1,6 @@
 (in-package #:miao)
 
-;;; The run journal (~takeiteasy/miao#119): an append-only s-expression log of
+;;; The run journal: an append-only s-expression log of
 ;;; what an agent's runs did, read back the same guarded way the vault is
 ;;; (checkpoint.lisp's %APPEND-LOG/%READ-LOG). Every entry carries :ID, :AT,
 ;;; :AGENT, :PARENT (a sub-agent's only) and :RUN, the key of the root run.
@@ -293,7 +293,7 @@ without its tool replies is closed as an abandoned one is."
 
 ;;; --- call records -----------------------------------------------------------
 
-;;; Call records (~takeiteasy/miao#73): one record per tool call an agent
+;;; Call records: one record per tool call an agent
 ;;; dispatches, so a call's status outlives the process running it. They share the
 ;;; journal's file and its guarded read.
 ;;;
@@ -308,7 +308,7 @@ without its tool replies is closed as an abandoned one is."
 ;;;   (:kind :input   :id "..." :at "iso" :agent name-or-nil :input-id "k"
 ;;;    :digest "md5hex" :by owner)
 ;;;
-;;; An :INPUT is a :RUN a caller keyed with :INPUT-ID (~takeiteasy/miao#75); it
+;;; An :INPUT is a :RUN a caller keyed with :INPUT-ID; it
 ;;; is finished by a :DONE line like a call. CALL-ENTRIES leaves it out.
 ;;;
 ;;; :ID is the log's own, fresh per dispatch: a provider may reuse :CALL-ID on
@@ -495,7 +495,7 @@ holding the lock, so it must not read PATH."
 ;;; --- compacting ------------------------------------------------------------
 
 ;;; TODO: the whole log is read and rewritten under its lock, so other processes
-;;; wait on it; a segmented log if that is measured to stall them (#216).
+;;; wait on it; a segmented log if that is measured to stall them (#49).
 
 (defun %expired-p (entry cutoff max-age)
   (let ((at (getf entry :at)))

@@ -109,7 +109,7 @@ in seconds. A request that fails its pre-flight, or nests too deep, answers
 
 ;; TODO: a run with many separate events or tool calls still stays in the
 ;; history until it ends; cap it with a truncation marker in the replay if
-;; that grows too large (#220).
+;; that grows too large (#50).
 (defun record-event (fanout event)
   "Add EVENT to FANOUT's history, merging a streamed text or tool-call
 fragment into the last entry when it continues it. The merged entry is a new

@@ -44,7 +44,7 @@
 ;;; resolving it. The final component is operated on relative to that
 ;;; directory, so the symlink check and the operation share one file
 ;;; descriptor -- there is no window between them for a swap to land in
-;;; (~takeiteasy/miao#52).
+;;;.
 
 (defun native-absolute (path)
   (if (and (plusp (length path)) (char= (char path 0) #\/))

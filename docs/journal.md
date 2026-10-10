@@ -102,7 +102,7 @@ its conversation reads back the same.
 ## Limitations
 
 - Compaction rewrites the whole log under its lock, so other processes wait
-  ([#216](https://todo.sr.ht/~takeiteasy/miao/216)).
+  ([#49](https://github.com/communal-software/miao/issues/49)).
 
 [^crash]: A crash loses the entries still queued, never a call record: a `:call`
     is on disk before its tool runs and a `:done` before the call counts as

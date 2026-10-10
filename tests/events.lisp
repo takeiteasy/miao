@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The UI contract (~takeiteasy/miao#193, #194): :RUN-START and :STEER, the
+;;; The UI contract: :RUN-START and :STEER, the
 ;;; :AGENT and :PARENT tags, and :SUBSCRIBE / :UNSUBSCRIBE.
 
 (defun run-dones (recorder)

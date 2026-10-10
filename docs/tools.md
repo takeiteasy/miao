@@ -364,7 +364,7 @@ or `tool-self`'s job. See [introspection](introspection.md).
 
 - `tool-services`'s `:state` is `m:children`'s restart bookkeeping, not the
   richer lifecycle `service-status` tracks
-  ([#46](https://todo.sr.ht/~takeiteasy/miao/46)).
+  (“tool-services reports restart state, not lifecycle status”).
 - `tool-vault`'s compaction is safe within one process only
-  ([#84](https://todo.sr.ht/~takeiteasy/miao/84)). See
+  (“Vault compaction is safe within one process only”). See
   [the vault](vault.md#limitations).

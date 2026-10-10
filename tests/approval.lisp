@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; The operator approval hook (~takeiteasy/miao#118): what it holds, how it is
+;;; The operator approval hook: what it holds, how it is
 ;;; answered, and that it never outlives the agent's wait.
 
 (m:defservice tool-op () () (:name :tool-op))

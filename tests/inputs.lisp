@@ -1,7 +1,7 @@
 (in-package #:miao/tests)
 (in-suite :miao)
 
-;;; Idempotent input redelivery (~takeiteasy/miao#75): a :RUN or :STEER a caller
+;;; Idempotent input redelivery: a :RUN or :STEER a caller
 ;;; keys with :INPUT-ID is accepted once, and a redelivery answers with the
 ;;; original's status. Replies are read through M:CALL.
 
